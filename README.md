@@ -92,6 +92,24 @@ The web UI login has its own protections: a password-complexity requirement
 and a rate limit (5 failed attempts triggers a 30-second lockout) on the
 login endpoint, independent of your WiFi security.
 
+## Default credentials
+
+| | Default |
+|---|---|
+| WiFi AP SSID | `HurricaneControls` (open network, no password) |
+| Login password | `Siren123!` |
+
+The device boots into AP mode with the SSID above — connect to it directly
+to reach the web UI before it's joined any home network. **Change the
+default login password immediately** from the Settings page; see Setup
+below.
+
+Once configured, the device can join your home WiFi network instead of
+staying in AP mode (Settings → Wi-Fi). Note: the ESP32 only supports
+**2.4 GHz** WiFi, not 5 GHz — if your router broadcasts separate 2.4 GHz and
+5 GHz networks (or names, e.g. `MyNetwork` vs. `MyNetwork-5G`), make sure you
+join the 2.4 GHz one.
+
 ## Setup
 
 1. Install [PlatformIO](https://platformio.org/).
@@ -99,15 +117,15 @@ login endpoint, independent of your WiFi security.
    ```
    pio run -t upload
    ```
-3. On first boot, the device starts a WiFi access point named
-   `HurricaneControls` (open, no password). Connect to it and browse to
-   `http://hurricane.local` or the device's AP IP.
-4. Log in with the default password: **`Siren123!`**
+3. On first boot, connect to the `HurricaneControls` WiFi access point (see
+   Default credentials above) and browse to `http://hurricane.local` or the
+   device's AP IP.
+4. Log in with the default password.
 5. **Change the default password immediately** from the Settings page.
    Passwords must be at least 8 characters and include an uppercase letter,
    a lowercase letter, a number, and a special character.
-6. From Settings, you can also join the device to your home WiFi network
-   instead of staying in AP mode.
+6. From Settings, join the device to your home 2.4 GHz WiFi network instead
+   of staying in AP mode.
 
 ## Credits
 
