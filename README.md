@@ -49,6 +49,19 @@ Nothing in this README limits or modifies that license.
 - Optional physical WAIL/ATTACK/STOP buttons (also configurable in
   `src/config.h`)
 
+### Reference hardware
+
+This firmware was written for and tested on the [ESP-32S WiFi Development
+Board (NodeMCU-32S)](https://a.co/d/0iIUNPpi) — an ESP32-WROOM-32-based
+board with a 30-pin GPIO breakout and USB-C. Other ESP32 dev boards should
+work too, but pin numbering and the USB-serial chip may differ.
+
+This project was built specifically to control the [1/2 Scale ACA Hurricane
+Mk II](https://www.printables.com/model/929876-12-scale-aca-hurricane-mkii/),
+a 3D-printed scale replica of the ACA Hurricane Mk II mechanical siren.
+It should be adaptable to other similar chopper/blower/rotator siren
+builds, but GPIO wiring and timing defaults may need adjustment.
+
 ## GPIO pinout
 
 All pin assignments live in `src/config.h` and can be changed there if your
