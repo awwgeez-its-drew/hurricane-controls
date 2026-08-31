@@ -87,7 +87,7 @@ trailing whitespace.
 | `SIREN FASTWAIL` | Siren idle, TEST MODE off | Starts FAST WAIL mode | `FASTWAIL START received` |
 | `SIREN WAIL`/`ATTACK`/`FASTWAIL` | Siren **not** idle | (no-op) | `ERR: busy` |
 | `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`STOP` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
-| `SIREN STOP` | TEST MODE off | Stops the current run | `STOP received` immediately |
+| `SIREN STOP` | TEST MODE off | Stops the current run | `STOP received` immediately, then `.SIREN STOPPED` once shutdown completes (see below) |
 | `SIREN LOCK` | — | Locks physical buttons (same as the Main page's lock icon) | `OK: locked` |
 | `SIREN UNLOCK` | — | Unlocks physical buttons (also clears TEST MODE if it was active) | `OK: unlocked` |
 | `SIREN REBOOT` | — | Restarts the controller | `OK: rebooting` (sent before reset) |
@@ -97,13 +97,22 @@ trailing whitespace.
 
 ### Asynchronous "run ended" notification
 
-Independent of any command, the controller sends **`SIREN STOPPED`** (no
-prefix on this outgoing message — it's a report, not a command) exactly
-once, whenever the state machine transitions from an active run to idle,
-**for any reason**: a mesh-issued `STOP`, a web-UI or physical-button stop,
-or a timed mode (Attack/Fast Wail) simply running out its duration. So a
-`SIREN WAIL` that isn't followed by a manual stop will still eventually
-produce a `SIREN STOPPED` line on its own once the run completes.
+Independent of any command, the controller sends **`.SIREN STOPPED`**
+exactly once, whenever the state machine transitions from an active run to
+idle, **for any reason**: a mesh-issued `STOP`, a web-UI or physical-button
+stop, or a timed mode (Attack/Fast Wail) simply running out its duration.
+So a `SIREN WAIL` that isn't followed by a manual stop will still
+eventually produce a `.SIREN STOPPED` line on its own once the run
+completes.
+
+Note the **leading period** — this is a report, not a command, but it still
+happens to start with the word `SIREN`. Without the period it would
+literally match `MESH_COMMAND_PREFIX` on every *other* siren sharing the
+channel, each of which would then try to parse `STOPPED` as a command word,
+fail, and reply `ERR: unknown command` — the exact flood the prefix scheme
+exists to prevent, just self-inflicted by the controller's own status
+message. The period breaks that match while keeping the line
+human-readable.
 
 There are no other unsolicited status messages — no periodic heartbeat, no
 per-state-transition chatter. Just the immediate ack on a start/stop command

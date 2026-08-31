@@ -33,9 +33,12 @@ public:
         }
 
         // Report once whenever a run ends, regardless of why (mesh STOP, web
-        // STOP, physical STOP, or a timed mode simply running out).
+        // STOP, physical STOP, or a timed mode simply running out). Leading
+        // "." keeps this from matching MESH_COMMAND_PREFIX on other sirens
+        // sharing the channel — otherwise they'd parse it as an (unknown)
+        // command addressed to them and flood back "ERR: unknown command".
         bool active = sm.isActive();
-        if (wasActive_ && !active) reply("SIREN STOPPED");
+        if (wasActive_ && !active) reply(".SIREN STOPPED");
         wasActive_ = active;
     }
 

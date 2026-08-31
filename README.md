@@ -176,12 +176,12 @@ can share one channel without responding to each other's traffic:
 | Command | Effect | Reply |
 |---|---|---|
 | `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` | Starts that run mode | `WAIL START received` (or `ERR: busy` if already running) |
-| `SIREN STOP` | Stops the current run | `STOP received`, then `SIREN STOPPED` once shutdown completes |
+| `SIREN STOP` | Stops the current run | `STOP received`, then `.SIREN STOPPED` once shutdown completes |
 | `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `OK: locked` / `OK: unlocked` |
 | `SIREN REBOOT` | Restarts the device | `OK: rebooting` |
 | `SIREN PING` | Connectivity check | `PONG` |
 
-A `SIREN STOPPED` message is also sent whenever a run ends on its own (e.g.
+A `.SIREN STOPPED` message is also sent whenever a run ends on its own (e.g.
 an Attack/Fast Wail duration expiring), not just after a mesh-issued STOP.
 Any line without the `SIREN` prefix — another siren's traffic, general mesh
 chat — is silently ignored. Mesh commands are gated by the same rules as the
