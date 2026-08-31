@@ -7,6 +7,7 @@
 #include "buttons.h"
 #include "wifi_manager.h"
 #include "webserver.h"
+#include "mesh.h"
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 SettingsManager settingsMgr;
@@ -14,6 +15,7 @@ StateMachine    sm;
 ButtonHandler   buttons;
 WiFiManager     wifiMgr;
 WebUI           webUI;
+MeshBridge      meshBridge;
 
 static void logResetReason() {
     Serial.print("Reset reason: ");
@@ -44,6 +46,7 @@ void setup() {
     settingsMgr.load();
     sm.begin();
     buttons.begin();
+    meshBridge.begin();
 
     // WiFi first (may block up to 12 s for STA attempt)
     wifiMgr.begin();
@@ -57,4 +60,5 @@ void loop() {
     sm.update();
     webUI.update();
     wifiMgr.update();  // handles deferred ESP.restart() after WiFi credential changes
+    meshBridge.update();
 }

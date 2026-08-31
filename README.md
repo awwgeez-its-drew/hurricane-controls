@@ -140,6 +140,63 @@ join the 2.4 GHz one.
 6. From Settings, join the device to your home 2.4 GHz WiFi network instead
    of staying in AP mode.
 
+## Meshtastic remote control (optional)
+
+The firmware can be wired to a [Meshtastic](https://meshtastic.org) node
+(tested with a Heltec V3) to trigger and stop the siren over LoRa mesh, with
+a confirmation sent back over the mesh so you can see it worked from
+anywhere in range — no WiFi needed.
+
+**How it works**: the Meshtastic node's Serial Module (set to its plain-text
+passthrough mode) bridges UART traffic to mesh text messages in both
+directions. Text you send over UART gets broadcast on the mesh; mesh text
+messages arrive back over the same UART. This firmware listens on that UART
+for commands and replies with plain-text confirmations, the same way it does.
+
+**Wiring**: cross-connect UART TX/RX between the two boards, plus a shared
+ground — both are 3.3V-logic ESP32-family chips, so no level shifting is
+needed.
+
+| Hurricane Controls (GPIO, `src/config.h`) | Meshtastic node |
+|---|---|
+| `MESH_RX_PIN` (16) | node's serial TX |
+| `MESH_TX_PIN` (17) | node's serial RX |
+| GND | GND |
+
+On the Meshtastic side, enable the Serial Module on your channel of choice,
+set its mode to the plain-text passthrough mode, and set its baud rate to
+match `MESH_BAUD` (default 38400) in `src/config.h`. Pin/baud field names
+can vary slightly by Meshtastic app version — check your installed version's
+Serial Module settings.
+
+**Commands** are plain text lines, prefixed with `SIREN` (case-insensitive,
+configurable via `MESH_COMMAND_PREFIX` in `src/config.h`) so multiple sirens
+can share one channel without responding to each other's traffic:
+
+| Command | Effect | Reply |
+|---|---|---|
+| `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` | Starts that run mode | `WAIL START received` (or `ERR: busy` if already running) |
+| `SIREN STOP` | Stops the current run | `STOP received`, then `SIREN STOPPED` once shutdown completes |
+| `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `OK: locked` / `OK: unlocked` |
+| `SIREN REBOOT` | Restarts the device | `OK: rebooting` |
+| `SIREN PING` | Connectivity check | `PONG` |
+
+A `SIREN STOPPED` message is also sent whenever a run ends on its own (e.g.
+an Attack/Fast Wail duration expiring), not just after a mesh-issued STOP.
+Any line without the `SIREN` prefix — another siren's traffic, general mesh
+chat — is silently ignored. Mesh commands are gated by the same rules as the
+web UI: they're rejected while the siren isn't idle, and `WAIL`/`ATTACK`/
+`FASTWAIL`/`STOP` are blocked while TEST MODE is active.
+
+**Security note**: this feature has no authentication beyond your Meshtastic
+channel's own encryption. Anyone able to transmit on that channel can
+command the siren, the same tradeoff already accepted for this project's
+open WiFi AP and plain-HTTP web UI (see Network security note above) — use a
+dedicated private channel, not a public/default one. This is an additional
+command source into the same state machine as the web UI and physical
+buttons; it does not bypass the independent hardware E-Stop required in the
+Safety & Disclaimer section above.
+
 ## Credits
 
 Created by awwgeez.its.drew · Coded by Claude
