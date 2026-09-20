@@ -147,11 +147,15 @@ The firmware can be wired to a [Meshtastic](https://meshtastic.org) node
 a confirmation sent back over the mesh so you can see it worked from
 anywhere in range — no WiFi needed.
 
-**How it works**: the Meshtastic node's Serial Module (set to its plain-text
-passthrough mode) bridges UART traffic to mesh text messages in both
-directions. Text you send over UART gets broadcast on the mesh; mesh text
-messages arrive back over the same UART. This firmware listens on that UART
-for commands and replies with plain-text confirmations, the same way it does.
+**How it works**: the Meshtastic node's Serial Module, set to **Text Message
+mode**, bridges UART traffic to mesh text messages in both directions. Text
+you send over UART gets broadcast on the mesh; mesh text messages arrive
+back over the same UART, prefixed with the sender's short node ID (e.g.
+`3a3c: SIREN PING`) — the firmware strips that prefix automatically. (Two
+other modes, "Simple" and "Default", were tried during bring-up and
+confirmed not to work for this — Text Message mode is the one to use. See
+`docs/meshtastic-integration.md` for the full story, including a real
+Heltec V3 pin gotcha worth reading before wiring up your own node.)
 
 **Wiring**: cross-connect UART TX/RX between the two boards, plus a shared
 ground — both are 3.3V-logic ESP32-family chips, so no level shifting is
@@ -164,10 +168,11 @@ needed.
 | GND | GND |
 
 On the Meshtastic side, enable the Serial Module on your channel of choice,
-set its mode to the plain-text passthrough mode, and set its baud rate to
-match `MESH_BAUD` (default 38400) in `src/config.h`. Pin/baud field names
-can vary slightly by Meshtastic app version — check your installed version's
-Serial Module settings.
+set its mode to **Text Message**, and set its baud rate to match
+`MESH_BAUD` (default 38400) in `src/config.h`. Double-check the `rxd`/`txd`
+pins you assign are genuinely free on your board — on a Heltec V3, GPIO1 is
+NOT free (it's tied to battery-voltage sensing); GPIO2/GPIO3 are confirmed
+to work.
 
 **Commands** are plain text lines, prefixed with `SIREN` (case-insensitive,
 configurable via `MESH_COMMAND_PREFIX` in `src/config.h`) so multiple sirens
@@ -188,14 +193,21 @@ chat — is silently ignored. Mesh commands are gated by the same rules as the
 web UI: they're rejected while the siren isn't idle, and `WAIL`/`ATTACK`/
 `FASTWAIL`/`STOP` are blocked while TEST MODE is active.
 
-**Security note**: this feature has no authentication beyond your Meshtastic
-channel's own encryption. Anyone able to transmit on that channel can
-command the siren, the same tradeoff already accepted for this project's
-open WiFi AP and plain-HTTP web UI (see Network security note above) — use a
-dedicated private channel, not a public/default one. This is an additional
-command source into the same state machine as the web UI and physical
-buttons; it does not bypass the independent hardware E-Stop required in the
-Safety & Disclaimer section above.
+**Sender whitelist**: beyond the `SIREN` prefix, commands are only accepted
+from sender node IDs listed in the **Settings page → Mesh Whitelist** card
+(comma-separated, e.g. `3A3C, 1B93`). An empty whitelist blocks everything —
+add your node's ID before expecting any commands to work. A sender not on
+the list gets no reply at all, same as unaddressed traffic.
+
+**Security note**: beyond the whitelist, this feature has no authentication
+beyond your Meshtastic channel's own encryption. Anyone able to transmit on
+that channel — and whose node ID you've whitelisted — can command the siren,
+the same tradeoff already accepted for this project's open WiFi AP and
+plain-HTTP web UI (see Network security note above) — use a dedicated
+private channel, not a public/default one. This is an additional command
+source into the same state machine as the web UI and physical buttons; it
+does not bypass the independent hardware E-Stop required in the Safety &
+Disclaimer section above.
 
 ## Credits
 

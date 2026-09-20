@@ -22,6 +22,7 @@ struct Settings {
     uint32_t buttonDebounceMs     = 50;    // ms any physical button must be held LOW before its press is trusted (filters transient/EMI glitches)
     uint32_t attackChopperDelay   = 0;     // ms delay before chopper re-activates each attack cycle
     char     webPassword[33] = "Siren123!";
+    char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic sender IDs (hex, case-insensitive) allowed to issue mesh commands; empty = block all
 };
 
 class SettingsManager {
@@ -50,6 +51,8 @@ public:
         s.attackChopperDelay   = prefs.getUInt("atkChopDelay",        s.attackChopperDelay);
         String pw = prefs.getString("webPwd", "Siren123!");
         strlcpy(s.webPassword, pw.c_str(), sizeof(s.webPassword));
+        String wl = prefs.getString("meshWL", s.meshWhitelist);
+        strlcpy(s.meshWhitelist, wl.c_str(), sizeof(s.meshWhitelist));
         prefs.end();
     }
 
@@ -74,6 +77,7 @@ public:
         prefs.putUInt("btnDebounceMs",  s.buttonDebounceMs);
         prefs.putUInt("atkChopDelay",   s.attackChopperDelay);
         prefs.putString("webPwd",       s.webPassword);
+        prefs.putString("meshWL",       s.meshWhitelist);
         prefs.end();
     }
 };

@@ -391,6 +391,15 @@ input:focus{outline:none;border-color:var(--cyan)}
   <div class="msg" id="pm"></div>
 </div>
 
+<!-- Mesh Whitelist -->
+<div class="card">
+  <h2>Mesh Whitelist</h2>
+  <div class="row"><label>Allowed sender IDs (comma-separated, leave empty to block all)</label>
+    <input type="text" id="meshWL" placeholder="e.g. 3A3C, 1B93"></div>
+  <button class="btn save" onclick="saveMeshWL()">Save Whitelist</button>
+  <div class="msg" id="mwlm"></div>
+</div>
+
 <!-- Startup Sequence -->
 <div class="card">
   <h2>Startup Sequence</h2>
@@ -470,6 +479,7 @@ const TS=['wailDuration','attackDuration','attackOnTime','attackOffTime','attack
 fetch('/settings-data').then(r=>r.json()).then(d=>{
   TS.forEach(f=>{const e=document.getElementById('s_'+f);if(e)e.value=+(d[f]/1000).toFixed(2).replace(/\.?0+$/,'');});
   document.getElementById('verNum').textContent=d.fwVersion||'—';
+  document.getElementById('meshWL').value=d.meshWhitelist||'';
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -532,6 +542,10 @@ function savePw(){
   });
 }
 function logout(){post('/auth/logout',{}).then(()=>location.href='/login');}
+function saveMeshWL(){
+  const wl=document.getElementById('meshWL').value.trim();
+  post('/settings-data',{meshWhitelist:wl}).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
+}
 function saveTiming(){
   const b={};
   TS.forEach(f=>{const e=document.getElementById('s_'+f);if(e)b[f]=Math.round(parseFloat(e.value||0)*1000);});
@@ -943,6 +957,7 @@ private:
                     applyUInt(doc, "attackChopperDelay",  s.attackChopperDelay);
                     applyUInt(doc, "longPressMs",         s.longPressMs);
                     applyUInt(doc, "buttonDebounceMs",    s.buttonDebounceMs);
+                    applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
                     settingsMgr.save();
                 }
                 req->send(200, "application/json", "{\"ok\":true}");
@@ -1030,6 +1045,10 @@ private:
         if (!doc[key].isNull()) field = doc[key].as<uint32_t>();
     }
 
+    static void applyString(JsonDocument& doc, const char* key, char* field, size_t fieldSize) {
+        if (doc[key].is<const char*>()) strlcpy(field, doc[key].as<const char*>(), fieldSize);
+    }
+
     static String buildStatusJson() {
         uint8_t rs = relayState();
         TimerInfo ti = sm.getTimerInfo();
@@ -1075,6 +1094,7 @@ private:
         doc["attackChopperDelay"]  = s.attackChopperDelay;
         doc["longPressMs"]         = s.longPressMs;
         doc["buttonDebounceMs"]    = s.buttonDebounceMs;
+        doc["meshWhitelist"]       = s.meshWhitelist;
         doc["fwVersion"]           = FW_VERSION;
         String out;
         serializeJson(doc, out);

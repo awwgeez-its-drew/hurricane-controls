@@ -2,10 +2,10 @@
 
 This document describes how the Hurricane Controls firmware (this repo)
 implements its half of the Meshtastic bridge, for anyone configuring the
-Meshtastic node (e.g. a Heltec V3) that talks to it. The controller side is
-implemented and code-reviewed but **not yet bench-tested against real
-Meshtastic hardware** — treat exact behavior as "as designed," and verify
-against the real Serial Module once both sides are wired up.
+Meshtastic node (e.g. a Heltec V3) that talks to it. This has been bench-
+tested end-to-end on real hardware (Heltec V3 + a NodeMCU-32S controller) —
+see "Lessons from bring-up" below for the two real issues that turned up
+and how they were fixed.
 
 Source of truth: `src/mesh.h` (`MeshBridge` class) and the `MESH_*` constants
 in `src/config.h`. If anything here and the code disagree, the code wins —
@@ -13,17 +13,25 @@ this file may drift as the firmware evolves.
 
 ## What the controller expects from the Meshtastic node
 
-A **plain-text, line-based UART bridge**, not Meshtastic's protobuf/StreamAPI
-protocol. Concretely: the Meshtastic node should be running its **Serial
-Module in a plain-text passthrough mode** — i.e., whatever it receives on its
-serial RX line, it broadcasts as a text message on the mesh; whatever text
-message it receives from the mesh, it writes back out its serial TX line.
-(Meshtastic calls this mode something like "Simple" in current docs, but
-verify the exact mode name/label against the installed Meshtastic app/CLI
-version — it wasn't possible to confirm live docs when this was built.)
+A **line-based UART bridge** using the Meshtastic Serial Module's **Text
+Message mode** — not "Simple" mode (tried and confirmed non-functional on
+real hardware, see below), and not Meshtastic's protobuf/StreamAPI protocol
+("Default" mode, which is a different thing entirely and also confirmed
+non-functional for this purpose).
 
-The controller does **not** speak Meshtastic's binary API — no protobufs, no
-framing beyond newlines. Just raw ASCII text, one command or reply per line.
+Text Message mode has one behavior that matters a lot for parsing: **it
+prefixes every incoming mesh message with the sender's short node ID**
+before writing it to serial, e.g. a message typed as `SIREN PING` on another
+node arrives at the controller as:
+
+```
+3a3c: SIREN PING
+```
+
+`mesh.h` strips this `<sender-id>: ` prefix before matching the command, and
+also uses the extracted ID for the whitelist check (see below). The
+controller does **not** speak Meshtastic's binary API — no protobufs, just
+this one line-oriented text format.
 
 ## Physical link
 
@@ -42,9 +50,10 @@ Module baud setting must match this exactly, or match whatever you change
 `MESH_BAUD` to — it's a `constexpr` in `src/config.h`, easy to change on
 either the controller or Meshtastic config, just keep them in sync.
 
-The controller's Serial Module RX/TX GPIO choice on the Meshtastic node side
-is not fixed by this firmware — pick whatever free pins the Meshtastic
-board's Serial Module config allows, and wire accordingly.
+The Meshtastic node's own Serial Module RX/TX GPIO choice is not fixed by
+this firmware — pick free pins on that board's own pinout. **On a Heltec
+V3 specifically, GPIO2 and GPIO3 are confirmed free/working; GPIO1 is
+confirmed NOT free** — see "Lessons from bring-up" below.
 
 ## Command protocol
 
@@ -53,7 +62,9 @@ CRLF and bare LF work). Max line length is 63 characters — longer lines will
 be truncated at the buffer boundary (see `line_[64]` in `mesh.h`).
 
 **Every command must start with a prefix**, `SIREN` by default
-(case-insensitive), followed by whitespace and the command word:
+(case-insensitive), followed by whitespace and the command word. On the
+wire (after Text Message mode's sender-ID prefix), a real command looks
+like `3a3c: SIREN WAIL`; what you actually type/send is just:
 
 ```
 SIREN WAIL
@@ -65,35 +76,60 @@ The prefix is a `constexpr char MESH_COMMAND_PREFIX[]` in `src/config.h` —
 change it per physical unit if multiple sirens will share one Meshtastic
 channel, so each only reacts to its own traffic.
 
-**Any line that does not start with the prefix is silently ignored — no
-reply is sent.** This is deliberate: on a shared mesh channel, other
-devices' commands/replies and general chat will pass over this same serial
-link (since the Meshtastic Serial Module echoes all mesh text traffic to
-serial), and the controller must not spam back "unknown command" for
-traffic that isn't addressed to it. A line that *does* carry the prefix but
-has an unrecognized word after it is treated as addressed-but-malformed and
-does get an error reply (see table below).
+**Any line that does not start with the prefix (after the sender-ID is
+stripped) is silently ignored — no reply is sent.** This is deliberate: on
+a shared mesh channel, other devices' commands/replies and general chat
+will pass over this same serial link (since the Meshtastic Serial Module
+echoes all mesh text traffic to serial), and the controller must not spam
+back "unknown command" for traffic that isn't addressed to it. A line that
+*does* carry the prefix but has an unrecognized word after it is treated as
+addressed-but-malformed and does get an error reply (see table below).
 
 Matching, trimming, and case-folding are all handled by the controller —
 whoever/whatever sends commands doesn't need to worry about exact casing or
 trailing whitespace.
 
+### Sender whitelist
+
+Beyond the `SIREN` addressing prefix, the controller also checks the
+sender's node ID (the part Text Message mode prepends, e.g. `3a3c`) against
+an allow-list before doing anything — even for a correctly-prefixed,
+recognized command.
+
+- Configured via the **Settings page → Mesh Whitelist** card, or the
+  `meshWhitelist` field in `src/settings.h` / the `/settings-data` API.
+- Comma-separated list of short hex node IDs, case-insensitive, whitespace
+  around entries is trimmed (e.g. `3A3C, 1B93`).
+- **An empty whitelist blocks every command** — this is a fail-safe
+  default, not "allow everyone."
+- A sender not on the list is treated exactly like a non-addressed line:
+  **silently ignored, no reply.** No `ERR: unauthorized` or similar, both to
+  avoid leaking that the whitelist exists/behaves a certain way, and to
+  avoid giving an unwanted sender a reason to keep retrying.
+- Default whitelist ships with one confirmed-good test node: `3A3C`.
+- **This only works under Text Message mode.** The whitelist check is keyed
+  off the sender-ID prefix that mode adds; under Simple mode (no ID prefix)
+  every sender ID would be empty and every command would be rejected. Since
+  Text Message mode is the one confirmed to actually work (see below), this
+  isn't expected to matter in practice — but it's why the whitelist and the
+  mode choice are coupled, not independent settings.
+
 ### Commands and replies
 
 | Command | Preconditions | Effect | Reply |
 |---|---|---|---|
-| `SIREN WAIL` | Siren idle, TEST MODE off | Starts WAIL mode | `WAIL START received` |
-| `SIREN ATTACK` | Siren idle, TEST MODE off | Starts ATTACK mode | `ATTACK START received` |
-| `SIREN FASTWAIL` | Siren idle, TEST MODE off | Starts FAST WAIL mode | `FASTWAIL START received` |
+| `SIREN WAIL` | Siren idle, TEST MODE off, sender whitelisted | Starts WAIL mode | `WAIL START received` |
+| `SIREN ATTACK` | Siren idle, TEST MODE off, sender whitelisted | Starts ATTACK mode | `ATTACK START received` |
+| `SIREN FASTWAIL` | Siren idle, TEST MODE off, sender whitelisted | Starts FAST WAIL mode | `FASTWAIL START received` |
 | `SIREN WAIL`/`ATTACK`/`FASTWAIL` | Siren **not** idle | (no-op) | `ERR: busy` |
 | `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`STOP` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
-| `SIREN STOP` | TEST MODE off | Stops the current run | `STOP received` immediately, then `.SIREN STOPPED` once shutdown completes (see below) |
-| `SIREN LOCK` | — | Locks physical buttons (same as the Main page's lock icon) | `OK: locked` |
-| `SIREN UNLOCK` | — | Unlocks physical buttons (also clears TEST MODE if it was active) | `OK: unlocked` |
-| `SIREN REBOOT` | — | Restarts the controller | `OK: rebooting` (sent before reset) |
-| `SIREN PING` | — | Connectivity check | `PONG` |
-| `SIREN <anything else>` | — | No effect | `ERR: unknown command` |
-| *(no `SIREN` prefix)* | — | No effect | **no reply at all** |
+| `SIREN STOP` | TEST MODE off, sender whitelisted | Stops the current run | `STOP received` immediately, then `.SIREN STOPPED` once shutdown completes (see below) |
+| `SIREN LOCK` | Sender whitelisted | Locks physical buttons (same as the Main page's lock icon) | `OK: locked` |
+| `SIREN UNLOCK` | Sender whitelisted | Unlocks physical buttons (also clears TEST MODE if it was active) | `OK: unlocked` |
+| `SIREN REBOOT` | Sender whitelisted | Restarts the controller | `OK: rebooting` (sent before reset) |
+| `SIREN PING` | Sender whitelisted | Connectivity check | `PONG` |
+| `SIREN <anything else>` | Sender whitelisted | No effect | `ERR: unknown command` |
+| *(no `SIREN` prefix, or sender not whitelisted)* | — | No effect | **no reply at all** |
 
 ### Asynchronous "run ended" notification
 
@@ -140,21 +176,55 @@ code path for actually driving relays. Practically, this means:
 
 There is **no authentication in the command protocol itself** — no token, no
 passphrase, nothing beyond the `SIREN` addressing prefix (which is for
-routing/noise-filtering on a shared channel, not security). Anyone who can
-transmit on the Meshtastic channel this node is bridging can control the
-siren. The only real access control is the Meshtastic channel's own
-pre-shared key — **use a dedicated private channel**, not a public or
-default one, when setting this up.
+routing/noise-filtering on a shared channel, not security) and the sender
+whitelist above (which only recognizes senders you've explicitly added).
+Anyone who can transmit on the Meshtastic channel this node is bridging, and
+whose node ID you've whitelisted, can control the siren. The whitelist
+narrows this from "anyone on the channel" to "anyone on the channel whose ID
+you've added," but the channel's own pre-shared key is still the first line
+of defense — **use a dedicated private channel**, not a public or default
+one, when setting this up.
 
-## Open item for the Meshtastic-side agent
+## Lessons from bring-up
 
-Confirm against the actual installed Meshtastic firmware/app version:
-1. The exact Serial Module mode to select for plain ASCII passthrough
-   (referred to above as "Simple"/plain-text mode — naming may have
-   changed).
-2. Whether that mode's default line-batching/timeout behavior needs tuning
-   so short single-line commands/replies aren't delayed or coalesced
-   oddly before being sent to/from the mesh.
-3. Which GPIOs are free for the Serial Module on the specific Meshtastic
-   board in use (Heltec V3), since its OLED/LoRa radio already claim some
-   pins.
+Two real issues turned up getting this working end-to-end on a Heltec V3 +
+NodeMCU-32S pair, both resolved and reflected in the design above:
+
+1. **Heltec V3's GPIO1 is not a free pin — it's `VBAT_Read`, the board's
+   battery-voltage ADC sense line.** The Serial Module was initially
+   configured with `txd` on GPIO1, which meant the UART TX line was always
+   fighting the onboard battery-sense circuitry — total silence in both
+   directions, with the module otherwise correctly enabled/configured
+   (confirmed via `meshtastic --info`: `enabled: true`, correct mode, correct
+   baud — only the pin was wrong). Moving to GPIO2 (`rxd`) / GPIO3 (`txd`),
+   both genuinely general-purpose on this board, fixed it immediately.
+   **Takeaway**: check the target Meshtastic board's actual pinout diagram
+   for pins already committed to onboard functions (battery sense, PMU,
+   OLED, LoRa radio, etc.) before assigning Serial Module `rxd`/`txd` —
+   don't assume a low GPIO number is generic-purpose just because it's
+   broken out to a header.
+2. **Only Text Message mode actually delivered messages.** Both "Simple"
+   mode and "Default" mode were tried (after the pin fix, so pins/baud were
+   already correct) and confirmed — via a direct USB-serial tap on the
+   Serial Module's GPIO pins, bypassing Meshtastic's own debug console
+   entirely — to produce no output at all. Text Message mode worked
+   immediately once selected. This project's design and this doc originally
+   assumed Simple mode would be the right choice (a closer match to a raw
+   passthrough); that assumption was wrong for this firmware version, and
+   Text Message mode's sender-ID-prefixed format is what `mesh.h` now
+   parses for.
+
+One diagnostic note worth preserving: **Meshtastic's own debug console
+(over the node's native USB) is a different interface from the GPIO Serial
+Module link** and does not reliably reflect what's happening on those GPIO
+pins — don't trust its absence of `Module 'serial'`-style log lines as
+proof the module isn't working. A direct serial tap on the actual configured
+`rxd`/`txd` pins is the only fully conclusive test.
+
+Also observed: the Serial Module has its own internal `timeout` setting
+(seen as `2` seconds in a live config dump) that buffers and auto-sends
+serial input after that delay, rather than requiring an explicit line
+terminator from whatever's typing into it. This doesn't require any
+firmware change here — the controller's replies are sent via
+`Serial2.println()` regardless, and the module handles its own send timing
+independently of how the controller terminates its lines.
