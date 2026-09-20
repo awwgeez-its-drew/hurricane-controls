@@ -22,4 +22,4 @@ constexpr char WIFI_SSID[] = "HurricaneControls";
 constexpr char WIFI_PASS[] = "";         // open AP
 constexpr char MDNS_NAME[] = "hurricane";
 
-constexpr char FW_VERSION[] = "1.3.0";
+constexpr char FW_VERSION[] = "1.3.1";

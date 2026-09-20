@@ -37,6 +37,8 @@ public:
         runMode     = RunMode::NONE;
         stateTs     = 0;
         runStartTs_ = 0;
+        heartbeatTs_ = 0;
+        heartbeatOn_ = false;
     }
 
     bool trigger(RunMode mode) {
@@ -73,6 +75,21 @@ public:
             ledBlinkTs_ = now;
             ledOn_      = !ledOn_;
             digitalWrite(STATUS_LED, ledOn_ ? HIGH : LOW);
+        }
+
+        // Idle "heartbeat": a brief flash every HEARTBEAT_INTERVAL_MS so an
+        // idle (LED-off) controller doesn't look indistinguishable from one
+        // that's powered off.
+        if (state == State::IDLE) {
+            if (!heartbeatOn_ && now - heartbeatTs_ >= HEARTBEAT_INTERVAL_MS) {
+                heartbeatTs_ = now;
+                heartbeatOn_ = true;
+                digitalWrite(STATUS_LED, HIGH);
+            } else if (heartbeatOn_ && now - heartbeatTs_ >= HEARTBEAT_FLASH_MS) {
+                heartbeatTs_ = now;
+                heartbeatOn_ = false;
+                digitalWrite(STATUS_LED, LOW);
+            }
         }
 
         // Auto-terminate timed modes when their total duration expires
@@ -176,6 +193,8 @@ public:
                 if (now - doneTs_ >= 100) {
                     state = State::IDLE;
                     digitalWrite(STATUS_LED, LOW);
+                    heartbeatTs_ = now;
+                    heartbeatOn_ = false;
                 }
             }
             break;
@@ -253,6 +272,8 @@ public:
 
 private:
     static constexpr uint32_t LED_BLINK_MS = 250;
+    static constexpr uint32_t HEARTBEAT_INTERVAL_MS = 60000;  // idle "still alive" flash every 60s
+    static constexpr uint32_t HEARTBEAT_FLASH_MS    = 250;    // flash duration
 
     uint32_t stateTs        = 0;
     uint32_t runStartTs_    = 0;
@@ -265,6 +286,8 @@ private:
     uint32_t doneTs_         = 0;
     uint32_t ledBlinkTs_     = 0;
     bool     ledOn_          = false;
+    uint32_t heartbeatTs_    = 0;
+    bool     heartbeatOn_    = false;
 };
 
 extern StateMachine sm;

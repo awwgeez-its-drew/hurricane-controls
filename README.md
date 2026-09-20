@@ -89,7 +89,7 @@ without needing the web UI open:
 
 | State | LED |
 |-------|-----|
-| Idle | Off |
+| Idle | Off, with a brief 250ms heartbeat flash once every 60 seconds |
 | Starting up / running (any active mode) | Blinking (toggles every 250ms, ~2 Hz) |
 | Stopping (shutdown sequence in progress) | Steady on |
 
