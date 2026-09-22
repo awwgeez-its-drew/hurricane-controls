@@ -272,8 +272,8 @@ public:
 
 private:
     static constexpr uint32_t LED_BLINK_MS = 250;
-    static constexpr uint32_t HEARTBEAT_INTERVAL_MS = 60000;  // idle "still alive" flash every 60s
-    static constexpr uint32_t HEARTBEAT_FLASH_MS    = 250;    // flash duration
+    static constexpr uint32_t HEARTBEAT_INTERVAL_MS = 30000;  // idle "still alive" flash every 30s
+    static constexpr uint32_t HEARTBEAT_FLASH_MS    = 150;    // flash duration
 
     uint32_t stateTs        = 0;
     uint32_t runStartTs_    = 0;

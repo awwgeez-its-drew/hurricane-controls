@@ -16,7 +16,9 @@
 // Text Message mode prefixes every incoming line with the sender's short
 // node id, e.g. "3a3c: SIREN WAIL" — handleCommand() strips that prefix
 // before parsing the command, and also uses it as the whitelist check
-// against settingsMgr.s.meshWhitelist.
+// against settingsMgr.s.meshWhitelist. Commands also take an optional
+// trailing password token ("SIREN WAIL PASS123"), checked against
+// settingsMgr.s.meshPassword when one is configured; PING is exempt.
 class MeshBridge {
 public:
     void begin() {
@@ -80,6 +82,22 @@ private:
         return false;
     }
 
+    // pw is the (already-uppercased) token typed after the command word, or
+    // nullptr if none was given. An empty configured password means none is
+    // required at all. Comparison is case-insensitive since pw always
+    // arrives uppercased from handleCommand()'s earlier pass over the line.
+    static bool isPasswordCorrect(const char* pw) {
+        const char* configured = settingsMgr.s.meshPassword;
+        if (!*configured) return true;
+        if (!pw || !*pw) return false;
+        size_t len = strlen(configured);
+        if (strlen(pw) != len) return false;
+        for (size_t i = 0; i < len; i++) {
+            if (toupper((unsigned char)configured[i]) != pw[i]) return false;
+        }
+        return true;
+    }
+
     void handleCommand(char* raw) {
         char* line = raw;
         while (*line == ' ') line++;
@@ -125,6 +143,22 @@ private:
 
         char* cmd = body + prefixLen;
         while (*cmd == ' ') cmd++;
+
+        // Split off an optional trailing password token: "WAIL PASS123" ->
+        // cmd="WAIL", pw="PASS123". pw is already uppercase, since the whole
+        // body was uppercased above before this split.
+        char* pw = nullptr;
+        char* sp = strchr(cmd, ' ');
+        if (sp) {
+            *sp = '\0';
+            pw = sp + 1;
+            while (*pw == ' ') pw++;
+        }
+
+        // Password gate — every command except PING requires it (when one is
+        // configured). Same silent-ignore treatment as the whitelist/prefix
+        // checks above: a wrong or missing password gets no reply at all.
+        if (strcmp(cmd, "PING") != 0 && !isPasswordCorrect(pw)) return;
 
         bool testBlocked = buttons.testModeActive;
 

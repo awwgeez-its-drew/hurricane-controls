@@ -89,7 +89,7 @@ without needing the web UI open:
 
 | State | LED |
 |-------|-----|
-| Idle | Off, with a brief 250ms heartbeat flash once every 60 seconds |
+| Idle | Off, with a brief 150ms heartbeat flash once every 30 seconds |
 | Starting up / running (any active mode) | Blinking (toggles every 250ms, ~2 Hz) |
 | Stopping (shutdown sequence in progress) | Steady on |
 
@@ -176,7 +176,9 @@ to work.
 
 **Commands** are plain text lines, prefixed with `SIREN` (case-insensitive,
 configurable via `MESH_COMMAND_PREFIX` in `src/config.h`) so multiple sirens
-can share one channel without responding to each other's traffic:
+can share one channel without responding to each other's traffic, followed
+by an optional password (see below): `SIREN <command> <password>`, e.g.
+`SIREN WAIL PASS123`.
 
 | Command | Effect | Reply |
 |---|---|---|
@@ -184,7 +186,7 @@ can share one channel without responding to each other's traffic:
 | `SIREN STOP` | Stops the current run | `STOP received`, then `.SIREN STOPPED` once shutdown completes |
 | `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `OK: locked` / `OK: unlocked` |
 | `SIREN REBOOT` | Restarts the device | `OK: rebooting` |
-| `SIREN PING` | Connectivity check | `PONG` |
+| `SIREN PING` | Connectivity check (no password needed) | `PONG` |
 
 A `.SIREN STOPPED` message is also sent whenever a run ends on its own (e.g.
 an Attack/Fast Wail duration expiring), not just after a mesh-issued STOP.
@@ -194,20 +196,27 @@ web UI: they're rejected while the siren isn't idle, and `WAIL`/`ATTACK`/
 `FASTWAIL`/`STOP` are blocked while TEST MODE is active.
 
 **Sender whitelist**: beyond the `SIREN` prefix, commands are only accepted
-from sender node IDs listed in the **Settings page → Mesh Whitelist** card
+from sender node IDs listed in the **Settings page → Mesh Settings** card
 (comma-separated, e.g. `3A3C, 1B93`). An empty whitelist blocks everything —
 add your node's ID before expecting any commands to work. A sender not on
 the list gets no reply at all, same as unaddressed traffic.
 
-**Security note**: beyond the whitelist, this feature has no authentication
-beyond your Meshtastic channel's own encryption. Anyone able to transmit on
-that channel — and whose node ID you've whitelisted — can command the siren,
-the same tradeoff already accepted for this project's open WiFi AP and
-plain-HTTP web UI (see Network security note above) — use a dedicated
-private channel, not a public/default one. This is an additional command
-source into the same state machine as the web UI and physical buttons; it
-does not bypass the independent hardware E-Stop required in the Safety &
-Disclaimer section above.
+**Command password**: also on the Mesh Settings card, an optional plaintext
+password required as the last word of every command except `SIREN PING`
+(e.g. `SIREN WAIL PASS123`). Leave it blank if you don't want one — an empty
+password means none is required. A missing or wrong password is treated
+exactly like a non-whitelisted sender: no reply at all, not an error.
+
+**Security note**: beyond the whitelist and optional password, this feature
+has no authentication beyond your Meshtastic channel's own encryption.
+Anyone able to transmit on that channel — and whose node ID you've
+whitelisted, and who knows your command password if you set one — can
+command the siren, the same tradeoff already accepted for this project's
+open WiFi AP and plain-HTTP web UI (see Network security note above) — use
+a dedicated private channel, not a public/default one. This is an
+additional command source into the same state machine as the web UI and
+physical buttons; it does not bypass the independent hardware E-Stop
+required in the Safety & Disclaimer section above.
 
 ## Credits
 

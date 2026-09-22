@@ -62,12 +62,14 @@ CRLF and bare LF work). Max line length is 63 characters — longer lines will
 be truncated at the buffer boundary (see `line_[64]` in `mesh.h`).
 
 **Every command must start with a prefix**, `SIREN` by default
-(case-insensitive), followed by whitespace and the command word. On the
-wire (after Text Message mode's sender-ID prefix), a real command looks
-like `3a3c: SIREN WAIL`; what you actually type/send is just:
+(case-insensitive), followed by whitespace and the command word, optionally
+followed by a password (see "Command password" below). On the wire (after
+Text Message mode's sender-ID prefix), a real command looks like
+`3a3c: SIREN WAIL PASS123`; what you actually type/send is just:
 
 ```
 SIREN WAIL
+SIREN WAIL PASS123
 siren stop
 Siren Ping
 ```
@@ -96,7 +98,7 @@ sender's node ID (the part Text Message mode prepends, e.g. `3a3c`) against
 an allow-list before doing anything — even for a correctly-prefixed,
 recognized command.
 
-- Configured via the **Settings page → Mesh Whitelist** card, or the
+- Configured via the **Settings page → Mesh Settings** card, or the
   `meshWhitelist` field in `src/settings.h` / the `/settings-data` API.
 - Comma-separated list of short hex node IDs, case-insensitive, whitespace
   around entries is trimmed (e.g. `3A3C, 1B93`).
@@ -114,22 +116,46 @@ recognized command.
   isn't expected to matter in practice — but it's why the whitelist and the
   mode choice are coupled, not independent settings.
 
+### Command password
+
+Beyond the whitelist, a command's *last word* can be checked against an
+optional plaintext password before anything happens — a lightweight second
+factor on top of sender-ID filtering.
+
+- Configured via the same **Settings page → Mesh Settings** card, or the
+  `meshPassword` field in `src/settings.h` / the `/settings-data` API.
+- Plaintext, no hashing — this is a convenience layer, not the primary
+  defense (the Meshtastic channel's own encryption and the sender whitelist
+  are). Default is empty (no password required).
+- Format: `SIREN <command> <password>`, e.g. `SIREN WAIL PASS123`. The
+  password is whatever token immediately follows the command word.
+- Comparison is case-insensitive (mirroring the whitelist's case handling).
+- **An empty configured password means none is required at all** — a
+  command with or without a trailing token both work.
+- **`SIREN PING` is exempt** — it never requires a password, so connectivity
+  can always be checked regardless of what's configured.
+- A missing or wrong password is treated exactly like a non-whitelisted
+  sender: **silently ignored, no reply.** Same rationale as the whitelist —
+  don't confirm to an unauthorized sender that they were close.
+- Checked *after* the sender whitelist — both gates must pass (whitelist,
+  then password) for a non-PING command to do anything.
+
 ### Commands and replies
 
 | Command | Preconditions | Effect | Reply |
 |---|---|---|---|
-| `SIREN WAIL` | Siren idle, TEST MODE off, sender whitelisted | Starts WAIL mode | `WAIL START received` |
-| `SIREN ATTACK` | Siren idle, TEST MODE off, sender whitelisted | Starts ATTACK mode | `ATTACK START received` |
-| `SIREN FASTWAIL` | Siren idle, TEST MODE off, sender whitelisted | Starts FAST WAIL mode | `FASTWAIL START received` |
-| `SIREN WAIL`/`ATTACK`/`FASTWAIL` | Siren **not** idle | (no-op) | `ERR: busy` |
-| `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`STOP` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
-| `SIREN STOP` | TEST MODE off, sender whitelisted | Stops the current run | `STOP received` immediately, then `.SIREN STOPPED` once shutdown completes (see below) |
-| `SIREN LOCK` | Sender whitelisted | Locks physical buttons (same as the Main page's lock icon) | `OK: locked` |
-| `SIREN UNLOCK` | Sender whitelisted | Unlocks physical buttons (also clears TEST MODE if it was active) | `OK: unlocked` |
-| `SIREN REBOOT` | Sender whitelisted | Restarts the controller | `OK: rebooting` (sent before reset) |
-| `SIREN PING` | Sender whitelisted | Connectivity check | `PONG` |
-| `SIREN <anything else>` | Sender whitelisted | No effect | `ERR: unknown command` |
-| *(no `SIREN` prefix, or sender not whitelisted)* | — | No effect | **no reply at all** |
+| `SIREN WAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts WAIL mode | `WAIL START received` |
+| `SIREN ATTACK [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts ATTACK mode | `ATTACK START received` |
+| `SIREN FASTWAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts FAST WAIL mode | `FASTWAIL START received` |
+| `SIREN WAIL`/`ATTACK`/`FASTWAIL [pw]` | Siren **not** idle | (no-op) | `ERR: busy` |
+| `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`STOP [pw]` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
+| `SIREN STOP [pw]` | TEST MODE off, sender whitelisted, password correct (if set) | Stops the current run | `STOP received` immediately, then `.SIREN STOPPED` once shutdown completes (see below) |
+| `SIREN LOCK [pw]` | Sender whitelisted, password correct (if set) | Locks physical buttons (same as the Main page's lock icon) | `OK: locked` |
+| `SIREN UNLOCK [pw]` | Sender whitelisted, password correct (if set) | Unlocks physical buttons (also clears TEST MODE if it was active) | `OK: unlocked` |
+| `SIREN REBOOT [pw]` | Sender whitelisted, password correct (if set) | Restarts the controller | `OK: rebooting` (sent before reset) |
+| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity check | `PONG` |
+| `SIREN <anything else> [pw]` | Sender whitelisted, password correct (if set) | No effect | `ERR: unknown command` |
+| *(no `SIREN` prefix, sender not whitelisted, or wrong/missing password)* | — | No effect | **no reply at all** |
 
 ### Asynchronous "run ended" notification
 

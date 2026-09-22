@@ -391,12 +391,14 @@ input:focus{outline:none;border-color:var(--cyan)}
   <div class="msg" id="pm"></div>
 </div>
 
-<!-- Mesh Whitelist -->
+<!-- Mesh Settings -->
 <div class="card">
-  <h2>Mesh Whitelist</h2>
+  <h2>Mesh Settings</h2>
   <div class="row"><label>Allowed sender IDs (comma-separated, leave empty to block all)</label>
     <input type="text" id="meshWL" placeholder="e.g. 3A3C, 1B93"></div>
-  <button class="btn save" onclick="saveMeshWL()">Save Whitelist</button>
+  <div class="row"><label>Command Password (optional, plaintext)</label>
+    <input type="text" id="meshPW" placeholder="leave blank for no password"></div>
+  <button class="btn save" onclick="saveMeshWL()">Save Mesh Settings</button>
   <div class="msg" id="mwlm"></div>
 </div>
 
@@ -480,6 +482,7 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   TS.forEach(f=>{const e=document.getElementById('s_'+f);if(e)e.value=+(d[f]/1000).toFixed(2).replace(/\.?0+$/,'');});
   document.getElementById('verNum').textContent=d.fwVersion||'—';
   document.getElementById('meshWL').value=d.meshWhitelist||'';
+  document.getElementById('meshPW').value=d.meshPassword||'';
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -544,7 +547,8 @@ function savePw(){
 function logout(){post('/auth/logout',{}).then(()=>location.href='/login');}
 function saveMeshWL(){
   const wl=document.getElementById('meshWL').value.trim();
-  post('/settings-data',{meshWhitelist:wl}).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
+  const pw=document.getElementById('meshPW').value.trim();
+  post('/settings-data',{meshWhitelist:wl,meshPassword:pw}).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
 }
 function saveTiming(){
   const b={};
@@ -958,6 +962,7 @@ private:
                     applyUInt(doc, "longPressMs",         s.longPressMs);
                     applyUInt(doc, "buttonDebounceMs",    s.buttonDebounceMs);
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
+                    applyString(doc, "meshPassword", s.meshPassword, sizeof(s.meshPassword));
                     settingsMgr.save();
                 }
                 req->send(200, "application/json", "{\"ok\":true}");
@@ -1095,6 +1100,7 @@ private:
         doc["longPressMs"]         = s.longPressMs;
         doc["buttonDebounceMs"]    = s.buttonDebounceMs;
         doc["meshWhitelist"]       = s.meshWhitelist;
+        doc["meshPassword"]        = s.meshPassword;
         doc["fwVersion"]           = FW_VERSION;
         String out;
         serializeJson(doc, out);
