@@ -907,11 +907,11 @@ private:
                         strcmp(mode, "fastwail") == 0 || strcmp(mode, "manual") == 0 ||
                         strcmp(mode, "stop")     == 0);
                     if      (blockedByTestMode)             ok = false;
-                    else if (strcmp(mode, "wail")     == 0) sm.trigger(RunMode::WAIL);
-                    else if (strcmp(mode, "attack")   == 0) sm.trigger(RunMode::ATTACK);
-                    else if (strcmp(mode, "fastwail") == 0) sm.trigger(RunMode::FAST_WAIL);
-                    else if (strcmp(mode, "manual")   == 0) sm.trigger(RunMode::MANUAL);
-                    else if (strcmp(mode, "stop")     == 0) sm.stop();
+                    else if (strcmp(mode, "wail")     == 0) sm.trigger(RunMode::WAIL, TriggerSource::WEB);
+                    else if (strcmp(mode, "attack")   == 0) sm.trigger(RunMode::ATTACK, TriggerSource::WEB);
+                    else if (strcmp(mode, "fastwail") == 0) sm.trigger(RunMode::FAST_WAIL, TriggerSource::WEB);
+                    else if (strcmp(mode, "manual")   == 0) sm.trigger(RunMode::MANUAL, TriggerSource::WEB);
+                    else if (strcmp(mode, "stop")     == 0) sm.stop(TriggerSource::WEB);
                     else if (strcmp(mode, "btn-lock") == 0) buttons.setLocked(!buttons.locked, false);
                     else if (strcmp(mode, "test-lock") == 0) {
                         bool on = doc["on"] | false;

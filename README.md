@@ -182,18 +182,42 @@ by an optional password (see below): `SIREN <command> <password>`, e.g.
 
 | Command | Effect | Reply |
 |---|---|---|
-| `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` | Starts that run mode | `WAIL START received` (or `ERR: busy` if already running) |
-| `SIREN STOP` | Stops the current run | `STOP received`, then `.SIREN STOPPED` once shutdown completes |
-| `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `OK: locked` / `OK: unlocked` |
+| `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` | Starts that run mode | `<MODE> ACTIVATED (activation point: MESH)` (or `ERR: busy` if already running) |
+| `SIREN STOP` | Stops the current run | `STOP ACTIVATED (activation point: MESH)`, then `<MODE> CYCLE COMPLETED - SIREN STOPPED` once shutdown completes |
+| `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
 | `SIREN REBOOT` | Restarts the device | `OK: rebooting` |
-| `SIREN PING` | Connectivity check (no password needed) | `PONG` |
+| `SIREN PING` | Connectivity check (no password needed) | `MODE: ... // LOCAL CONTROLS ... // UPTIME: ... // CPU TEMP: ...` |
 
-A `.SIREN STOPPED` message is also sent whenever a run ends on its own (e.g.
-an Attack/Fast Wail duration expiring), not just after a mesh-issued STOP.
-Any line without the `SIREN` prefix — another siren's traffic, general mesh
-chat — is silently ignored. Mesh commands are gated by the same rules as the
-web UI: they're rejected while the siren isn't idle, and `WAIL`/`ATTACK`/
-`FASTWAIL`/`STOP` are blocked while TEST MODE is active.
+### Outgoing mesh broadcasts
+
+Beyond replying to commands, the controller also proactively broadcasts
+over the mesh whenever something happens — regardless of whether it was
+triggered by a mesh command, the web UI, or a physical button. None of
+these start with `SIREN`, so they're never mistaken for a command by
+another unit sharing the channel:
+
+| Event | Message |
+|---|---|
+| Any run mode starts | `<MODE> ACTIVATED (activation point: LOCAL/WEB/MESH)` |
+| Stop is invoked (even if nothing was running) | `STOP ACTIVATED (activation point: LOCAL/WEB/MESH)` |
+| A run cycle finishes, for any reason | `<MODE> CYCLE COMPLETED - SIREN STOPPED` |
+| Physical-button lockout changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
+| Boot, once, after the device is fully up | `STARTUP COMPLETE`, followed immediately by one STATUS line |
+| Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` |
+
+The CPU temperature reading comes from the ESP32's own internal die
+sensor (`temperatureRead()`) — it reflects chip temperature, not ambient
+room temperature, and reads noticeably warmer than the room; no extra
+hardware is used or needed.
+
+A run cycle finishing on its own (e.g. an Attack/Fast Wail duration
+expiring) still produces the `CYCLE COMPLETED` message, without a
+preceding `STOP ACTIVATED` — that message only fires for an explicitly
+invoked stop. Any incoming line without the `SIREN` prefix — another
+siren's traffic, general mesh chat — is silently ignored. Mesh commands
+are gated by the same rules as the web UI: they're rejected while the
+siren isn't idle, and `WAIL`/`ATTACK`/`FASTWAIL`/`STOP` are blocked while
+TEST MODE is active.
 
 **Sender whitelist**: beyond the `SIREN` prefix, commands are only accepted
 from sender node IDs listed in the **Settings page → Mesh Settings** card

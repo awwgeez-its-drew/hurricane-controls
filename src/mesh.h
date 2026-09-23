@@ -19,11 +19,21 @@
 // against settingsMgr.s.meshWhitelist. Commands also take an optional
 // trailing password token ("SIREN WAIL PASS123"), checked against
 // settingsMgr.s.meshPassword when one is configured; PING is exempt.
+//
+// Beyond replying to commands, this class also proactively broadcasts
+// activation/status messages (mode started/stopped, lockout changes, a
+// boot announcement, and a periodic status line) regardless of whether the
+// triggering action came from the mesh, the web UI, or a physical button —
+// see update()'s edge-detection below. None of these outgoing messages
+// start with "SIREN", so they can't be mistaken for a command by another
+// unit sharing the channel.
 class MeshBridge {
 public:
     void begin() {
         Serial2.begin(MESH_BAUD, SERIAL_8N1, MESH_RX_PIN, MESH_TX_PIN);
-        wasActive_ = sm.isActive();
+        wasActive_       = sm.isActive();
+        wasLocked_       = buttons.locked;
+        lastSeenStopSeq_ = sm.stopCallSeq;
     }
 
     void update() {
@@ -40,22 +50,115 @@ public:
             }
         }
 
-        // Report once whenever a run ends, regardless of why (mesh STOP, web
-        // STOP, physical STOP, or a timed mode simply running out). Leading
-        // "." keeps this from matching MESH_COMMAND_PREFIX on other sirens
-        // sharing the channel — otherwise they'd parse it as an (unknown)
-        // command addressed to them and flood back "ERR: unknown command".
+        // Cache the last real run mode every tick, before it can go stale —
+        // runMode is cleared to NONE the instant stop() runs, well before
+        // state actually reaches IDLE (it sits in STOPPING for the
+        // configured shutdown delays first).
+        if (sm.runMode != RunMode::NONE) lastKnownRunMode_ = sm.runMode;
+
+        // Run started (any source) / run cycle completed (any reason).
         bool active = sm.isActive();
-        if (wasActive_ && !active) reply(".SIREN STOPPED");
+        if (!wasActive_ && active) {
+            reply(String(modeWord(sm.runMode)) + " ACTIVATED (activation point: " +
+                  sourceWord(sm.lastTriggerSource) + ")");
+        }
+        if (wasActive_ && !active) {
+            reply(String(modeWord(lastKnownRunMode_)) + " CYCLE COMPLETED - SIREN STOPPED");
+        }
         wasActive_ = active;
+
+        // Stop explicitly invoked (any source), even if it was a no-op —
+        // detected via a sequence counter since a no-op stop() produces no
+        // observable state change to edge-detect against.
+        if (sm.stopCallSeq != lastSeenStopSeq_) {
+            lastSeenStopSeq_ = sm.stopCallSeq;
+            reply(String("STOP ACTIVATED (activation point: ") + sourceWord(sm.lastStopSource) + ")");
+        }
+
+        // Physical-button lockout state changed.
+        if (buttons.locked != wasLocked_) {
+            wasLocked_ = buttons.locked;
+            reply(wasLocked_ ? "LOCAL BUTTON LOCKOUT ACTIVE" : "LOCAL BUTTON LOCKOUT INACTIVE");
+        }
+
+        // Periodic status line.
+        uint32_t now = millis();
+        if (now - lastStatusTs_ >= STATUS_INTERVAL_MS) {
+            lastStatusTs_ = now;
+            reply(buildStatusMessage());
+        }
+    }
+
+    // Called once from main.cpp, at the very end of setup() (after WiFi and
+    // the web UI are also up), so this reflects a fully-ready device.
+    void announceStartup() {
+        reply("STARTUP COMPLETE");
+        lastStatusTs_ = millis();
+        reply(buildStatusMessage());
     }
 
 private:
-    char    line_[64];
-    uint8_t lineLen_   = 0;
-    bool    wasActive_ = false;
+    static constexpr uint32_t STATUS_INTERVAL_MS = 12UL * 60 * 60 * 1000;  // 12 hours
+
+    char     line_[64];
+    uint8_t  lineLen_          = 0;
+    bool     wasActive_        = false;
+    RunMode  lastKnownRunMode_ = RunMode::NONE;
+    uint32_t lastSeenStopSeq_  = 0;
+    bool     wasLocked_        = false;
+    uint32_t lastStatusTs_     = 0;
 
     void reply(const char* msg) { Serial2.println(msg); }
+    void reply(const String& msg) { Serial2.println(msg); }
+
+    static const char* modeWord(RunMode m) {
+        switch (m) {
+        case RunMode::WAIL:      return "WAIL";
+        case RunMode::ATTACK:    return "ATTACK";
+        case RunMode::FAST_WAIL: return "FASTWAIL";
+        case RunMode::MANUAL:    return "MANUAL";
+        default:                 return "UNKNOWN";
+        }
+    }
+
+    static const char* sourceWord(TriggerSource s) {
+        switch (s) {
+        case TriggerSource::LOCAL: return "LOCAL";
+        case TriggerSource::WEB:   return "WEB";
+        case TriggerSource::MESH:  return "MESH";
+        default:                   return "LOCAL";
+        }
+    }
+
+    static String formatUptime(uint32_t ms) {
+        uint32_t sec = ms / 1000;
+        uint32_t d = sec / 86400;
+        uint32_t h = (sec % 86400) / 3600;
+        uint32_t m = (sec % 3600) / 60;
+        String out;
+        if (d) out += String(d) + "d ";
+        if (d || h) out += String(h) + "h ";
+        out += String(m) + "m";
+        return out;
+    }
+
+    static String modeOrStandby() { return sm.isIdle() ? "STANDBY" : String(modeWord(sm.runMode)); }
+
+    // ESP32's own internal die-temperature sensor — not ambient, and known
+    // to be a rough reading, but needs no extra hardware.
+    static int cpuTempF() {
+        return (int)(temperatureRead() * 9.0f / 5.0f + 32.0f);
+    }
+
+    static String buildStatusMessage() {
+        return "STATUS: " + modeOrStandby() + " - LOCAL CONTROL " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
+               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F";
+    }
+
+    static String buildPingReply() {
+        return "MODE: " + modeOrStandby() + " // LOCAL CONTROLS " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
+               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F";
+    }
 
     // Comma-separated, case-insensitive, whitespace-trimmed match against
     // settingsMgr.s.meshWhitelist. An empty whitelist blocks everything
@@ -166,29 +269,29 @@ private:
             if (testBlocked) { reply("ERR: test mode active"); return; }
             RunMode m = !strcmp(cmd, "WAIL")   ? RunMode::WAIL :
                         !strcmp(cmd, "ATTACK") ? RunMode::ATTACK : RunMode::FAST_WAIL;
-            if (sm.trigger(m)) {
-                String r = String(cmd) + " START received";
-                reply(r.c_str());
-            } else {
-                reply("ERR: busy");
-            }
+            if (!sm.trigger(m, TriggerSource::MESH)) reply("ERR: busy");
+            // else: the generic "<MODE> ACTIVATED (activation point: MESH)"
+            // broadcast in update() covers the success case, with no
+            // perceptible delay since it fires later in this same tick.
         } else if (!strcmp(cmd, "STOP")) {
             if (testBlocked) { reply("ERR: test mode active"); return; }
-            sm.stop();
-            reply("STOP received");
+            sm.stop(TriggerSource::MESH);
+            // "STOP ACTIVATED (activation point: MESH)" is broadcast
+            // generically in update(), covering this case too.
         } else if (!strcmp(cmd, "LOCK")) {
             buttons.setLocked(true, false);
-            reply("OK: locked");
+            // "LOCAL BUTTON LOCKOUT ACTIVE" is broadcast generically in
+            // update() whenever buttons.locked changes, covering this too.
         } else if (!strcmp(cmd, "UNLOCK")) {
             buttons.setLocked(false, false);
-            reply("OK: unlocked");
+            // "LOCAL BUTTON LOCKOUT INACTIVE" covers this the same way.
         } else if (!strcmp(cmd, "REBOOT")) {
             reply("OK: rebooting");
             Serial2.flush();
             delay(100);
             ESP.restart();
         } else if (!strcmp(cmd, "PING")) {
-            reply("PONG");
+            reply(buildPingReply());
         } else {
             reply("ERR: unknown command");
         }

@@ -144,41 +144,72 @@ factor on top of sender-ID filtering.
 
 | Command | Preconditions | Effect | Reply |
 |---|---|---|---|
-| `SIREN WAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts WAIL mode | `WAIL START received` |
-| `SIREN ATTACK [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts ATTACK mode | `ATTACK START received` |
-| `SIREN FASTWAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts FAST WAIL mode | `FASTWAIL START received` |
+| `SIREN WAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts WAIL mode | `WAIL ACTIVATED (activation point: MESH)` (see "Outgoing broadcasts" below) |
+| `SIREN ATTACK [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts ATTACK mode | `ATTACK ACTIVATED (activation point: MESH)` |
+| `SIREN FASTWAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts FAST WAIL mode | `FASTWAIL ACTIVATED (activation point: MESH)` |
 | `SIREN WAIL`/`ATTACK`/`FASTWAIL [pw]` | Siren **not** idle | (no-op) | `ERR: busy` |
 | `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`STOP [pw]` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
-| `SIREN STOP [pw]` | TEST MODE off, sender whitelisted, password correct (if set) | Stops the current run | `STOP received` immediately, then `.SIREN STOPPED` once shutdown completes (see below) |
-| `SIREN LOCK [pw]` | Sender whitelisted, password correct (if set) | Locks physical buttons (same as the Main page's lock icon) | `OK: locked` |
-| `SIREN UNLOCK [pw]` | Sender whitelisted, password correct (if set) | Unlocks physical buttons (also clears TEST MODE if it was active) | `OK: unlocked` |
+| `SIREN STOP [pw]` | TEST MODE off, sender whitelisted, password correct (if set) | Stops the current run | `STOP ACTIVATED (activation point: MESH)`, then `<MODE> CYCLE COMPLETED - SIREN STOPPED` once shutdown completes |
+| `SIREN LOCK [pw]` | Sender whitelisted, password correct (if set) | Locks physical buttons (same as the Main page's lock icon) | `LOCAL BUTTON LOCKOUT ACTIVE` |
+| `SIREN UNLOCK [pw]` | Sender whitelisted, password correct (if set) | Unlocks physical buttons (also clears TEST MODE if it was active) | `LOCAL BUTTON LOCKOUT INACTIVE` |
 | `SIREN REBOOT [pw]` | Sender whitelisted, password correct (if set) | Restarts the controller | `OK: rebooting` (sent before reset) |
-| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity check | `PONG` |
+| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity/status check | `MODE: <STANDBY\|mode> // LOCAL CONTROLS <LOCKED\|UNLOCKED> // UPTIME: ... // CPU TEMP: ...` |
 | `SIREN <anything else> [pw]` | Sender whitelisted, password correct (if set) | No effect | `ERR: unknown command` |
 | *(no `SIREN` prefix, sender not whitelisted, or wrong/missing password)* | — | No effect | **no reply at all** |
 
-### Asynchronous "run ended" notification
+Note that `WAIL`/`ATTACK`/`FASTWAIL`/`STOP`/`LOCK`/`UNLOCK` no longer get a
+command-specific "received" ack — the source-agnostic broadcasts described
+next now cover those cases too (a mesh-issued command produces its
+broadcast with no perceptible delay, since it fires later in the same
+`update()` tick). `ERR: busy`/`ERR: test mode active`/`ERR: unknown
+command`/`OK: rebooting` remain direct, immediate replies since they're
+specific to a *rejected or reboot* mesh command, not a state change any
+other source could also produce.
 
-Independent of any command, the controller sends **`.SIREN STOPPED`**
-exactly once, whenever the state machine transitions from an active run to
-idle, **for any reason**: a mesh-issued `STOP`, a web-UI or physical-button
-stop, or a timed mode (Attack/Fast Wail) simply running out its duration.
-So a `SIREN WAIL` that isn't followed by a manual stop will still
-eventually produce a `.SIREN STOPPED` line on its own once the run
-completes.
+### Outgoing broadcasts (not replies — proactive)
 
-Note the **leading period** — this is a report, not a command, but it still
-happens to start with the word `SIREN`. Without the period it would
-literally match `MESH_COMMAND_PREFIX` on every *other* siren sharing the
-channel, each of which would then try to parse `STOPPED` as a command word,
-fail, and reply `ERR: unknown command` — the exact flood the prefix scheme
-exists to prevent, just self-inflicted by the controller's own status
-message. The period breaks that match while keeping the line
-human-readable.
+Beyond responding to commands, the controller proactively broadcasts
+whenever something happens, **regardless of source** (mesh, web UI, or
+physical button) — this is how a mesh-only observer sees local/web
+activity, not just its own commands. None of these start with the literal
+word `SIREN`, so — unlike the old `.SIREN STOPPED` design — no leading-period
+trick is needed to keep them from being misread as a command by another
+unit; only *incoming* lines need the `SIREN` prefix to be recognized.
 
-There are no other unsolicited status messages — no periodic heartbeat, no
-per-state-transition chatter. Just the immediate ack on a start/stop command
-and the single end-of-run notification.
+| Event | Message | Fires when |
+|---|---|---|
+| Run mode activated | `<MODE> ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.trigger()` succeeds, from any source. `MODE` ∈ WAIL/ATTACK/FASTWAIL/MANUAL. |
+| Stop invoked | `STOP ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.stop()` is called by an external source — even a no-op call while already idle. Internal/automatic stops (duration expiry) do **not** trigger this. |
+| Run cycle completed | `<MODE> CYCLE COMPLETED - SIREN STOPPED` | The state machine reaches `IDLE` from an active run, for any reason (explicit stop or a timed mode's duration expiring). |
+| Lockout changed | `LOCAL BUTTON LOCKOUT ACTIVE` / `LOCAL BUTTON LOCKOUT INACTIVE` | `buttons.locked` changes state, from any cause (Main page icon, TEST MODE entry/exit, or a mesh `LOCK`/`UNLOCK`). |
+| Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once, at the very end of `setup()` — after WiFi and the web UI are also up. |
+| Periodic status | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. |
+
+Implementation notes (`src/mesh.h`, `src/statemachine.h`):
+- **Source attribution** (`LOCAL`/`WEB`/`MESH`) is threaded through a new
+  `TriggerSource` parameter on `StateMachine::trigger()`/`stop()`, set by
+  whichever call site invokes it (`buttons.h` passes `LOCAL`, `webserver.h`'s
+  `POST /cmd` passes `WEB`, `mesh.h` passes `MESH`). This avoids a circular
+  include (`mesh.h` already includes `buttons.h`) by keeping the state
+  machine — already the one shared choke point — as the source of truth,
+  rather than having `mesh.h` call into `buttons.h`/`webserver.h` directly.
+  Internal/automatic `stop()` calls (duration expiry, a defensive fallback)
+  use the default `TriggerSource::AUTO` and are never reported as a
+  user-invoked "STOP ACTIVATED".
+- **"STOP ACTIVATED" needs a call counter, not just state-change
+  edge-detection** — pressing STOP while already idle is a legitimate no-op
+  that produces no observable state transition to detect. `stopCallSeq`
+  increments on every external `stop()` call (not `AUTO` ones); `mesh.h`
+  compares it each tick against the last value it saw.
+- **"CYCLE COMPLETED" needs the mode cached before it goes stale** —
+  `runMode` resets to `NONE` the instant `stop()` runs, well before `state`
+  actually reaches `IDLE` (it sits in `STOPPING` for the configured shutdown
+  delays first). `mesh.h` caches the last non-`NONE` `runMode` every tick so
+  it still has the right value once `IDLE` is finally reached.
+- **CPU temperature** comes from the ESP32's own internal `temperatureRead()`
+  — the chip's die temperature, not ambient/room temperature. It will read
+  noticeably warmer than the room; this is expected and needs no extra
+  hardware or calibration.
 
 ## Safety semantics (why, not just what)
 

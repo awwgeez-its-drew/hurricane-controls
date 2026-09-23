@@ -53,6 +53,7 @@ void setup() {
     webUI.begin();
 
     Serial.println("Hurricane Controls ready.");
+    meshBridge.announceStartup();
 }
 
 void loop() {

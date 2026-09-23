@@ -19,6 +19,13 @@ enum class State : uint8_t {
 
 enum class RunMode : uint8_t { NONE, WAIL, ATTACK, FAST_WAIL, MANUAL };
 
+// Who invoked trigger()/stop() — lets mesh.h report "activation point" on its
+// broadcasts without needing to know about buttons.h/webserver.h (would be a
+// circular include, since mesh.h already includes buttons.h). AUTO marks an
+// internal/automatic call (duration expiry, defensive fallback) that should
+// never be reported as a user-invoked "STOP ACTIVATED".
+enum class TriggerSource : uint8_t { LOCAL, WEB, MESH, AUTO };
+
 struct TimerInfo {
     uint32_t totalElapsedMs   = 0;
     uint32_t totalRemainingMs = 0;  // wail/attack/fast-wail: time left
@@ -29,6 +36,9 @@ class StateMachine {
 public:
     State   state   = State::IDLE;
     RunMode runMode = RunMode::NONE;
+    TriggerSource lastTriggerSource = TriggerSource::LOCAL;
+    TriggerSource lastStopSource    = TriggerSource::AUTO;
+    uint32_t      stopCallSeq       = 0;   // bumped once per external stop() call, even a no-op one
 
     void begin() {
         allOff();
@@ -41,8 +51,9 @@ public:
         heartbeatOn_ = false;
     }
 
-    bool trigger(RunMode mode) {
+    bool trigger(RunMode mode, TriggerSource source = TriggerSource::LOCAL) {
         if (state != State::IDLE) return false;
+        lastTriggerSource = source;
         runMode     = mode;
         runStartTs_ = 0;
         stateTs     = millis();
@@ -54,7 +65,9 @@ public:
         return true;
     }
 
-    void stop() {
+    void stop(TriggerSource source = TriggerSource::AUTO) {
+        lastStopSource = source;
+        if (source != TriggerSource::AUTO) stopCallSeq++;
         if (state == State::IDLE) return;
         stateTs         = millis();
         state           = State::STOPPING;

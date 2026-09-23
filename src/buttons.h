@@ -72,7 +72,7 @@ public:
             stopTriggered    = false;
         }
         if (stopPressed && !stopTriggered && (now - stopPressTs) >= s.buttonDebounceMs) {
-            sm.stop();
+            sm.stop(TriggerSource::LOCAL);
             stopTriggered = true;
         }
         if (!stopPressed) {
@@ -113,13 +113,13 @@ public:
         if (attackPressed && !attackLongArmed) {
             if ((now - attackPressTs) >= s.longPressMs) {
                 attackLongArmed = true;
-                if (sm.isIdle()) sm.trigger(RunMode::FAST_WAIL);
+                if (sm.isIdle()) sm.trigger(RunMode::FAST_WAIL, TriggerSource::LOCAL);
             }
         }
 
         if (!attackPressed && prevAttack) {
             if (!attackLongArmed) {
-                if (sm.isIdle()) sm.trigger(RunMode::ATTACK);
+                if (sm.isIdle()) sm.trigger(RunMode::ATTACK, TriggerSource::LOCAL);
             }
             attackLongArmed = false;
         }
@@ -157,7 +157,7 @@ public:
             if ((now - wailPressTs) >= s.longPressMs) {
                 longPressArmed = true;
                 if (sm.isIdle()) {
-                    if (sm.trigger(RunMode::MANUAL))
+                    if (sm.trigger(RunMode::MANUAL, TriggerSource::LOCAL))
                         physicalManualActive_ = true;
                 }
             }
@@ -168,13 +168,13 @@ public:
             if (longPressArmed) {
                 // Momentary: only stop what the physical button started
                 if (physicalManualActive_) {
-                    sm.stop();
+                    sm.stop(TriggerSource::LOCAL);
                     physicalManualActive_ = false;
                 }
                 longPressArmed = false;
             } else {
                 // Short tap → Wail
-                if (sm.isIdle()) sm.trigger(RunMode::WAIL);
+                if (sm.isIdle()) sm.trigger(RunMode::WAIL, TriggerSource::LOCAL);
             }
         }
 
