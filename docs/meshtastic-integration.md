@@ -178,9 +178,9 @@ unit; only *incoming* lines need the `SIREN` prefix to be recognized.
 
 | Event | Message | Fires when |
 |---|---|---|
-| Run mode activated | `<MODE> ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.trigger()` succeeds, from any source. `MODE` ∈ WAIL/ATTACK/FASTWAIL/MANUAL. |
-| Stop invoked | `STOP ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.stop()` is called by an external source — even a no-op call while already idle. Internal/automatic stops (duration expiry) do **not** trigger this. |
-| Run cycle completed | `<MODE> CYCLE COMPLETED - SIREN STOPPED` | The state machine reaches `IDLE` from an active run, for any reason (explicit stop or a timed mode's duration expiring). |
+| Run mode activated | `\x07<MODE> ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.trigger()` succeeds, from any source. `MODE` ∈ WAIL/ATTACK/FASTWAIL/MANUAL. **Carries a leading BEL (`0x07`)** — Meshtastic treats this as an alert, notifying differently than a normal message on compatible apps (unverified against a live app from this sandbox). |
+| Stop invoked | `\x07STOP ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.stop()` is called by an external source — even a no-op call while already idle. Internal/automatic stops (duration expiry) do **not** trigger this. Also carries the alert-bell prefix, same rationale as activation. |
+| Run cycle completed | `<MODE> CYCLE COMPLETED - SIREN STOPPED` | The state machine reaches `IDLE` from an active run, for any reason (explicit stop or a timed mode's duration expiring). No alert-bell prefix — informational, not urgent. |
 | Lockout changed | `LOCAL BUTTON LOCKOUT ACTIVE` / `LOCAL BUTTON LOCKOUT INACTIVE` | `buttons.locked` changes state, from any cause (Main page icon, TEST MODE entry/exit, or a mesh `LOCK`/`UNLOCK`). |
 | Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once, at the very end of `setup()` — after WiFi and the web UI are also up. |
 | Periodic status | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. |
@@ -210,6 +210,14 @@ Implementation notes (`src/mesh.h`, `src/statemachine.h`):
   — the chip's die temperature, not ambient/room temperature. It will read
   noticeably warmer than the room; this is expected and needs no extra
   hardware or calibration.
+- **Alert-bell prefix**: the activation and stop-invoked broadcasts are sent
+  with a leading BEL character (`\x07`), which Meshtastic is understood to
+  treat as an alert-style message rather than a normal silent one on
+  compatible clients. This is a deliberate choice, limited to those two
+  broadcasts (not `CYCLE COMPLETED`, lockout changes, or `STATUS`), since
+  those two represent something happening right now rather than routine
+  status. Not independently verified against a live Meshtastic app from
+  this sandbox — confirm the actual notification behavior on real hardware.
 
 ## Safety semantics (why, not just what)
 

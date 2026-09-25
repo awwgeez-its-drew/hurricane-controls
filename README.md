@@ -198,12 +198,20 @@ another unit sharing the channel:
 
 | Event | Message |
 |---|---|
-| Any run mode starts | `<MODE> ACTIVATED (activation point: LOCAL/WEB/MESH)` |
-| Stop is invoked (even if nothing was running) | `STOP ACTIVATED (activation point: LOCAL/WEB/MESH)` |
+| Any run mode starts | `\x07<MODE> ACTIVATED (activation point: LOCAL/WEB/MESH)` |
+| Stop is invoked (even if nothing was running) | `\x07STOP ACTIVATED (activation point: LOCAL/WEB/MESH)` |
 | A run cycle finishes, for any reason | `<MODE> CYCLE COMPLETED - SIREN STOPPED` |
 | Physical-button lockout changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
 | Boot, once, after the device is fully up | `STARTUP COMPLETE`, followed immediately by one STATUS line |
 | Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` |
+
+The activation and stop broadcasts carry a leading BEL character (`\x07`),
+which Meshtastic is understood to treat as an alert-style message on
+compatible apps rather than a normal silent one — reserved for those two
+since they represent something happening right now, unlike the routine
+`CYCLE COMPLETED`/`STATUS` lines. Not independently verified against a
+live Meshtastic app; confirm the actual notification behavior on your
+hardware/client.
 
 The CPU temperature reading comes from the ESP32's own internal die
 sensor (`temperatureRead()`) — it reflects chip temperature, not ambient

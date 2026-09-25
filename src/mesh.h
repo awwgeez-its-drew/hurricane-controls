@@ -57,9 +57,13 @@ public:
         if (sm.runMode != RunMode::NONE) lastKnownRunMode_ = sm.runMode;
 
         // Run started (any source) / run cycle completed (any reason).
+        // Leading "\x07" (BEL) on the activation broadcast marks it as an
+        // alert to compatible Meshtastic apps, distinct from a normal
+        // silent message — reserved for events that need attention right
+        // now, not the informational CYCLE COMPLETED/STATUS lines.
         bool active = sm.isActive();
         if (!wasActive_ && active) {
-            reply(String(modeWord(sm.runMode)) + " ACTIVATED (activation point: " +
+            reply(String("\x07") + modeWord(sm.runMode) + " ACTIVATED (activation point: " +
                   sourceWord(sm.lastTriggerSource) + ")");
         }
         if (wasActive_ && !active) {
@@ -69,10 +73,11 @@ public:
 
         // Stop explicitly invoked (any source), even if it was a no-op —
         // detected via a sequence counter since a no-op stop() produces no
-        // observable state change to edge-detect against.
+        // observable state change to edge-detect against. Also carries the
+        // alert-bell prefix, same rationale as the activation broadcast.
         if (sm.stopCallSeq != lastSeenStopSeq_) {
             lastSeenStopSeq_ = sm.stopCallSeq;
-            reply(String("STOP ACTIVATED (activation point: ") + sourceWord(sm.lastStopSource) + ")");
+            reply(String("\x07STOP ACTIVATED (activation point: ") + sourceWord(sm.lastStopSource) + ")");
         }
 
         // Physical-button lockout state changed.
