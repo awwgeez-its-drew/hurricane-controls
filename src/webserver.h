@@ -348,6 +348,8 @@ input:focus{outline:none;border-color:var(--cyan)}
 .trow label:first-child{font-size:.85rem;color:#eaeaea}
 .ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
      background:var(--surface);border-radius:var(--radius)}
+.ver a{color:inherit;text-decoration:none}
+.ver a:hover{text-decoration:underline}
 .stopbar{position:fixed;bottom:0;left:0;right:0;background:var(--stop-bg);color:var(--stop-text);
          display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;letter-spacing:1px;
          padding:18px;cursor:pointer;border-top:2px solid rgba(0,0,0,.15);z-index:20;font-size:1.1rem}
@@ -477,8 +479,8 @@ input:focus{outline:none;border-color:var(--cyan)}
   <div class="msg" id="tm4"></div>
 </div>
 
-<div class="ver mono">Hurricane Controls &middot; v<span id="verNum">—</span></div>
-<div class="ver mono">Created by awwgeez.its.drew &middot; Coded by Claude</div>
+<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Hurricane Controls &middot; v<span id="verNum">—</span></a></div>
+<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
 
 </div>
 
