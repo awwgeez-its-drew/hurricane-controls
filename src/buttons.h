@@ -4,6 +4,11 @@
 #include "settings.h"
 #include "statemachine.h"
 
+// Reported (via mesh.h) whenever a physical button is pressed while
+// buttons.locked is true — not a dual-function distinction, just "someone is
+// touching this control that's currently disabled."
+enum class LockedButton : uint8_t { NONE, STOP, WAIL, ATTACK };
+
 class ButtonHandler {
 public:
     void begin() {
@@ -14,6 +19,8 @@ public:
 
     bool locked         = false;
     bool testModeActive = false;
+    LockedButton lastLockedPress = LockedButton::NONE;
+    uint32_t     lockedPressSeq  = 0;   // bumped once per confirmed press while locked
 
     // Shared entry point for both lock toggles (Main page's plain icon and the
     // Test page's explicit TEST MODE switch) so auto-expiry bookkeeping only
@@ -59,7 +66,19 @@ public:
             setTestMode(false);
         }
 
-        if (locked) return;
+        if (locked) {
+            // Awareness only — no debounce-chain actuation while locked, just
+            // a single-stage confirm (reusing s.buttonDebounceMs for noise
+            // immunity) so someone touching a disabled control is reported.
+            const Settings& ls = settingsMgr.s;
+            checkLockedPress(BTN_STOP,   LockedButton::STOP,   now, ls.buttonDebounceMs,
+                              prevLockedStopRaw_, lockedStopCandTs_, lockedStopAnnounced_);
+            checkLockedPress(BTN_WAIL,   LockedButton::WAIL,   now, ls.buttonDebounceMs,
+                              prevLockedWailRaw_, lockedWailCandTs_, lockedWailAnnounced_);
+            checkLockedPress(BTN_ATTACK, LockedButton::ATTACK, now, ls.buttonDebounceMs,
+                              prevLockedAttackRaw_, lockedAttackCandTs_, lockedAttackAnnounced_);
+            return;
+        }
         const Settings& s = settingsMgr.s;
 
         // ── STOP / E-Stop (GPIO4) ─────────────────────────────────────────
@@ -184,6 +203,33 @@ public:
 private:
     static constexpr uint32_t RELEASE_DEBOUNCE_MS   = 30;
     static constexpr uint32_t TEST_LOCK_TIMEOUT_MS  = 180000;   // 3 minutes
+
+    // Single-stage confirm (press debounced, re-arms on release) used only
+    // for locked-out awareness reporting — no long-press/dual-function logic
+    // needed here, just "was this button touched."
+    void checkLockedPress(uint8_t pin, LockedButton which, uint32_t now, uint32_t debounceMs,
+                           bool& prevRaw, uint32_t& candTs, bool& announced) {
+        bool raw = (digitalRead(pin) == LOW);
+        if (raw && !prevRaw) candTs = now;
+        if (!raw) { candTs = 0; announced = false; }
+        bool confirmed = raw && candTs != 0 && (now - candTs) >= debounceMs;
+        if (confirmed && !announced) {
+            announced = true;
+            lastLockedPress = which;
+            lockedPressSeq++;
+        }
+        prevRaw = raw;
+    }
+
+    bool     prevLockedStopRaw_      = false;
+    uint32_t lockedStopCandTs_       = 0;
+    bool     lockedStopAnnounced_    = false;
+    bool     prevLockedWailRaw_      = false;
+    uint32_t lockedWailCandTs_       = 0;
+    bool     lockedWailAnnounced_    = false;
+    bool     prevLockedAttackRaw_    = false;
+    uint32_t lockedAttackCandTs_     = 0;
+    bool     lockedAttackAnnounced_  = false;
 
     bool     prevStop              = false;
     uint32_t stopPressTs           = 0;

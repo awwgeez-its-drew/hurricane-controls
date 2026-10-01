@@ -14,10 +14,13 @@ enum class State : uint8_t {
     RUN_FASTWAIL_OFF,   // chopper OFF, waiting fastWailOffTime
     RUN_FASTWAIL_PREON, // chopper still OFF, waiting fastWailChopperDelay before re-energising
     RUN_MANUAL,
+    RUN_GROWL_BLOWER,   // Growl Test: blower alone
+    RUN_GROWL_ROTATOR,  // Growl Test: rotator alone
+    RUN_GROWL_CHOPPER,  // Growl Test: chopper alone
     STOPPING,
 };
 
-enum class RunMode : uint8_t { NONE, WAIL, ATTACK, FAST_WAIL, MANUAL };
+enum class RunMode : uint8_t { NONE, WAIL, ATTACK, FAST_WAIL, MANUAL, GROWL };
 
 // Who invoked trigger()/stop() — lets mesh.h report "activation point" on its
 // broadcasts without needing to know about buttons.h/webserver.h (would be a
@@ -55,13 +58,21 @@ public:
         if (state != State::IDLE) return false;
         lastTriggerSource = source;
         runMode     = mode;
-        runStartTs_ = 0;
         stateTs     = millis();
-        chopperStarted_ = blowerStarted_ = rotStarted_ = false;
-        state       = State::STARTING;
         ledBlinkTs_ = millis();
         ledOn_      = true;
         digitalWrite(STATUS_LED, HIGH);
+        if (mode == RunMode::GROWL) {
+            // Growl Test bypasses the independent-delay STARTING sequence
+            // entirely — only one component is ever on at a time, by design.
+            runStartTs_ = stateTs;
+            blowerOn();
+            state = State::RUN_GROWL_BLOWER;
+        } else {
+            runStartTs_ = 0;
+            chopperStarted_ = blowerStarted_ = rotStarted_ = false;
+            state = State::STARTING;
+        }
         return true;
     }
 
@@ -195,6 +206,29 @@ public:
         case State::RUN_MANUAL:
             break;
 
+        // ── Growl Test — one component at a time, no repeat ──────────────
+        case State::RUN_GROWL_BLOWER:
+            if (elapsed >= s.growlBlowerTime) {
+                blowerOff();
+                rotatorOn();
+                stateTs = now;
+                state   = State::RUN_GROWL_ROTATOR;
+            }
+            break;
+
+        case State::RUN_GROWL_ROTATOR:
+            if (elapsed >= s.growlRotatorTime) {
+                rotatorOff();
+                chopperOn();
+                stateTs = now;
+                state   = State::RUN_GROWL_CHOPPER;
+            }
+            break;
+
+        case State::RUN_GROWL_CHOPPER:
+            if (elapsed >= s.growlChopperTime) stop();
+            break;
+
         // ── Shutdown — independent per-component delays from stop() ──────
         case State::STOPPING: {
             uint32_t el = now - stateTs;
@@ -233,6 +267,9 @@ public:
         case State::RUN_FASTWAIL_OFF:
         case State::RUN_FASTWAIL_PREON: return "fastwail_off";
         case State::RUN_MANUAL:        return "manual";
+        case State::RUN_GROWL_BLOWER:
+        case State::RUN_GROWL_ROTATOR:
+        case State::RUN_GROWL_CHOPPER: return "growl";
         case State::STOPPING:          return "stop";
         default:                       return "idle";
         }
@@ -244,6 +281,7 @@ public:
         case RunMode::ATTACK:    return "attack";
         case RunMode::FAST_WAIL: return "fastwail";
         case RunMode::MANUAL:    return "manual";
+        case RunMode::GROWL:     return "growl";
         default:                 return "idle";
         }
     }
@@ -277,6 +315,14 @@ public:
             t.totalRemainingMs = (t.totalElapsedMs < s.fastWailDuration)
                                  ? s.fastWailDuration - t.totalElapsedMs : 0;
             break;
+        case State::RUN_GROWL_BLOWER:
+        case State::RUN_GROWL_ROTATOR:
+        case State::RUN_GROWL_CHOPPER: {
+            uint32_t total = s.growlBlowerTime + s.growlRotatorTime + s.growlChopperTime;
+            t.hasRemaining     = true;
+            t.totalRemainingMs = (t.totalElapsedMs < total) ? total - t.totalElapsedMs : 0;
+            break;
+        }
         default:
             break;
         }

@@ -88,7 +88,7 @@ static const char MAIN_HTML[] PROGMEM = R"rawliteral(
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
-  --wail:#1e3a8a;--attack:#7f1d1d;--fastwail:#78350f;--manual:#4c1d95;
+  --wail:#1e3a8a;--attack:#7f1d1d;--fastwail:#78350f;--manual:#4c1d95;--growl:#0f4c3d;
   --stop-bg:#fca5a5;--stop-text:#000;--radius:4px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -116,6 +116,7 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .attack  {background:var(--attack);color:#ffc9c9}
 .fastwail{background:var(--fastwail);color:#ffd9a0}
 .manual  {background:var(--manual);color:#e3caff}
+.growl   {background:var(--growl);color:#a7f3d0}
 .seq,.stop{background:var(--green);color:#04220f}
 .timer{font-size:3rem;font-weight:700;letter-spacing:3px;
        font-variant-numeric:tabular-nums;min-height:3.5rem;line-height:1}
@@ -464,6 +465,18 @@ input:focus{outline:none;border-color:var(--cyan)}
   <div class="msg" id="tm3"></div>
 </div>
 
+<!-- Growl Test -->
+<div class="card">
+  <h2>Growl Test</h2>
+  <div class="grid2">
+    <div><label>Blower time (sec)</label><input type="number" id="s_growlBlowerTime" min="0.1" step="0.1"></div>
+    <div><label>Rotator time (sec)</label><input type="number" id="s_growlRotatorTime" min="0.1" step="0.1"></div>
+    <div><label>Chopper time (sec)</label><input type="number" id="s_growlChopperTime" min="0.1" step="0.1"></div>
+  </div>
+  <button class="btn save" onclick="saveTiming()">Save Growl Settings</button>
+  <div class="msg" id="tm4"></div>
+</div>
+
 <div class="ver mono">Hurricane Controls &middot; v<span id="verNum">—</span></div>
 <div class="ver mono">Created by awwgeez.its.drew &middot; Coded by Claude</div>
 
@@ -476,7 +489,8 @@ input:focus{outline:none;border-color:var(--cyan)}
 const TS=['wailDuration','attackDuration','attackOnTime','attackOffTime','attackChopperDelay',
           'chopperDelay','blowerDelay','rotatorDelay',
           'stopBlowerDelay','stopChopperDelay','stopRotDelay','longPressMs','buttonDebounceMs',
-          'fastWailDuration','fastWailOnTime','fastWailOffTime','fastWailChopperDelay'];
+          'fastWailDuration','fastWailOnTime','fastWailOffTime','fastWailChopperDelay',
+          'growlBlowerTime','growlRotatorTime','growlChopperTime'];
 
 fetch('/settings-data').then(r=>r.json()).then(d=>{
   TS.forEach(f=>{const e=document.getElementById('s_'+f);if(e)e.value=+(d[f]/1000).toFixed(2).replace(/\.?0+$/,'');});
@@ -637,6 +651,12 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
     onmousedown="testDown(event,'rotator')" onmouseup="testUp(event,'rotator')" onmouseleave="testUp(event,'rotator')"
     ontouchstart="testDown(event,'rotator')" ontouchend="testUp(event,'rotator')" ontouchcancel="testUp(event,'rotator')">ROTATOR</button>
   <div class="msg" id="tmsg"></div>
+</div>
+
+<div class="card">
+  <h2>Growl Test</h2>
+  <p class="hint">Activates blower, then rotator, then chopper — one at a time, for their configured durations (Settings → Growl Test). Requires the siren to be idle and TEST MODE off.</p>
+  <button class="ttest" onclick="claxon();cmd('growl')">START GROWL TEST</button>
 </div>
 </div>
 
@@ -905,12 +925,13 @@ private:
                     bool blockedByTestMode = buttons.testModeActive && (
                         strcmp(mode, "wail")     == 0 || strcmp(mode, "attack") == 0 ||
                         strcmp(mode, "fastwail") == 0 || strcmp(mode, "manual") == 0 ||
-                        strcmp(mode, "stop")     == 0);
+                        strcmp(mode, "growl")    == 0 || strcmp(mode, "stop")  == 0);
                     if      (blockedByTestMode)             ok = false;
                     else if (strcmp(mode, "wail")     == 0) sm.trigger(RunMode::WAIL, TriggerSource::WEB);
                     else if (strcmp(mode, "attack")   == 0) sm.trigger(RunMode::ATTACK, TriggerSource::WEB);
                     else if (strcmp(mode, "fastwail") == 0) sm.trigger(RunMode::FAST_WAIL, TriggerSource::WEB);
                     else if (strcmp(mode, "manual")   == 0) sm.trigger(RunMode::MANUAL, TriggerSource::WEB);
+                    else if (strcmp(mode, "growl")    == 0) sm.trigger(RunMode::GROWL, TriggerSource::WEB);
                     else if (strcmp(mode, "stop")     == 0) sm.stop(TriggerSource::WEB);
                     else if (strcmp(mode, "btn-lock") == 0) buttons.setLocked(!buttons.locked, false);
                     else if (strcmp(mode, "test-lock") == 0) {
@@ -959,6 +980,9 @@ private:
                     applyUInt(doc, "stopChopperDelay", s.stopChopperDelay);
                     applyUInt(doc, "stopRotDelay",     s.stopRotDelay);
                     applyUInt(doc, "attackChopperDelay",  s.attackChopperDelay);
+                    applyUInt(doc, "growlBlowerTime",  s.growlBlowerTime);
+                    applyUInt(doc, "growlRotatorTime", s.growlRotatorTime);
+                    applyUInt(doc, "growlChopperTime", s.growlChopperTime);
                     applyUInt(doc, "longPressMs",         s.longPressMs);
                     applyUInt(doc, "buttonDebounceMs",    s.buttonDebounceMs);
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
@@ -1097,6 +1121,9 @@ private:
         doc["stopChopperDelay"] = s.stopChopperDelay;
         doc["stopRotDelay"]     = s.stopRotDelay;
         doc["attackChopperDelay"]  = s.attackChopperDelay;
+        doc["growlBlowerTime"]  = s.growlBlowerTime;
+        doc["growlRotatorTime"] = s.growlRotatorTime;
+        doc["growlChopperTime"] = s.growlChopperTime;
         doc["longPressMs"]         = s.longPressMs;
         doc["buttonDebounceMs"]    = s.buttonDebounceMs;
         doc["meshWhitelist"]       = s.meshWhitelist;

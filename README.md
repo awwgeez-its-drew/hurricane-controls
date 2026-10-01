@@ -2,7 +2,8 @@
 
 ESP32 firmware + web interface for controlling a motor-driven mechanical siren
 (chopper, blower, rotator) — WAIL, ATTACK, FAST WAIL, and MANUAL run modes, a
-Component Test page for bench-testing relays independently, and a
+Component Test page for bench-testing relays independently (including a
+Growl Test mode that cycles blower/rotator/chopper one at a time), and a
 mobile-friendly web UI served directly from the device.
 
 ## ⚠️ Safety & Disclaimer
@@ -182,7 +183,7 @@ by an optional password (see below): `SIREN <command> <password>`, e.g.
 
 | Command | Effect | Reply |
 |---|---|---|
-| `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` | Starts that run mode | `<MODE> ACTIVATED (activation point: MESH)` (or `ERR: busy` if already running) |
+| `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` / `SIREN GROWL` | Starts that run mode (Growl Test runs blower, then rotator, then chopper, one at a time, for their configured durations — see Settings → Growl Test) | `<MODE> ACTIVATED (activation point: MESH)` (or `ERR: busy` if already running) |
 | `SIREN STOP` | Stops the current run | `STOP ACTIVATED (activation point: MESH)`, then `<MODE> CYCLE COMPLETED - SIREN STOPPED` once shutdown completes |
 | `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
 | `SIREN REBOOT` | Restarts the device | `OK: rebooting` |
@@ -202,16 +203,20 @@ another unit sharing the channel:
 | Stop is invoked (even if nothing was running) | `\x07STOP ACTIVATED (activation point: LOCAL/WEB/MESH)` |
 | A run cycle finishes, for any reason | `<MODE> CYCLE COMPLETED - SIREN STOPPED` |
 | Physical-button lockout changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
+| A physical button is pressed while locked out | `\x07<BUTTON> PRESSED - LOCKED OUT` (`BUTTON` = `STOP`/`WAIL`/`ATTACK`) |
 | Boot, once, after the device is fully up | `STARTUP COMPLETE`, followed immediately by one STATUS line |
 | Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` |
 
-The activation and stop broadcasts carry a leading BEL character (`\x07`),
-which Meshtastic is understood to treat as an alert-style message on
-compatible apps rather than a normal silent one — reserved for those two
-since they represent something happening right now, unlike the routine
-`CYCLE COMPLETED`/`STATUS` lines. Not independently verified against a
-live Meshtastic app; confirm the actual notification behavior on your
-hardware/client.
+The activation, stop, and locked-button-press broadcasts carry a leading
+BEL character (`\x07`), which Meshtastic is understood to treat as an
+alert-style message on compatible apps rather than a normal silent one —
+reserved for those since they represent something happening right now,
+unlike the routine `CYCLE COMPLETED`/`STATUS` lines. Not independently
+verified against a live Meshtastic app; confirm the actual notification
+behavior on your hardware/client. The locked-button-press alert exists to
+flag that someone is physically at the unit trying to use disabled
+controls — it fires once per press (re-arms on release), not continuously
+while held.
 
 The CPU temperature reading comes from the ESP32's own internal die
 sensor (`temperatureRead()`) — it reflects chip temperature, not ambient

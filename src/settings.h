@@ -21,6 +21,9 @@ struct Settings {
     uint32_t longPressMs          = 800;   // shared long-press threshold: WAIL->MANUAL and ATTACK->FAST_WAIL
     uint32_t buttonDebounceMs     = 50;    // ms any physical button must be held LOW before its press is trusted (filters transient/EMI glitches)
     uint32_t attackChopperDelay   = 0;     // ms delay before chopper re-activates each attack cycle
+    uint32_t growlBlowerTime  = 5000;   // Growl Test: blower-alone duration
+    uint32_t growlRotatorTime = 5000;   // Growl Test: rotator-alone duration
+    uint32_t growlChopperTime = 5000;   // Growl Test: chopper-alone duration
     char     webPassword[33] = "Siren123!";
     char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic sender IDs (hex, case-insensitive) allowed to issue mesh commands; empty = block all
     char     meshPassword[64] = "";        // plaintext, optional trailing token on mesh commands ("SIREN WAIL <password>"); empty = not required. PING is exempt.
@@ -50,6 +53,9 @@ public:
         s.longPressMs          = prefs.getUInt("longPressMs",          s.longPressMs);
         s.buttonDebounceMs     = prefs.getUInt("btnDebounceMs",        s.buttonDebounceMs);
         s.attackChopperDelay   = prefs.getUInt("atkChopDelay",        s.attackChopperDelay);
+        s.growlBlowerTime  = prefs.getUInt("growlBlwTime", s.growlBlowerTime);
+        s.growlRotatorTime = prefs.getUInt("growlRotTime", s.growlRotatorTime);
+        s.growlChopperTime = prefs.getUInt("growlChpTime", s.growlChopperTime);
         String pw = prefs.getString("webPwd", "Siren123!");
         strlcpy(s.webPassword, pw.c_str(), sizeof(s.webPassword));
         String wl = prefs.getString("meshWL", s.meshWhitelist);
@@ -79,6 +85,9 @@ public:
         prefs.putUInt("longPressMs",    s.longPressMs);
         prefs.putUInt("btnDebounceMs",  s.buttonDebounceMs);
         prefs.putUInt("atkChopDelay",   s.attackChopperDelay);
+        prefs.putUInt("growlBlwTime", s.growlBlowerTime);
+        prefs.putUInt("growlRotTime", s.growlRotatorTime);
+        prefs.putUInt("growlChpTime", s.growlChopperTime);
         prefs.putString("webPwd",       s.webPassword);
         prefs.putString("meshWL",       s.meshWhitelist);
         prefs.putString("meshPW",       s.meshPassword);

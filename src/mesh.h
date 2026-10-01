@@ -31,9 +31,10 @@ class MeshBridge {
 public:
     void begin() {
         Serial2.begin(MESH_BAUD, SERIAL_8N1, MESH_RX_PIN, MESH_TX_PIN);
-        wasActive_       = sm.isActive();
-        wasLocked_       = buttons.locked;
-        lastSeenStopSeq_ = sm.stopCallSeq;
+        wasActive_              = sm.isActive();
+        wasLocked_              = buttons.locked;
+        lastSeenStopSeq_        = sm.stopCallSeq;
+        lastSeenLockedPressSeq_ = buttons.lockedPressSeq;
     }
 
     void update() {
@@ -86,6 +87,14 @@ public:
             reply(wasLocked_ ? "LOCAL BUTTON LOCKOUT ACTIVE" : "LOCAL BUTTON LOCKOUT INACTIVE");
         }
 
+        // Someone physically pressed a button while it's locked out — alert,
+        // since this means a person is at the unit right now trying to use
+        // disabled controls.
+        if (buttons.lockedPressSeq != lastSeenLockedPressSeq_) {
+            lastSeenLockedPressSeq_ = buttons.lockedPressSeq;
+            reply(String("\x07") + lockedButtonWord(buttons.lastLockedPress) + " PRESSED - LOCKED OUT");
+        }
+
         // Periodic status line.
         uint32_t now = millis();
         if (now - lastStatusTs_ >= STATUS_INTERVAL_MS) {
@@ -112,6 +121,7 @@ private:
     uint32_t lastSeenStopSeq_  = 0;
     bool     wasLocked_        = false;
     uint32_t lastStatusTs_     = 0;
+    uint32_t lastSeenLockedPressSeq_ = 0;
 
     void reply(const char* msg) { Serial2.println(msg); }
     void reply(const String& msg) { Serial2.println(msg); }
@@ -122,6 +132,7 @@ private:
         case RunMode::ATTACK:    return "ATTACK";
         case RunMode::FAST_WAIL: return "FASTWAIL";
         case RunMode::MANUAL:    return "MANUAL";
+        case RunMode::GROWL:     return "GROWL";
         default:                 return "UNKNOWN";
         }
     }
@@ -132,6 +143,15 @@ private:
         case TriggerSource::WEB:   return "WEB";
         case TriggerSource::MESH:  return "MESH";
         default:                   return "LOCAL";
+        }
+    }
+
+    static const char* lockedButtonWord(LockedButton b) {
+        switch (b) {
+        case LockedButton::STOP:   return "STOP";
+        case LockedButton::WAIL:   return "WAIL";
+        case LockedButton::ATTACK: return "ATTACK";
+        default:                   return "UNKNOWN";
         }
     }
 
@@ -270,10 +290,11 @@ private:
 
         bool testBlocked = buttons.testModeActive;
 
-        if (!strcmp(cmd, "WAIL") || !strcmp(cmd, "ATTACK") || !strcmp(cmd, "FASTWAIL")) {
+        if (!strcmp(cmd, "WAIL") || !strcmp(cmd, "ATTACK") || !strcmp(cmd, "FASTWAIL") || !strcmp(cmd, "GROWL")) {
             if (testBlocked) { reply("ERR: test mode active"); return; }
-            RunMode m = !strcmp(cmd, "WAIL")   ? RunMode::WAIL :
-                        !strcmp(cmd, "ATTACK") ? RunMode::ATTACK : RunMode::FAST_WAIL;
+            RunMode m = !strcmp(cmd, "WAIL")     ? RunMode::WAIL :
+                        !strcmp(cmd, "ATTACK")   ? RunMode::ATTACK :
+                        !strcmp(cmd, "FASTWAIL") ? RunMode::FAST_WAIL : RunMode::GROWL;
             if (!sm.trigger(m, TriggerSource::MESH)) reply("ERR: busy");
             // else: the generic "<MODE> ACTIVATED (activation point: MESH)"
             // broadcast in update() covers the success case, with no

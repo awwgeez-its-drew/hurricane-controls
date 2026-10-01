@@ -147,8 +147,9 @@ factor on top of sender-ID filtering.
 | `SIREN WAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts WAIL mode | `WAIL ACTIVATED (activation point: MESH)` (see "Outgoing broadcasts" below) |
 | `SIREN ATTACK [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts ATTACK mode | `ATTACK ACTIVATED (activation point: MESH)` |
 | `SIREN FASTWAIL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts FAST WAIL mode | `FASTWAIL ACTIVATED (activation point: MESH)` |
-| `SIREN WAIL`/`ATTACK`/`FASTWAIL [pw]` | Siren **not** idle | (no-op) | `ERR: busy` |
-| `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`STOP [pw]` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
+| `SIREN GROWL [pw]` | Siren idle, TEST MODE off, sender whitelisted, password correct (if set) | Starts Growl Test: activates blower, then rotator, then chopper, one at a time, for their configured durations (Settings → Growl Test), then stops — no repeat | `GROWL ACTIVATED (activation point: MESH)`, then `GROWL CYCLE COMPLETED - SIREN STOPPED` once the sequence finishes |
+| `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`GROWL [pw]` | Siren **not** idle | (no-op) | `ERR: busy` |
+| `SIREN WAIL`/`ATTACK`/`FASTWAIL`/`GROWL`/`STOP [pw]` | TEST MODE active | (no-op, blocked) | `ERR: test mode active` |
 | `SIREN STOP [pw]` | TEST MODE off, sender whitelisted, password correct (if set) | Stops the current run | `STOP ACTIVATED (activation point: MESH)`, then `<MODE> CYCLE COMPLETED - SIREN STOPPED` once shutdown completes |
 | `SIREN LOCK [pw]` | Sender whitelisted, password correct (if set) | Locks physical buttons (same as the Main page's lock icon) | `LOCAL BUTTON LOCKOUT ACTIVE` |
 | `SIREN UNLOCK [pw]` | Sender whitelisted, password correct (if set) | Unlocks physical buttons (also clears TEST MODE if it was active) | `LOCAL BUTTON LOCKOUT INACTIVE` |
@@ -182,6 +183,7 @@ unit; only *incoming* lines need the `SIREN` prefix to be recognized.
 | Stop invoked | `\x07STOP ACTIVATED (activation point: LOCAL\|WEB\|MESH)` | `sm.stop()` is called by an external source — even a no-op call while already idle. Internal/automatic stops (duration expiry) do **not** trigger this. Also carries the alert-bell prefix, same rationale as activation. |
 | Run cycle completed | `<MODE> CYCLE COMPLETED - SIREN STOPPED` | The state machine reaches `IDLE` from an active run, for any reason (explicit stop or a timed mode's duration expiring). No alert-bell prefix — informational, not urgent. |
 | Lockout changed | `LOCAL BUTTON LOCKOUT ACTIVE` / `LOCAL BUTTON LOCKOUT INACTIVE` | `buttons.locked` changes state, from any cause (Main page icon, TEST MODE entry/exit, or a mesh `LOCK`/`UNLOCK`). |
+| Locked button pressed | `\x07<BUTTON> PRESSED - LOCKED OUT` | A physical STOP/WAIL/ATTACK button is pressed while `buttons.locked` is true. `BUTTON` ∈ STOP/WAIL/ATTACK. Fires once per press (debounced, re-arms on release) — not repeatedly while held. **Carries the alert-bell prefix**, same rationale as activation/stop: someone is physically at the unit right now. |
 | Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once, at the very end of `setup()` — after WiFi and the web UI are also up. |
 | Periodic status | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. |
 
@@ -210,14 +212,33 @@ Implementation notes (`src/mesh.h`, `src/statemachine.h`):
   — the chip's die temperature, not ambient/room temperature. It will read
   noticeably warmer than the room; this is expected and needs no extra
   hardware or calibration.
-- **Alert-bell prefix**: the activation and stop-invoked broadcasts are sent
-  with a leading BEL character (`\x07`), which Meshtastic is understood to
-  treat as an alert-style message rather than a normal silent one on
-  compatible clients. This is a deliberate choice, limited to those two
-  broadcasts (not `CYCLE COMPLETED`, lockout changes, or `STATUS`), since
-  those two represent something happening right now rather than routine
-  status. Not independently verified against a live Meshtastic app from
-  this sandbox — confirm the actual notification behavior on real hardware.
+- **Alert-bell prefix**: the activation, stop-invoked, and locked-button-press
+  broadcasts are sent with a leading BEL character (`\x07`), which Meshtastic
+  is understood to treat as an alert-style message rather than a normal
+  silent one on compatible clients. This is a deliberate choice, limited to
+  those three broadcasts (not `CYCLE COMPLETED`, lockout changes, or
+  `STATUS`), since they represent something happening right now rather than
+  routine status. Not independently verified against a live Meshtastic app
+  from this sandbox — confirm the actual notification behavior on real
+  hardware.
+- **Locked-button-press detection is a single-stage debounce, independent of
+  the normal multi-stage button logic** — `buttons.h` runs a dedicated
+  `checkLockedPress()` per button only while `locked` is true (the dual-
+  function long-press/short-tap logic is irrelevant here; there's nothing to
+  actuate, just "was this button touched"). A `lockedPressSeq` counter
+  (mirroring `stopCallSeq`'s pattern) increments once per confirmed press;
+  `mesh.h` compares it each tick, the same edge-detection approach used for
+  "STOP ACTIVATED" above.
+- **Growl Test mode (`RunMode::GROWL`)** is a sequential, non-repeating mode:
+  blower on alone, then rotator alone, then chopper alone, each for its own
+  configured duration (`growlBlowerTime`/`growlRotatorTime`/
+  `growlChopperTime` in `src/settings.h`, editable from Settings → Growl
+  Test), then the state machine calls `stop()` with the default
+  `TriggerSource::AUTO` — so, like a duration expiring on any other mode, it
+  produces `GROWL CYCLE COMPLETED - SIREN STOPPED` without a preceding `STOP
+  ACTIVATED`. Unlike every other mode, `trigger()` skips the shared
+  independent-delay `STARTING` state entirely for GROWL, since only one
+  component is ever energized at a time.
 
 ## Safety semantics (why, not just what)
 
