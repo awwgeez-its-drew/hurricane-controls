@@ -17,9 +17,16 @@ constexpr uint8_t  MESH_TX_PIN = 17;   // ESP32 TX2 — wire to Meshtastic node'
 constexpr uint32_t MESH_BAUD   = 38400; // must match the Meshtastic Serial Module's baud setting
 constexpr char     MESH_COMMAND_PREFIX[] = "SIREN"; // required prefix, case-insensitive; change per-unit if running multiple sirens on one channel
 
+// Weather Watcher link (UART1, optional — wire to a second ESP32 running the
+// weather-watcher/ firmware in this repo, which polls NWS alerts and sends a
+// trigger command over this dedicated, directly-wired link)
+constexpr uint8_t  WEATHER_RX_PIN = 18;   // ESP32 RX1 — wire to Weather Watcher's serial TX
+constexpr uint8_t  WEATHER_TX_PIN = 19;   // ESP32 TX1 — wire to Weather Watcher's serial RX
+constexpr uint32_t WEATHER_BAUD   = 38400;
+
 // WiFi AP
 constexpr char WIFI_SSID[] = "HurricaneControls";
 constexpr char WIFI_PASS[] = "";         // open AP
 constexpr char MDNS_NAME[] = "hurricane";
 
-constexpr char FW_VERSION[] = "1.6.0";
+constexpr char FW_VERSION[] = "1.7.0";

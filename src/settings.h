@@ -27,6 +27,7 @@ struct Settings {
     char     webPassword[33] = "Siren123!";
     char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic sender IDs (hex, case-insensitive) allowed to issue mesh commands; empty = block all
     char     meshPassword[64] = "";        // plaintext, optional trailing token on mesh commands ("SIREN WAIL <password>"); empty = not required. PING is exempt.
+    bool     weatherAutoTriggerEnabled = true;  // dedicated kill-switch for the Weather Watcher link, independent of buttons.locked
 };
 
 class SettingsManager {
@@ -62,6 +63,7 @@ public:
         strlcpy(s.meshWhitelist, wl.c_str(), sizeof(s.meshWhitelist));
         String mpw = prefs.getString("meshPW", s.meshPassword);
         strlcpy(s.meshPassword, mpw.c_str(), sizeof(s.meshPassword));
+        s.weatherAutoTriggerEnabled = prefs.getBool("wxAutoTrig", s.weatherAutoTriggerEnabled);
         prefs.end();
     }
 
@@ -91,6 +93,7 @@ public:
         prefs.putString("webPwd",       s.webPassword);
         prefs.putString("meshWL",       s.meshWhitelist);
         prefs.putString("meshPW",       s.meshPassword);
+        prefs.putBool("wxAutoTrig",     s.weatherAutoTriggerEnabled);
         prefs.end();
     }
 };

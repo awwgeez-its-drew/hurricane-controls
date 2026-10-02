@@ -328,10 +328,12 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;margin-bottom:14px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
 .row{margin-bottom:10px}
+.hint{font-size:.78rem;color:#9aa3af;margin-bottom:12px}
 label{font-size:.78rem;color:#9aa3af;display:block;margin-bottom:3px}
 input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
       border-radius:var(--radius);padding:9px 11px;font-size:.9rem;font-family:inherit}
 input:focus{outline:none;border-color:var(--cyan)}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:pointer;flex-shrink:0}
 .ws{font-size:.8rem;padding:9px 12px;background:#0a0e18;border-radius:var(--radius);
     margin-bottom:12px;color:#9aa3af;display:flex;align-items:center;gap:8px;border-left:3px solid transparent}
 .ws.ok{color:var(--green);border-left-color:var(--green)}
@@ -403,6 +405,17 @@ input:focus{outline:none;border-color:var(--cyan)}
     <input type="text" id="meshPW" placeholder="leave blank for no password"></div>
   <button class="btn save" onclick="saveMeshWL()">Save Mesh Settings</button>
   <div class="msg" id="mwlm"></div>
+</div>
+
+<!-- Weather Watcher -->
+<div class="card">
+  <h2>Weather Watcher</h2>
+  <p class="hint">Allows a second, separately-wired ESP32 polling National Weather Service alerts to automatically trigger the siren. See docs/weather-watcher.md. This does not bypass TEST MODE.</p>
+  <div class="trow">
+    <label for="wxAutoTrig">Automatic weather-triggered activation</label>
+    <input type="checkbox" id="wxAutoTrig" onchange="saveWeatherAutoTrigger()">
+  </div>
+  <div class="msg" id="wxm"></div>
 </div>
 
 <!-- Startup Sequence -->
@@ -499,6 +512,7 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('verNum').textContent=d.fwVersion||'—';
   document.getElementById('meshWL').value=d.meshWhitelist||'';
   document.getElementById('meshPW').value=d.meshPassword||'';
+  document.getElementById('wxAutoTrig').checked=!!d.weatherAutoTriggerEnabled;
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -565,6 +579,10 @@ function saveMeshWL(){
   const wl=document.getElementById('meshWL').value.trim();
   const pw=document.getElementById('meshPW').value.trim();
   post('/settings-data',{meshWhitelist:wl,meshPassword:pw}).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
+}
+function saveWeatherAutoTrigger(){
+  const on=document.getElementById('wxAutoTrig').checked;
+  post('/settings-data',{weatherAutoTriggerEnabled:on}).then(d=>msg('wxm',d.ok?'Saved!':'Error',d.ok));
 }
 function saveTiming(){
   const b={};
@@ -989,6 +1007,7 @@ private:
                     applyUInt(doc, "buttonDebounceMs",    s.buttonDebounceMs);
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
                     applyString(doc, "meshPassword", s.meshPassword, sizeof(s.meshPassword));
+                    applyBool(doc, "weatherAutoTriggerEnabled", s.weatherAutoTriggerEnabled);
                     settingsMgr.save();
                 }
                 req->send(200, "application/json", "{\"ok\":true}");
@@ -1080,6 +1099,10 @@ private:
         if (doc[key].is<const char*>()) strlcpy(field, doc[key].as<const char*>(), fieldSize);
     }
 
+    static void applyBool(JsonDocument& doc, const char* key, bool& field) {
+        if (doc[key].is<bool>()) field = doc[key].as<bool>();
+    }
+
     static String buildStatusJson() {
         uint8_t rs = relayState();
         TimerInfo ti = sm.getTimerInfo();
@@ -1130,6 +1153,7 @@ private:
         doc["buttonDebounceMs"]    = s.buttonDebounceMs;
         doc["meshWhitelist"]       = s.meshWhitelist;
         doc["meshPassword"]        = s.meshPassword;
+        doc["weatherAutoTriggerEnabled"] = s.weatherAutoTriggerEnabled;
         doc["fwVersion"]           = FW_VERSION;
         String out;
         serializeJson(doc, out);

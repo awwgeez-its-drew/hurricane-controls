@@ -36,6 +36,16 @@ By using this code, you accept full responsibility for:
   relying on it in any safety-relevant context,
 - Any consequences of using, modifying, or distributing this code.
 
+If you enable the optional [Weather Watcher](docs/weather-watcher.md)
+auto-activation add-on: it is a **best-effort, supplementary** automation,
+dependent on your home internet, WiFi, and the National Weather Service's
+API all being available at the moment a warning is issued. It fails silently
+(no activation) rather than falsely triggering when any of those is
+unreachable — which also means no activation at all during an outage. It
+does not replace other warning methods (Wireless Emergency Alerts, NOAA
+Weather Radio, your local emergency management agency's outdoor sirens,
+etc.) — treat it as an extra layer, never your only one.
+
 This project is licensed under the MIT License (see [LICENSE](LICENSE)),
 which includes a standard "AS IS, WITHOUT WARRANTY OF ANY KIND" disclaimer.
 Nothing in this README limits or modifies that license.
@@ -254,6 +264,20 @@ a dedicated private channel, not a public/default one. This is an
 additional command source into the same state machine as the web UI and
 physical buttons; it does not bypass the independent hardware E-Stop
 required in the Safety & Disclaimer section above.
+
+## Weather Watcher — automatic NWS alert activation (optional)
+
+A second, separately-flashed ESP32 (`weather-watcher/` in this repo) can
+poll National Weather Service alerts for your exact coordinates — using
+real storm-based warning polygons, not whole-county alerts — and
+automatically trigger the siren over a dedicated wired link when a
+confirmed/PDS/Tornado Emergency Tornado Warning or a Considerable/
+Destructive Severe Thunderstorm Warning covers your location.
+
+This is entirely optional hardware, independent of everything else in this
+project. See [`docs/weather-watcher.md`](docs/weather-watcher.md) for
+wiring, setup, the exact alert-matching criteria and their limitations, and
+how it interacts with TEST MODE and the physical lock icon.
 
 ## Credits
 

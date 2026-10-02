@@ -27,7 +27,7 @@ enum class RunMode : uint8_t { NONE, WAIL, ATTACK, FAST_WAIL, MANUAL, GROWL };
 // circular include, since mesh.h already includes buttons.h). AUTO marks an
 // internal/automatic call (duration expiry, defensive fallback) that should
 // never be reported as a user-invoked "STOP ACTIVATED".
-enum class TriggerSource : uint8_t { LOCAL, WEB, MESH, AUTO };
+enum class TriggerSource : uint8_t { LOCAL, WEB, MESH, WEATHER, AUTO };
 
 struct TimerInfo {
     uint32_t totalElapsedMs   = 0;

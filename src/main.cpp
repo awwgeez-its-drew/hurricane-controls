@@ -8,6 +8,7 @@
 #include "wifi_manager.h"
 #include "webserver.h"
 #include "mesh.h"
+#include "weather_link.h"
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 SettingsManager settingsMgr;
@@ -16,6 +17,7 @@ ButtonHandler   buttons;
 WiFiManager     wifiMgr;
 WebUI           webUI;
 MeshBridge      meshBridge;
+WeatherLink     weatherLink;
 
 static void logResetReason() {
     Serial.print("Reset reason: ");
@@ -47,6 +49,7 @@ void setup() {
     sm.begin();
     buttons.begin();
     meshBridge.begin();
+    weatherLink.begin();
 
     // WiFi first (may block up to 12 s for STA attempt)
     wifiMgr.begin();
@@ -62,4 +65,5 @@ void loop() {
     webUI.update();
     wifiMgr.update();  // handles deferred ESP.restart() after WiFi credential changes
     meshBridge.update();
+    weatherLink.update();
 }

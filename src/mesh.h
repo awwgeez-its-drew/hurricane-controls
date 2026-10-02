@@ -139,10 +139,11 @@ private:
 
     static const char* sourceWord(TriggerSource s) {
         switch (s) {
-        case TriggerSource::LOCAL: return "LOCAL";
-        case TriggerSource::WEB:   return "WEB";
-        case TriggerSource::MESH:  return "MESH";
-        default:                   return "LOCAL";
+        case TriggerSource::LOCAL:   return "LOCAL";
+        case TriggerSource::WEB:     return "WEB";
+        case TriggerSource::MESH:    return "MESH";
+        case TriggerSource::WEATHER: return "WEATHER";
+        default:                     return "LOCAL";
         }
     }
 
