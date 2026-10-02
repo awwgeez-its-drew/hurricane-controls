@@ -33,6 +33,7 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Weather Watcher</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M6 16a4 4 0 0 1 .4-7.97 5.5 5.5 0 0 1 10.6 1.5A4 4 0 0 1 17 16H6z'/%3E%3Cpath fill='%23fbbf24' d='M13 17l-2 4h2l-1 3 4-5h-2l1-2z'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -67,7 +68,7 @@ function login(e){
   fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({password:document.getElementById('pw').value})
   }).then(r=>r.json()).then(d=>{
-    if(d.ok){location.href='/';}
+    if(d.ok){location.href='/settings';}
     else if(d.locked){document.getElementById('err').textContent='Too many attempts. Try again in '+d.retryAfter+'s.';}
     else{document.getElementById('err').textContent='Incorrect password';
          document.getElementById('pw').value='';}
@@ -81,6 +82,9 @@ static const char DASHBOARD_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Weather Watcher</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M6 16a4 4 0 0 1 .4-7.97 5.5 5.5 0 0 1 10.6 1.5A4 4 0 0 1 17 16H6z'/%3E%3Cpath fill='%23fbbf24' d='M13 17l-2 4h2l-1 3 4-5h-2l1-2z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -91,6 +95,7 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
+.navbar h1 a{color:inherit;text-decoration:none}
 .navicons{display:flex;gap:14px;align-items:center}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
@@ -98,15 +103,6 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
       box-shadow:0 1px 3px rgba(0,0,0,.35)}
 h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;margin-bottom:12px}
 .hint{font-size:.78rem;color:#9aa3af}
-.overlay{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:50}
-.mbox{background:var(--surface);border-radius:var(--radius);padding:28px 24px;text-align:center;
-      max-width:280px;width:calc(100% - 32px)}
-.mbox p{margin-bottom:20px;font-size:1rem}
-.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.mok{padding:12px;background:#7f1d1d;color:#fff;border:none;border-radius:var(--radius);
-     font-weight:700;cursor:pointer;font-family:inherit}
-.mcancel{padding:12px;background:#1b2438;color:#9aa3af;border:none;border-radius:var(--radius);
-         font-weight:700;cursor:pointer;font-family:inherit}
 .status-row{display:flex;align-items:center;cursor:pointer;padding:8px 0}
 .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:10px;background:#3a3f4a;flex-shrink:0}
 .dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
@@ -115,7 +111,11 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 .status-detail{display:none;font-size:.8rem;color:#9aa3af;padding:2px 0 10px 22px;line-height:1.4}
 .status-detail.show{display:block}
 .statline{text-align:center;font-size:.78rem;color:#9aa3af;padding-top:10px;border-top:1px solid #1a2a3a;margin-top:6px}
-.clock{text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:2px;margin:6px 0 2px}
+.clock{text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:2px;margin:6px 0 2px;
+       font-family:'Roboto',Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
+     background:var(--surface);border-radius:var(--radius)}
+.ver a{color:inherit;text-decoration:none}
 .no-alerts{display:flex;align-items:center;justify-content:center;gap:8px;border:2px solid var(--green);
     border-radius:4px;padding:16px;color:var(--green);font-weight:700;font-size:.9rem}
 .alert-item{display:block;padding:12px 14px;border-radius:4px;margin-bottom:8px;text-decoration:none;color:#fff}
@@ -131,11 +131,8 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 </style></head>
 <body>
 <div class="navbar">
-  <h1>Weather Watcher</h1>
+  <h1><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher</a></h1>
   <div class="navicons">
-    <button class="ibtn" onclick="showRestart()" title="Restart">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
-    </button>
     <a href="/settings" class="ibtn" title="Settings">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </a>
@@ -173,17 +170,11 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
   <div id="recentAlerts"><p class="hint">None yet.</p></div>
 </div>
 
+<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a></div>
+<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
+
 </div>
 
-<div class="overlay" id="rmModal">
-  <div class="mbox">
-    <p>Restart the Weather Watcher?</p>
-    <div class="mgrid">
-      <button class="mok"     onclick="doRestart()">Restart</button>
-      <button class="mcancel" onclick="closeModal()">Cancel</button>
-    </div>
-  </div>
-</div>
 <script>
 function toggleDetail(id){document.getElementById(id).classList.toggle('show');}
 
@@ -237,14 +228,11 @@ function refresh(){
     document.getElementById('lastPoll').textContent='Last polling attempt: '+d.lastPoll;
     renderCurrentAlerts(d.currentAlerts);
     renderRecentAlerts(d.recentAlerts);
+    if(d.fwVersion)document.getElementById('verNum').textContent=d.fwVersion;
   }).catch(()=>{});
 }
 refresh();
 setInterval(refresh,1000);
-
-function showRestart(){document.getElementById('rmModal').style.display='flex';}
-function closeModal(){document.getElementById('rmModal').style.display='none';}
-function doRestart(){closeModal();fetch('/restart',{method:'POST'});}
 </script>
 </body></html>
 )rawliteral";
@@ -254,6 +242,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Weather Watcher</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M6 16a4 4 0 0 1 .4-7.97 5.5 5.5 0 0 1 10.6 1.5A4 4 0 0 1 17 16H6z'/%3E%3Cpath fill='%23fbbf24' d='M13 17l-2 4h2l-1 3 4-5h-2l1-2z'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -300,6 +289,21 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
 .ws.ok{color:var(--green);border-left-color:var(--green)}
 .ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
      background:var(--surface);border-radius:var(--radius)}
+.ver a{color:inherit;text-decoration:none}
+.overlay{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:50}
+.mbox{background:var(--surface);border-radius:var(--radius);padding:28px 24px;text-align:center;
+      max-width:280px;width:calc(100% - 32px)}
+.mbox p{margin-bottom:20px;font-size:1rem}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mok{padding:12px;background:#7f1d1d;color:#fff;border:none;border-radius:var(--radius);
+     font-weight:700;cursor:pointer;font-family:inherit}
+.mcancel{padding:12px;background:#1b2438;color:#9aa3af;border:none;border-radius:var(--radius);
+         font-weight:700;cursor:pointer;font-family:inherit}
+.chklist{max-height:260px;overflow-y:auto;margin:10px 0;border:1px solid #1a2a3a;border-radius:var(--radius);padding:4px 10px}
+.chkrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #1a2a3a}
+.chkrow:first-child{border-top:none}
+.chkrow label{font-size:.85rem;color:#eaeaea;margin:0}
+.chkrow input[type=checkbox]{width:18px;height:18px}
 </style></head>
 <body>
 <div class="navbar">
@@ -307,7 +311,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
   <h1>Settings</h1>
-  <div style="width:22px"></div>
+  <button class="ibtn" onclick="showRestart()" title="Restart">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+  </button>
 </div>
 
 <div class="content">
@@ -358,17 +364,33 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
 <div class="card">
   <div class="card-head" onclick="toggleCard(this)"><h2>Trigger Modes</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
   <div class="card-body">
-  <p class="hint">Which Hurricane Controls run mode to request for each qualifying alert type. Sent as "WX &lt;MODE&gt;" over the dedicated UART link.</p>
-  <div class="row"><label>Confirmed/PDS/Emergency Tornado Warning</label>
-    <select id="torMode"><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="row"><label>Considerable/Destructive Severe T-storm Warning</label>
-    <select id="tsMode"><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <p class="hint">Which Hurricane Controls run mode to request for each qualifying alert category. Sent as "WX &lt;MODE&gt;" over the dedicated UART link. OFF means the alert still shows on the Dashboard but never triggers the siren.</p>
+  <div class="row"><label>Tornado Warning — unconfirmed</label>
+    <select id="torUcMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <div class="row"><label>Tornado Warning — confirmed (observed or damage-tagged)</label>
+    <select id="torCfMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <div class="row"><label>Tornado Emergency (catastrophic damage threat)</label>
+    <select id="torEmMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <div class="row"><label>Severe T-storm Warning — base (no damage tag)</label>
+    <select id="svrBaMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <div class="row"><label>Severe T-storm Warning — considerable damage threat</label>
+    <select id="svrCoMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <div class="row"><label>Severe T-storm Warning — destructive damage threat</label>
+    <select id="svrDeMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
   <div class="trow">
     <label for="repeatUpg">Re-trigger if an already-triggered alert escalates further</label>
     <input type="checkbox" id="repeatUpg" onchange="saveModes()">
   </div>
   <button class="btn save" onclick="saveModes()">Save Trigger Modes</button>
   <div class="msg" id="mm"></div>
+
+  <p class="hint" style="margin-top:18px;border-top:1px solid #1a2a3a;padding-top:14px">
+    <b style="color:#eaeaea">Other Extreme Emergency</b> &mdash; any alert marked Extreme severity, Immediate urgency, and Observed certainty (NWS's own "this is happening right now, as serious as it gets" markers) that isn't a Tornado or Severe T-storm Warning. These don't carry a dedicated damage tag, so each specific warning type below must be checked on to ever trigger — unchecked types never will, no matter how severe, so e.g. a Flood Warning can stay off if it's not a risk for your location.
+  </p>
+  <div class="row"><label>Siren mode for any checked type below</label>
+    <select id="otherMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+  <div class="chklist" id="otherList"></div>
+  <button class="btn save" onclick="saveModes()">Save Other Extreme Emergency</button>
   </div>
 </div>
 
@@ -379,16 +401,38 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <p class="hint">Used for the dashboard's clock and alert timestamps. Requires an internet connection to sync.</p>
   <div class="row"><label>NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
   <div class="row"><label>Update frequency (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
-  <div class="row"><label>POSIX Timezone string</label>
-    <input type="text" id="posixTz" placeholder="e.g. EST5EDT,M3.2.0,M11.1.0"></div>
-  <p class="hint">Encodes both your UTC offset and daylight-saving transition dates, so the clock adjusts for DST on its own — no separate toggle needed. Common US zones: Eastern <code>EST5EDT,M3.2.0,M11.1.0</code> &middot; Central <code>CST6CDT,M3.2.0,M11.1.0</code> &middot; Mountain <code>MST7MDT,M3.2.0,M11.1.0</code> &middot; Pacific <code>PST8PDT,M3.2.0,M11.1.0</code> &middot; no DST, e.g. Arizona <code>MST7</code>.</p>
+  <div class="row"><label>Time zone</label>
+    <select id="timeZone">
+      <option value="EASTERN">Eastern</option>
+      <option value="CENTRAL">Central</option>
+      <option value="MOUNTAIN">Mountain</option>
+      <option value="ARIZONA">Arizona (no DST)</option>
+      <option value="PACIFIC">Pacific</option>
+      <option value="ALASKA">Alaska</option>
+      <option value="HAWAII">Hawaii (no DST)</option>
+    </select></div>
+  <div class="trow">
+    <label for="autoDst">Automatically adjust for Daylight Saving Time</label>
+    <input type="checkbox" id="autoDst">
+  </div>
   <button class="btn save" onclick="saveTime()">Save Time Settings</button>
   <div class="msg" id="tmz"></div>
   </div>
 </div>
 
-<div class="ver mono">Weather Watcher &middot; v<span id="verNum">&mdash;</span></div>
+<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a></div>
+<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
 
+</div>
+
+<div class="overlay" id="rmModal">
+  <div class="mbox">
+    <p>Restart the Weather Watcher?</p>
+    <div class="mgrid">
+      <button class="mok"     onclick="doRestart()">Restart</button>
+      <button class="mcancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
 </div>
 <script>
 function toggleCard(headEl){ headEl.parentElement.classList.toggle('expanded'); }
@@ -400,17 +444,47 @@ function msg(id,txt,ok){
   setTimeout(()=>{e.textContent='';e.className='msg';},3500);
 }
 
+// Mirrors weather-watcher/src/other_extreme_types.h — keep in sync if that table changes.
+const OTHER_EXTREME_CANDIDATES=[
+  ["FIRE","Fire Warning"],["CEM","Civil Emergency Message"],["CIVDNG","Civil Danger Warning"],
+  ["HAZMAT","Hazardous Materials Warning"],["RAD","Radiological Hazard Warning"],
+  ["NUKE","Nuclear Power Plant Warning"],["SHELTER","Shelter In Place Warning"],
+  ["EVAC","Evacuation Immediate"],["LAWENF","Law Enforcement Warning"],
+  ["LOCAL","Local Area Emergency"],["911","911 Telephone Outage Emergency"],
+  ["FFW","Flash Flood Warning"],["FLW","Flood Warning"],["XWIND","Extreme Wind Warning"],
+  ["TSUNAMI","Tsunami Warning"],["VOLCANO","Volcano Warning"],["EQ","Earthquake Warning"],
+  ["DUST","Dust Storm Warning"],
+];
+function renderOtherList(includedCsv){
+  const included=new Set((includedCsv||'').split(',').map(s=>s.trim()).filter(Boolean));
+  document.getElementById('otherList').innerHTML=OTHER_EXTREME_CANDIDATES.map(([code,label])=>
+    '<div class="chkrow"><input type="checkbox" id="oe_'+code+'" data-code="'+code+'"'+
+    (included.has(code)?' checked':'')+'><label for="oe_'+code+'">'+label+'</label></div>'
+  ).join('');
+}
+function collectOtherIncluded(){
+  return Array.from(document.querySelectorAll('#otherList input[type=checkbox]:checked'))
+    .map(el=>el.dataset.code).join(',');
+}
+
 fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('lat').value=d.latitude||'';
   document.getElementById('lon').value=d.longitude||'';
   document.getElementById('pollSec').value=d.pollIntervalSec||120;
   document.getElementById('uaContact').value=d.userAgentContact||'';
-  document.getElementById('torMode').value=d.tornadoMode||'WAIL';
-  document.getElementById('tsMode').value=d.thunderstormMode||'WAIL';
+  document.getElementById('torUcMode').value=d.tornadoUnconfirmedMode||'OFF';
+  document.getElementById('torCfMode').value=d.tornadoConfirmedMode||'WAIL';
+  document.getElementById('torEmMode').value=d.tornadoEmergencyMode||'WAIL';
+  document.getElementById('svrBaMode').value=d.thunderstormBaseMode||'OFF';
+  document.getElementById('svrCoMode').value=d.thunderstormConsiderableMode||'WAIL';
+  document.getElementById('svrDeMode').value=d.thunderstormDestructiveMode||'WAIL';
+  document.getElementById('otherMode').value=d.otherExtremeMode||'OFF';
+  renderOtherList(d.otherExtremeIncluded);
   document.getElementById('repeatUpg').checked=!!d.repeatOnUpgrade;
   document.getElementById('ntpServer').value=d.ntpServer||'pool.ntp.org';
   document.getElementById('ntpUpdateHours').value=d.ntpUpdateHours||12;
-  document.getElementById('posixTz').value=d.posixTz||'UTC0';
+  document.getElementById('timeZone').value=d.timeZone||'EASTERN';
+  document.getElementById('autoDst').checked=d.autoDst!==false;
   document.getElementById('verNum').textContent=d.fwVersion||'-';
 });
 
@@ -453,8 +527,14 @@ function saveLocation(){
 }
 function saveModes(){
   const b={
-    tornadoMode: document.getElementById('torMode').value,
-    thunderstormMode: document.getElementById('tsMode').value,
+    tornadoUnconfirmedMode: document.getElementById('torUcMode').value,
+    tornadoConfirmedMode: document.getElementById('torCfMode').value,
+    tornadoEmergencyMode: document.getElementById('torEmMode').value,
+    thunderstormBaseMode: document.getElementById('svrBaMode').value,
+    thunderstormConsiderableMode: document.getElementById('svrCoMode').value,
+    thunderstormDestructiveMode: document.getElementById('svrDeMode').value,
+    otherExtremeMode: document.getElementById('otherMode').value,
+    otherExtremeIncluded: collectOtherIncluded(),
     repeatOnUpgrade: document.getElementById('repeatUpg').checked,
   };
   post('/settings-data',b).then(d=>msg('mm',d.ok?'Saved!':'Error',d.ok));
@@ -463,10 +543,15 @@ function saveTime(){
   const b={
     ntpServer: document.getElementById('ntpServer').value.trim(),
     ntpUpdateHours: parseInt(document.getElementById('ntpUpdateHours').value||12,10),
-    posixTz: document.getElementById('posixTz').value.trim(),
+    timeZone: document.getElementById('timeZone').value,
+    autoDst: document.getElementById('autoDst').checked,
   };
   post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
 }
+
+function showRestart(){document.getElementById('rmModal').style.display='flex';}
+function closeModal(){document.getElementById('rmModal').style.display='none';}
+function doRestart(){closeModal();fetch('/restart',{method:'POST'});}
 </script>
 </body></html>
 )rawliteral";
@@ -538,7 +623,8 @@ private:
         });
 
         server_.on("/", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { redirectLogin(req); return; }
+            // Public dashboard — status/alert awareness needs no login; only
+            // Settings and anything that changes device state is gated.
             req->send(200, "text/html", DASHBOARD_HTML);
         });
 
@@ -618,7 +704,7 @@ private:
         );
 
         server_.on("/status-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            // Public — feeds the unauthenticated dashboard.
             req->send(200, "application/json", buildStatusJson());
         });
 
@@ -641,16 +727,29 @@ private:
                     if (!doc["pollIntervalSec"].isNull()) s.pollIntervalSec = doc["pollIntervalSec"].as<uint32_t>();
                     if (doc["userAgentContact"].is<const char*>())
                         strlcpy(s.userAgentContact, doc["userAgentContact"].as<const char*>(), sizeof(s.userAgentContact));
-                    if (doc["tornadoMode"].is<const char*>())
-                        strlcpy(s.tornadoMode, doc["tornadoMode"].as<const char*>(), sizeof(s.tornadoMode));
-                    if (doc["thunderstormMode"].is<const char*>())
-                        strlcpy(s.thunderstormMode, doc["thunderstormMode"].as<const char*>(), sizeof(s.thunderstormMode));
+                    if (doc["tornadoUnconfirmedMode"].is<const char*>())
+                        strlcpy(s.tornadoUnconfirmedMode, doc["tornadoUnconfirmedMode"].as<const char*>(), sizeof(s.tornadoUnconfirmedMode));
+                    if (doc["tornadoConfirmedMode"].is<const char*>())
+                        strlcpy(s.tornadoConfirmedMode, doc["tornadoConfirmedMode"].as<const char*>(), sizeof(s.tornadoConfirmedMode));
+                    if (doc["tornadoEmergencyMode"].is<const char*>())
+                        strlcpy(s.tornadoEmergencyMode, doc["tornadoEmergencyMode"].as<const char*>(), sizeof(s.tornadoEmergencyMode));
+                    if (doc["thunderstormBaseMode"].is<const char*>())
+                        strlcpy(s.thunderstormBaseMode, doc["thunderstormBaseMode"].as<const char*>(), sizeof(s.thunderstormBaseMode));
+                    if (doc["thunderstormConsiderableMode"].is<const char*>())
+                        strlcpy(s.thunderstormConsiderableMode, doc["thunderstormConsiderableMode"].as<const char*>(), sizeof(s.thunderstormConsiderableMode));
+                    if (doc["thunderstormDestructiveMode"].is<const char*>())
+                        strlcpy(s.thunderstormDestructiveMode, doc["thunderstormDestructiveMode"].as<const char*>(), sizeof(s.thunderstormDestructiveMode));
+                    if (doc["otherExtremeMode"].is<const char*>())
+                        strlcpy(s.otherExtremeMode, doc["otherExtremeMode"].as<const char*>(), sizeof(s.otherExtremeMode));
+                    if (doc["otherExtremeIncluded"].is<const char*>())
+                        strlcpy(s.otherExtremeIncluded, doc["otherExtremeIncluded"].as<const char*>(), sizeof(s.otherExtremeIncluded));
                     if (doc["repeatOnUpgrade"].is<bool>()) s.repeatOnUpgrade = doc["repeatOnUpgrade"].as<bool>();
                     if (doc["ntpServer"].is<const char*>())
                         strlcpy(s.ntpServer, doc["ntpServer"].as<const char*>(), sizeof(s.ntpServer));
                     if (!doc["ntpUpdateHours"].isNull()) s.ntpUpdateHours = doc["ntpUpdateHours"].as<uint32_t>();
-                    if (doc["posixTz"].is<const char*>())
-                        strlcpy(s.posixTz, doc["posixTz"].as<const char*>(), sizeof(s.posixTz));
+                    if (doc["timeZone"].is<const char*>())
+                        strlcpy(s.timeZone, doc["timeZone"].as<const char*>(), sizeof(s.timeZone));
+                    if (doc["autoDst"].is<bool>()) s.autoDst = doc["autoDst"].as<bool>();
                     settingsMgr.save();
                     applyTimeConfig();
                 }
@@ -700,7 +799,8 @@ private:
         });
 
         server_.on("/test-link", HTTP_POST, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            // Public — the dashboard's Controller Link row triggers this with
+            // no login; it only re-tests the UART wire, nothing mutates settings.
             nwsClient.requestLinkTest();
             req->send(200, "application/json", "{\"ok\":true}");
         });
@@ -714,13 +814,20 @@ private:
         doc["latitude"]         = s.latitude;
         doc["longitude"]        = s.longitude;
         doc["pollIntervalSec"]  = s.pollIntervalSec;
-        doc["tornadoMode"]      = s.tornadoMode;
-        doc["thunderstormMode"] = s.thunderstormMode;
+        doc["tornadoUnconfirmedMode"]        = s.tornadoUnconfirmedMode;
+        doc["tornadoConfirmedMode"]          = s.tornadoConfirmedMode;
+        doc["tornadoEmergencyMode"]          = s.tornadoEmergencyMode;
+        doc["thunderstormBaseMode"]          = s.thunderstormBaseMode;
+        doc["thunderstormConsiderableMode"]  = s.thunderstormConsiderableMode;
+        doc["thunderstormDestructiveMode"]   = s.thunderstormDestructiveMode;
+        doc["otherExtremeMode"]              = s.otherExtremeMode;
+        doc["otherExtremeIncluded"]          = s.otherExtremeIncluded;
         doc["userAgentContact"] = s.userAgentContact;
         doc["repeatOnUpgrade"]  = s.repeatOnUpgrade;
         doc["ntpServer"]        = s.ntpServer;
         doc["ntpUpdateHours"]   = s.ntpUpdateHours;
-        doc["posixTz"]          = s.posixTz;
+        doc["timeZone"]         = s.timeZone;
+        doc["autoDst"]          = s.autoDst;
         doc["fwVersion"]        = FW_VERSION;
         String out;
         serializeJson(doc, out);
@@ -736,6 +843,7 @@ private:
 
     static String buildStatusJson() {
         JsonDocument doc;
+        doc["fwVersion"] = FW_VERSION;
 
         bool wifiOk = wifiMgr.isConnected();
         doc["wifiConnected"] = wifiOk;
@@ -778,7 +886,7 @@ private:
             o["event"]     = a.event;
             o["headline"]  = a.headline;
             o["areaDesc"]  = a.areaDesc;
-            o["color"]     = tierColor(a.tier);
+            o["color"]     = categoryColor(a.category);
             o["triggered"] = a.triggeredSiren;
         }
 

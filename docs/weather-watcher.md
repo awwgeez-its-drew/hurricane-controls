@@ -28,28 +28,24 @@ helper board" pattern already used for the Meshtastic bridge — does all the
 internet-facing work, and only ever sends a short, simple command over a
 dedicated wire to the main board.
 
-## Severity tiers
+## Alert categories
 
-Every active alert covering your point is classified into one of four
-tiers, used both for the dashboard's color-coding and for deciding whether
-to trigger the siren. Any alert type other than Tornado Warning or Severe
-Thunderstorm Warning is ignored entirely — not displayed, never triggers.
+Every active alert covering your point is classified into one of **7
+trigger categories** (or none, if it doesn't qualify for any), used both for
+the dashboard's color-coding and for deciding whether to trigger the siren.
+Each category has its own independently configurable siren mode
+(`OFF`/`WAIL`/`ATTACK`/`FASTWAIL`) on the Settings page — `OFF` means the
+alert still shows on the dashboard for awareness but never triggers.
 
-| Tier | Color | Condition | Triggers the siren? |
-|---|---|---|---|
-| Tornado Emergency | Purple | Tornado Warning with `tornadoDamageThreat` = `CATASTROPHIC` | Yes |
-| Tornado Confirmed | Purple | Tornado Warning with `tornadoDetection` = `OBSERVED`, or any `tornadoDamageThreat` tag present | Yes |
-| Warning (red) | Red | Tornado Warning not meeting the above (unconfirmed/radar-indicated), **or** Severe Thunderstorm Warning with a `thunderstormDamageThreat` tag (`CONSIDERABLE`/`DESTRUCTIVE`) | Only the Severe T-storm case |
-| Warning (orange) | Orange | Severe Thunderstorm Warning with no damage-threat tag | No |
-
-In other words: for Tornado Warnings, only the purple tier (confirmed or
-higher) triggers — a plain, unconfirmed Tornado Warning shows up red on the
-dashboard for awareness but never sounds the siren. For Severe Thunderstorm
-Warnings, only a damage-tagged one (red) triggers — the base-level orange
-tier is display-only. This matches the original design intent: only
-automatically activate for the subset of warnings serious enough to
-warrant it, while still giving full situational awareness of everything
-active nearby.
+| Category | Color | Condition |
+|---|---|---|
+| Tornado Emergency | Purple | Tornado Warning with `tornadoDamageThreat` = `CATASTROPHIC` |
+| Tornado Confirmed | Purple | Tornado Warning with `tornadoDetection` = `OBSERVED`, or any `tornadoDamageThreat` tag present |
+| Tornado Unconfirmed | Red | Tornado Warning not meeting either of the above (unconfirmed/radar-indicated) |
+| Severe T-storm Destructive | Red | Severe Thunderstorm Warning with `thunderstormDamageThreat` = `DESTRUCTIVE` |
+| Severe T-storm Considerable | Red | Severe Thunderstorm Warning with `thunderstormDamageThreat` = `CONSIDERABLE` |
+| Severe T-storm Base | Orange | Severe Thunderstorm Warning with no damage-threat tag |
+| Other Extreme Emergency | Purple | Any other event type, but only if `severity`=`Extreme` **and** `urgency`=`Immediate` **and** `certainty`=`Observed`, **and** that specific event type has been explicitly opted in (see below) |
 
 **Important caveat on "PDS" and "Tornado Emergency"**: there is no dedicated,
 structured field for "Particularly Dangerous Situation" wording in the NWS
@@ -57,12 +53,40 @@ API — it's free text embedded in the warning's body, not a queryable tag.
 `tornadoDamageThreat = CATASTROPHIC` is specifically reserved for Tornado
 Emergency–tier events and is the closest reliable machine-readable proxy;
 "any damage-threat tag present" (not just `CATASTROPHIC`) is what's used for
-the broader "Tornado Confirmed" tier, so it reliably captures confirmed,
+the broader "Tornado Confirmed" category, so it reliably captures confirmed,
 PDS-tier, and Tornado Emergency–tier warnings without needing to parse the
 free-text product body.
 
 A Watch (Tornado Watch, Severe Thunderstorm Watch) never qualifies — watches
 are zone/county-based, not polygon-based, and don't carry these tags.
+
+### Other Extreme Emergency — per-type opt-in
+
+Tornado and Severe Thunderstorm Warnings are the only NWS products with
+dedicated structured damage/confirmation tags. Everything else that can
+reach `severity=Extreme`/`urgency=Immediate`/`certainty=Observed` — Fire
+Warning, Civil Emergency Message, Hazmat/Radiological/Nuclear warnings,
+Flash Flood/Flood Warning, Tsunami Warning, and similar — shares one
+category with one configured siren mode, **but none of them trigger by
+default**. Each specific warning type must be individually checked on from
+the Trigger Modes card's list before it can ever activate, even though it
+technically meets the severity/urgency/certainty bar. This is deliberate:
+an alert type that's irrelevant to your location (e.g. a Flood Warning,
+if you're well above any flood plain) stays silent unless you explicitly
+add it, rather than requiring you to find and disable it after the fact.
+The full candidate list and the exact NWS event strings it matches live in
+`weather-watcher/src/other_extreme_types.h`.
+
+### Active-alerts-only safeguard
+
+Regardless of category, an alert is skipped entirely unless NWS marks it
+`status`=`Actual` and its `messageType` isn't `Cancel` or `Error` — a
+defensive check against a stale, historical, or test record somehow being
+returned. This is a status/messageType check only, **not** a full ISO 8601
+`expires` timestamp comparison against the current time — a deliberate
+simplification, since `status`/`messageType` already rule out the realistic
+failure modes (a cancelled or test product) without needing clock-accurate
+expiry math on an embedded device.
 
 ## Re-triggering on escalation
 
@@ -75,19 +99,22 @@ though it's fundamentally the same warning event throughout its life. The
 VTEC identifier is what actually stays stable across that whole lifecycle.
 
 By default, a given warning event triggers the siren **once** — the first
-time it crosses its activation threshold. If the Settings page's **"Re-
+time its category's configured mode isn't `OFF`. If the Settings page's **"Re-
 trigger if an already-triggered alert escalates further"** toggle is on, a
 warning that already triggered can trigger again later if it escalates to a
-*higher* tier than it had already acted on — e.g. a Tornado Warning that
+*higher* category than it had already acted on — e.g. a Tornado Warning that
 triggered once when it was confirmed, then later gets upgraded to a Tornado
 Emergency. It will not re-trigger for a re-issuance that doesn't represent a
 real escalation (e.g. a routine continuation with unchanged tags), since the
-tier it's already acted on hasn't increased.
+category it's already acted on hasn't increased.
 
 ## Dashboard
 
-The main page after logging in. Polls `/status-data` once per second:
+The **public homepage** (`/`) — no login required, since it's read-only
+status/awareness, not control. Polls `/status-data` once per second:
 
+- **Header** — "Weather Watcher" links to this repo, matching the main
+  board's attribution convention.
 - **Status lights** — green/red dots for **Wi-Fi**, **NWS API**, and
   **Controller Link**. Tap any of them to expand a plain-English detail
   line: "Status OK" when healthy, or the specific problem otherwise (e.g.
@@ -99,15 +126,13 @@ The main page after logging in. Polls `/status-data` once per second:
   the other two lights, which just show their already-known status). It
   stays at its neutral default color until the first test resolves (up to
   ~3 seconds).
-- **Clock** — current time in 24-hour `HH:MM:SS`, from NTP (see below).
-  Shows "Not synced" until the clock has successfully synced. Directly below
-  it: the board's own CPU temperature (internal die sensor, same caveat as
-  the main board's — reads warmer than ambient) and uptime.
+- **Clock** — current time in 24-hour `HH:MM:SS`, from NTP (see below), set
+  in Roboto. Shows "Not synced" until the clock has successfully synced.
+  Directly below it: the board's own CPU temperature (internal die sensor,
+  same caveat as the main board's — reads warmer than ambient) and uptime.
 - **Last polling attempt** — timestamp of the most recent poll, success or
   failure.
-- **Restart icon** (top right, next to Settings) — same confirm-then-restart
-  flow as the main board.
-- **Current Alerts** — every alert in a visible tier (see table above),
+- **Current Alerts** — every alert in a visible category (see table above),
   sorted most-severe-first, color-coded, each linking (opens in a new tab)
   to its raw `api.weather.gov` record — NWS retired their human-readable
   per-alert webpage, so this is the closest thing to an official source
@@ -119,28 +144,41 @@ The main page after logging in. Polls `/status-data` once per second:
 - **Recent Alerts** — the last 5 alerts that triggered a siren activation,
   with a timestamp, most recent first. This is a running log, independent
   of what's currently active.
+- **Footer** — version number and attribution, both linking to this repo,
+  matching the main board's Settings page.
 
 ## Settings
 
-All cards are collapsed by default (tap the title to expand) — same pattern
-as the main Hurricane Controls board's Settings page.
+Everything that changes device state lives behind the password wall at
+`/settings` (a Settings icon on the Dashboard links here; logging in from
+`/login` lands here directly). All cards are collapsed by default (tap the
+title to expand) — same pattern as the main Hurricane Controls board's
+Settings page. The restart icon (confirm-then-restart, same flow as the main
+board) lives in this page's navbar, not the public Dashboard's.
 
 - **Wi-Fi** — join a network or fall back to AP-only mode.
 - **Security** — change the login password (same complexity policy as the
   main board: 8+ characters, upper/lower/digit/special).
 - **Alert Location** — latitude/longitude (not a zip/city), poll interval,
   and the User-Agent contact string.
-- **Trigger Modes** — which run mode (`WAIL`/`ATTACK`/`FASTWAIL`) to request
-  for a qualifying Tornado Warning vs. a qualifying Severe Thunderstorm
-  Warning, plus the re-trigger-on-escalation toggle described above.
+- **Trigger Modes** — an independent run mode (`OFF`/`WAIL`/`ATTACK`/
+  `FASTWAIL`) for each of the 6 Tornado/Severe-T-storm categories, the
+  re-trigger-on-escalation toggle, and the **Other Extreme Emergency**
+  subsection: one shared siren mode plus a scrollable checklist of specific
+  NWS warning types (Fire Warning, Civil Emergency Message, Hazmat,
+  Flash Flood Warning, etc.) — only checked types can ever trigger, all
+  unchecked by default (see "Other Extreme Emergency — per-type opt-in"
+  above).
 - **Time (NTP)** — NTP server (default `pool.ntp.org`), how often to
-  re-sync (default every 12 hours), and a **POSIX timezone string** (e.g.
-  `EST5EDT,M3.2.0,M11.1.0` for US Eastern) instead of a plain UTC offset —
-  the TZ string encodes the DST transition dates for that zone, so the
-  clock adjusts for daylight saving automatically; there's no separate DST
-  toggle to remember twice a year. Applied immediately on save, no reboot
-  needed — though it only has anything to sync against while connected to
-  WiFi with internet access.
+  re-sync (default every 12 hours), a **time zone dropdown** (Eastern/
+  Central/Mountain/Arizona/Pacific/Alaska/Hawaii), and an **"Automatically
+  adjust for Daylight Saving Time"** checkbox (ignored for Arizona/Hawaii,
+  which never observe DST). The firmware maps this friendly selection to
+  the matching POSIX TZ string internally (`weather-watcher/src/main.cpp`'s
+  `posixTzFor()`) before handing it to `configTzTime()`, so the clock still
+  adjusts for DST on its own twice a year with no string-editing required.
+  Applied immediately on save, no reboot needed — though it only has
+  anything to sync against while connected to WiFi with internet access.
 
 ## Login
 
@@ -148,7 +186,8 @@ Same mechanism as the main Hurricane Controls board: a single password,
 session cookie (`HttpOnly`, `SameSite=Strict`), and a lockout after 5 failed
 attempts (30 seconds). Default password is `Weather123!` — **change it** from
 the Security card before relying on this device, same as you would on the
-main board.
+main board. Logging in lands on `/settings`, since that's the only page the
+password actually protects.
 
 ## Wiring
 
@@ -176,10 +215,10 @@ WX <MODE>
 ```
 
 `MODE` is one of `WAIL`, `ATTACK`, or `FASTWAIL` — configured independently
-for Tornado vs. Severe Thunderstorm Warnings (Trigger Modes card). `MANUAL`
-and `GROWL` are deliberately not reachable this way: `MANUAL` needs
-momentary-hold semantics that don't fit an autonomous trigger, and `GROWL`
-is a diagnostic test mode, not a warning tone.
+per alert category (Trigger Modes card). `MANUAL` and `GROWL` are
+deliberately not reachable this way: `MANUAL` needs momentary-hold semantics
+that don't fit an autonomous trigger, and `GROWL` is a diagnostic test mode,
+not a warning tone.
 
 A second command, `WX PING`, is a pure link-health check — it never touches
 the state machine and isn't gated by anything (not the auto-trigger toggle,
@@ -233,12 +272,13 @@ the same model used for the main board's own physical buttons.
 7. Set a **User-Agent contact** (your email, or a website) — required by the
    [NWS API's usage policy](https://www.weather.gov/documentation/services-web-api),
    which asks every client to identify itself.
-8. Set your POSIX timezone string (and NTP server/update frequency if you
-   want something other than the defaults) in the Time card so the
-   dashboard's clock and alert timestamps are correct — and keep
-   adjusting for DST on their own.
-9. Choose which run mode each alert category should trigger, and whether
-   escalation should re-trigger (Trigger Modes card).
+8. Set your time zone and leave Auto DST on (and adjust NTP server/update
+   frequency if you want something other than the defaults) in the Time
+   card so the dashboard's clock and alert timestamps are correct.
+9. Choose which run mode each alert category should trigger, whether
+   escalation should re-trigger, and which specific Other Extreme
+   Emergency warning types (if any) you want opted in (Trigger Modes
+   card).
 10. On the main Hurricane Controls board's Settings page, confirm "Automatic
     weather-triggered activation" is on (it's on by default).
 

@@ -8,19 +8,34 @@
 #include <cstring>
 #include "config.h"
 #include "settings.h"
+#include "other_extreme_types.h"
 
-// Severity tiers for display (Current Alerts card) and for deciding whether/
-// when to trigger the main board. Numeric order matters: higher value =
-// more severe, used both for sort order and for escalation comparisons.
-enum class Tier : uint8_t { IGNORED = 0, ORANGE = 1, RED = 2, PURPLE_CONFIRMED = 3, PURPLE_EMERGENCY = 4 };
+// Alert categories for display (Current Alerts card) and for deciding
+// whether/when to trigger the main board. Numeric order matters: higher
+// value = more severe, used both for sort order and for escalation
+// comparisons (settingsMgr.s.repeatOnUpgrade re-triggers only on a move to a
+// strictly higher category for the same tracked warning).
+enum class AlertCategory : uint8_t {
+    NONE = 0,
+    THUNDERSTORM_BASE,
+    OTHER_EXTREME,
+    THUNDERSTORM_CONSIDERABLE,
+    TORNADO_UNCONFIRMED,
+    THUNDERSTORM_DESTRUCTIVE,
+    TORNADO_CONFIRMED,
+    TORNADO_EMERGENCY,
+};
 
-inline const char* tierColor(Tier t) {
-    switch (t) {
-    case Tier::PURPLE_EMERGENCY:
-    case Tier::PURPLE_CONFIRMED: return "purple";
-    case Tier::RED:              return "red";
-    case Tier::ORANGE:           return "orange";
-    default:                     return "";
+inline const char* categoryColor(AlertCategory c) {
+    switch (c) {
+    case AlertCategory::TORNADO_EMERGENCY:
+    case AlertCategory::TORNADO_CONFIRMED:
+    case AlertCategory::OTHER_EXTREME:        return "purple";
+    case AlertCategory::TORNADO_UNCONFIRMED:
+    case AlertCategory::THUNDERSTORM_DESTRUCTIVE:
+    case AlertCategory::THUNDERSTORM_CONSIDERABLE: return "red";
+    case AlertCategory::THUNDERSTORM_BASE:    return "orange";
+    default:                                  return "";
     }
 }
 
@@ -29,10 +44,10 @@ inline const char* tierColor(Tier t) {
 // NWS feed simply stops appearing here on the next cycle.
 struct CurrentAlert {
     String id;            // full api.weather.gov URL — used as the "view on NWS" link
-    String event;         // "Tornado Warning" / "Severe Thunderstorm Warning"
+    String event;         // e.g. "Tornado Warning", "Fire Warning"
     String headline;      // NWS-provided headline, falls back to event name
     String areaDesc;
-    Tier   tier = Tier::IGNORED;
+    AlertCategory category = AlertCategory::NONE;
     bool   triggeredSiren = false;
 };
 
@@ -43,23 +58,33 @@ struct RecentTrigger {
 };
 
 // Polls api.weather.gov for active alerts covering settingsMgr.s.latitude/
-// longitude, classifies each into a severity Tier, and sends a "WX <MODE>"
+// longitude, classifies each into an AlertCategory, and sends a "WX <MODE>"
 // command over the dedicated UART link to the Hurricane Controls main board
-// the first time a tracked warning event crosses its activation threshold:
+// the first time a tracked warning event crosses that category's configured
+// mode (anything other than "OFF"):
 //
-//   - Tornado Warning reaches PURPLE_CONFIRMED (tornadoDetection "OBSERVED",
-//     i.e. radar/spotter-confirmed, or any tornadoDamageThreat tag at all —
-//     CONSIDERABLE/CATASTROPHIC; there's no separate structured field for
-//     "PDS", so "any damage-threat tag" is the proxy) or higher
-//     (PURPLE_EMERGENCY = CATASTROPHIC specifically, reserved for Tornado
-//     Emergency-tier events).
-//   - Severe Thunderstorm Warning reaches RED (thunderstormDamageThreat
-//     "CONSIDERABLE" or "DESTRUCTIVE").
+//   - Tornado Warning: CATASTROPHIC damage tag -> TORNADO_EMERGENCY;
+//     tornadoDetection "OBSERVED" or any damage tag at all -> TORNADO_CONFIRMED
+//     (there's no separate structured "PDS" field, so "any damage-threat tag"
+//     is the proxy); otherwise -> TORNADO_UNCONFIRMED.
+//   - Severe Thunderstorm Warning: DESTRUCTIVE damage tag -> THUNDERSTORM_DESTRUCTIVE;
+//     CONSIDERABLE -> THUNDERSTORM_CONSIDERABLE; otherwise -> THUNDERSTORM_BASE.
+//   - Anything else: only classified as OTHER_EXTREME if severity=="Extreme" AND
+//     urgency=="Immediate" AND certainty=="Observed" AND its event type has been
+//     explicitly opted into settingsMgr.s.otherExtremeIncluded (see
+//     other_extreme_types.h) — an unlisted or not-opted-in event type is never
+//     classified at all, however severe, so e.g. a Flood Warning stays silent
+//     for an owner who isn't in a flood-prone area unless they add it themselves.
 //
-// Plain/unconfirmed Tornado Warnings (RED) and base Severe Thunderstorm
-// Warnings with no damage tag (ORANGE) are shown in Current Alerts for
-// situational awareness but never trigger the siren — only the two
-// thresholds above do.
+// Each of the 7 non-NONE categories maps 1:1 to its own configurable mode
+// field in Settings (OFF/WAIL/ATTACK/FASTWAIL) — a category only ever
+// triggers if its mode isn't OFF.
+//
+// Active-alerts-only safeguard: an alert is skipped entirely unless
+// properties.status=="Actual" and properties.messageType isn't "Cancel" or
+// "Error" — a defensive check against a stale/historical/test record. This
+// is a status/messageType check only, not a full ISO8601 `expires` timestamp
+// comparison — a deliberate, documented simplification (see docs/weather-watcher.md).
 //
 // De-duplication/escalation tracking is keyed by the warning's stable VTEC
 // event identifier (office + phenomena + significance + ETN, parsed from
@@ -68,8 +93,8 @@ struct RecentTrigger {
 // upgrades, cancellations), even though it's still fundamentally the same
 // warning event. Tracking by VTEC key means: a warning only ever triggers
 // once by default, and — if settingsMgr.s.repeatOnUpgrade is enabled — can
-// trigger again later if it escalates further (e.g. a confirmed Tornado
-// Warning that's later upgraded to a Tornado Emergency).
+// trigger again later if it escalates to a strictly higher category (e.g. a
+// confirmed Tornado Warning that's later upgraded to a Tornado Emergency).
 class NwsClient {
 public:
     void begin() {
@@ -147,7 +172,7 @@ private:
     // ── Tracked warning events, keyed by VTEC office.phenomena.sig.etn ──────
     struct TrackedEvent {
         char     vtecKey[20] = {0};
-        uint8_t  lastActedTier = 0;  // Tier::IGNORED — highest tier ever acted on (triggered) for this event
+        uint8_t  lastActedCategory = 0;  // AlertCategory::NONE — highest category ever acted on (triggered) for this event
         uint32_t lastSeenMs = 0;
         bool     used = false;
     };
@@ -164,14 +189,14 @@ private:
             if (!e.used) {
                 strlcpy(e.vtecKey, key, sizeof(e.vtecKey));
                 e.used = true;
-                e.lastActedTier = 0;
+                e.lastActedCategory = 0;
                 return &e;
             }
         }
         // Table full (>16 concurrent tracked events for one point — should
         // never happen in practice) — evict the least-recently-seen entry.
         strlcpy(oldest->vtecKey, key, sizeof(oldest->vtecKey));
-        oldest->lastActedTier = 0;
+        oldest->lastActedCategory = 0;
         return oldest;
     }
 
@@ -207,26 +232,42 @@ private:
         return true;
     }
 
-    static Tier classify(const char* event, JsonObject params) {
+    static AlertCategory classify(const char* event, JsonObject params,
+                                   const char* severity, const char* urgency, const char* certainty) {
         if (!strcmp(event, "Tornado Warning")) {
             const char* detection = params["tornadoDetection"][0] | "";
             const char* damage    = params["tornadoDamageThreat"][0] | "";
             bool hasDamageTag = params["tornadoDamageThreat"][0].is<const char*>();
-            if (!strcmp(damage, "CATASTROPHIC")) return Tier::PURPLE_EMERGENCY;
-            if (!strcmp(detection, "OBSERVED") || hasDamageTag) return Tier::PURPLE_CONFIRMED;
-            return Tier::RED;
+            if (!strcmp(damage, "CATASTROPHIC")) return AlertCategory::TORNADO_EMERGENCY;
+            if (!strcmp(detection, "OBSERVED") || hasDamageTag) return AlertCategory::TORNADO_CONFIRMED;
+            return AlertCategory::TORNADO_UNCONFIRMED;
         }
         if (!strcmp(event, "Severe Thunderstorm Warning")) {
+            const char* damage = params["thunderstormDamageThreat"][0] | "";
             bool hasDamageTag = params["thunderstormDamageThreat"][0].is<const char*>();
-            return hasDamageTag ? Tier::RED : Tier::ORANGE;
+            if (!strcmp(damage, "DESTRUCTIVE")) return AlertCategory::THUNDERSTORM_DESTRUCTIVE;
+            if (hasDamageTag) return AlertCategory::THUNDERSTORM_CONSIDERABLE;
+            return AlertCategory::THUNDERSTORM_BASE;
         }
-        return Tier::IGNORED;
+        if (!strcmp(severity, "Extreme") && !strcmp(urgency, "Immediate") && !strcmp(certainty, "Observed")) {
+            const char* code = otherExtremeCodeForEvent(event);
+            if (code && otherExtremeCodeIncluded(settingsMgr.s.otherExtremeIncluded, code))
+                return AlertCategory::OTHER_EXTREME;
+        }
+        return AlertCategory::NONE;
     }
 
-    static Tier activationThreshold(const char* event) {
-        if (!strcmp(event, "Tornado Warning")) return Tier::PURPLE_CONFIRMED;
-        if (!strcmp(event, "Severe Thunderstorm Warning")) return Tier::RED;
-        return Tier::IGNORED;
+    static const char* modeForCategory(AlertCategory c) {
+        switch (c) {
+        case AlertCategory::TORNADO_UNCONFIRMED:        return settingsMgr.s.tornadoUnconfirmedMode;
+        case AlertCategory::TORNADO_CONFIRMED:          return settingsMgr.s.tornadoConfirmedMode;
+        case AlertCategory::TORNADO_EMERGENCY:          return settingsMgr.s.tornadoEmergencyMode;
+        case AlertCategory::THUNDERSTORM_BASE:          return settingsMgr.s.thunderstormBaseMode;
+        case AlertCategory::THUNDERSTORM_CONSIDERABLE:  return settingsMgr.s.thunderstormConsiderableMode;
+        case AlertCategory::THUNDERSTORM_DESTRUCTIVE:   return settingsMgr.s.thunderstormDestructiveMode;
+        case AlertCategory::OTHER_EXTREME:              return settingsMgr.s.otherExtremeMode;
+        default:                                        return "OFF";
+        }
     }
 
     void poll() {
@@ -289,13 +330,23 @@ private:
         JsonArray features = doc["features"].as<JsonArray>();
         for (JsonObject feature : features) {
             JsonObject props = feature["properties"];
-            const char* id    = props["id"]    | "";
-            const char* event = props["event"] | "";
+            const char* id     = props["id"]          | "";
+            const char* event  = props["event"]       | "";
+            const char* status = props["status"]      | "";
+            const char* msgType = props["messageType"] | "";
             if (!*id || !*event) continue;
 
+            // Active-alerts-only safeguard: never act on a non-current record.
+            if (strcmp(status, "Actual") != 0) continue;
+            if (!strcmp(msgType, "Cancel") || !strcmp(msgType, "Error")) continue;
+
+            const char* severity = props["severity"]  | "";
+            const char* urgency  = props["urgency"]   | "";
+            const char* certainty = props["certainty"] | "";
+
             JsonObject params = props["parameters"];
-            Tier tier = classify(event, params);
-            if (tier == Tier::IGNORED) continue;
+            AlertCategory category = classify(event, params, severity, urgency, certainty);
+            if (category == AlertCategory::NONE) continue;
 
             char key[20];
             if (!parseVtecKey(params["VTEC"][0] | "", key, sizeof(key)))
@@ -304,17 +355,15 @@ private:
             TrackedEvent* te = findOrCreateTracked(key, now);
             te->lastSeenMs = now;
 
-            Tier threshold = activationThreshold(event);
-            uint8_t tierVal = (uint8_t)tier, thresholdVal = (uint8_t)threshold;
-            if (tierVal >= thresholdVal) {
-                bool firstTime  = te->lastActedTier < thresholdVal;
-                bool escalated  = settingsMgr.s.repeatOnUpgrade &&
-                                   te->lastActedTier >= thresholdVal &&
-                                   tierVal > te->lastActedTier;
+            const char* mode = modeForCategory(category);
+            uint8_t categoryVal = (uint8_t)category;
+            if (strcmp(mode, "OFF") != 0) {
+                bool firstTime = te->lastActedCategory == 0;
+                bool escalated = settingsMgr.s.repeatOnUpgrade &&
+                                  te->lastActedCategory > 0 &&
+                                  categoryVal > te->lastActedCategory;
                 if (firstTime || escalated) {
-                    te->lastActedTier = tierVal;
-                    const char* mode = !strcmp(event, "Tornado Warning")
-                        ? settingsMgr.s.tornadoMode : settingsMgr.s.thunderstormMode;
+                    te->lastActedCategory = categoryVal;
                     sendTrigger(mode);
                     recordRecentTrigger(event, mode);
                 }
@@ -326,8 +375,8 @@ private:
                 ca.event    = event;
                 ca.headline = props["headline"].is<const char*>() ? (const char*)props["headline"] : event;
                 ca.areaDesc = props["areaDesc"].is<const char*>() ? (const char*)props["areaDesc"] : "";
-                ca.tier     = tier;
-                ca.triggeredSiren = (te->lastActedTier > 0);
+                ca.category = category;
+                ca.triggeredSiren = (te->lastActedCategory > 0);
             }
         }
 
@@ -336,7 +385,7 @@ private:
         for (uint8_t i = 1; i < freshCount; i++) {
             CurrentAlert key = fresh[i];
             int j = i - 1;
-            while (j >= 0 && (uint8_t)fresh[j].tier < (uint8_t)key.tier) {
+            while (j >= 0 && (uint8_t)fresh[j].category < (uint8_t)key.category) {
                 fresh[j + 1] = fresh[j];
                 j--;
             }
