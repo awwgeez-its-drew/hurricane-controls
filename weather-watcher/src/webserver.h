@@ -116,6 +116,8 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 .status-detail.show{display:block}
 .statline{text-align:center;font-size:.78rem;color:#9aa3af;padding-top:10px;border-top:1px solid #1a2a3a;margin-top:6px}
 .clock{text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:2px;margin:6px 0 2px}
+.no-alerts{display:flex;align-items:center;justify-content:center;gap:8px;border:2px solid var(--green);
+    border-radius:4px;padding:16px;color:var(--green);font-weight:700;font-size:.9rem}
 .alert-item{display:block;padding:12px 14px;border-radius:4px;margin-bottom:8px;text-decoration:none;color:#fff}
 .alert-purple{background:#6b21a8}
 .alert-red{background:#7f1d1d}
@@ -189,7 +191,10 @@ function esc(s){const d=document.createElement('div');d.textContent=s||'';return
 
 function renderCurrentAlerts(list){
   const el=document.getElementById('currentAlerts');
-  if(!list||!list.length){el.innerHTML='<p class="hint">No active alerts for your location.</p>';return;}
+  if(!list||!list.length){
+    el.innerHTML='<div class="no-alerts"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> No active alerts for your location</div>';
+    return;
+  }
   el.innerHTML=list.map(a=>
     '<a class="alert-item alert-'+a.color+'" href="'+esc(a.id)+'" target="_blank" rel="noopener">'+
       '<div class="alert-head">'+esc(a.event)+(a.triggered?' <span class="alert-tag">SIREN ACTIVATED</span>':'')+'</div>'+
@@ -273,6 +278,7 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
 .row{margin-bottom:10px}
 .hint{font-size:.78rem;color:#9aa3af;margin-bottom:12px}
+.hint code{font-family:ui-monospace,"SF Mono","Cascadia Code","Courier New",monospace;background:#0a0e18;padding:1px 4px;border-radius:3px}
 label{font-size:.78rem;color:#9aa3af;display:block;margin-bottom:3px}
 input,select{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
       border-radius:var(--radius);padding:9px 11px;font-size:.9rem;font-family:inherit}
@@ -372,11 +378,10 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-body">
   <p class="hint">Used for the dashboard's clock and alert timestamps. Requires an internet connection to sync.</p>
   <div class="row"><label>NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
-  <div class="row"><label>UTC offset (hours, e.g. -5 for US Eastern)</label><input type="number" id="utcOffset" step="0.5"></div>
-  <div class="trow">
-    <label for="observeDst">Observe daylight saving time (+1h)</label>
-    <input type="checkbox" id="observeDst">
-  </div>
+  <div class="row"><label>Update frequency (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
+  <div class="row"><label>POSIX Timezone string</label>
+    <input type="text" id="posixTz" placeholder="e.g. EST5EDT,M3.2.0,M11.1.0"></div>
+  <p class="hint">Encodes both your UTC offset and daylight-saving transition dates, so the clock adjusts for DST on its own — no separate toggle needed. Common US zones: Eastern <code>EST5EDT,M3.2.0,M11.1.0</code> &middot; Central <code>CST6CDT,M3.2.0,M11.1.0</code> &middot; Mountain <code>MST7MDT,M3.2.0,M11.1.0</code> &middot; Pacific <code>PST8PDT,M3.2.0,M11.1.0</code> &middot; no DST, e.g. Arizona <code>MST7</code>.</p>
   <button class="btn save" onclick="saveTime()">Save Time Settings</button>
   <div class="msg" id="tmz"></div>
   </div>
@@ -404,8 +409,8 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('tsMode').value=d.thunderstormMode||'WAIL';
   document.getElementById('repeatUpg').checked=!!d.repeatOnUpgrade;
   document.getElementById('ntpServer').value=d.ntpServer||'pool.ntp.org';
-  document.getElementById('utcOffset').value=d.utcOffsetHours||0;
-  document.getElementById('observeDst').checked=!!d.observeDst;
+  document.getElementById('ntpUpdateHours').value=d.ntpUpdateHours||12;
+  document.getElementById('posixTz').value=d.posixTz||'UTC0';
   document.getElementById('verNum').textContent=d.fwVersion||'-';
 });
 
@@ -457,8 +462,8 @@ function saveModes(){
 function saveTime(){
   const b={
     ntpServer: document.getElementById('ntpServer').value.trim(),
-    utcOffsetHours: parseFloat(document.getElementById('utcOffset').value||0),
-    observeDst: document.getElementById('observeDst').checked,
+    ntpUpdateHours: parseInt(document.getElementById('ntpUpdateHours').value||12,10),
+    posixTz: document.getElementById('posixTz').value.trim(),
   };
   post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
 }
@@ -643,8 +648,9 @@ private:
                     if (doc["repeatOnUpgrade"].is<bool>()) s.repeatOnUpgrade = doc["repeatOnUpgrade"].as<bool>();
                     if (doc["ntpServer"].is<const char*>())
                         strlcpy(s.ntpServer, doc["ntpServer"].as<const char*>(), sizeof(s.ntpServer));
-                    if (!doc["utcOffsetHours"].isNull()) s.utcOffsetHours = doc["utcOffsetHours"].as<float>();
-                    if (doc["observeDst"].is<bool>()) s.observeDst = doc["observeDst"].as<bool>();
+                    if (!doc["ntpUpdateHours"].isNull()) s.ntpUpdateHours = doc["ntpUpdateHours"].as<uint32_t>();
+                    if (doc["posixTz"].is<const char*>())
+                        strlcpy(s.posixTz, doc["posixTz"].as<const char*>(), sizeof(s.posixTz));
                     settingsMgr.save();
                     applyTimeConfig();
                 }
@@ -713,8 +719,8 @@ private:
         doc["userAgentContact"] = s.userAgentContact;
         doc["repeatOnUpgrade"]  = s.repeatOnUpgrade;
         doc["ntpServer"]        = s.ntpServer;
-        doc["utcOffsetHours"]   = s.utcOffsetHours;
-        doc["observeDst"]       = s.observeDst;
+        doc["ntpUpdateHours"]   = s.ntpUpdateHours;
+        doc["posixTz"]          = s.posixTz;
         doc["fwVersion"]        = FW_VERSION;
         String out;
         serializeJson(doc, out);

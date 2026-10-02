@@ -13,8 +13,10 @@ struct Settings {
     bool     repeatOnUpgrade = false;       // re-trigger if an already-triggered event's tier escalates further
                                              // (e.g. confirmed Tornado Warning -> Tornado Emergency)
     char     ntpServer[64] = "pool.ntp.org";
-    float    utcOffsetHours = 0.0f;         // e.g. -5 for US Eastern Standard Time
-    bool     observeDst     = false;        // adds +1h on top of utcOffsetHours
+    char     posixTz[48]   = "UTC0";        // POSIX TZ string, e.g. "EST5EDT,M3.2.0,M11.1.0" for US
+                                             // Eastern — encodes DST transition dates, so the clock
+                                             // adjusts for DST automatically with no manual toggle
+    uint32_t ntpUpdateHours = 12;           // how often to re-sync with the NTP server
 };
 
 class SettingsManager {
@@ -38,8 +40,9 @@ public:
         s.repeatOnUpgrade = p.getBool("repeatUpg", s.repeatOnUpgrade);
         String ntp = p.getString("ntpServer", s.ntpServer);
         strlcpy(s.ntpServer, ntp.c_str(), sizeof(s.ntpServer));
-        s.utcOffsetHours = p.getFloat("utcOffset", s.utcOffsetHours);
-        s.observeDst     = p.getBool("observeDst", s.observeDst);
+        String tz = p.getString("posixTz", s.posixTz);
+        strlcpy(s.posixTz, tz.c_str(), sizeof(s.posixTz));
+        s.ntpUpdateHours = p.getUInt("ntpUpdHrs", s.ntpUpdateHours);
         p.end();
     }
 
@@ -55,8 +58,8 @@ public:
         p.putString("webPwd", s.webPassword);
         p.putBool("repeatUpg", s.repeatOnUpgrade);
         p.putString("ntpServer", s.ntpServer);
-        p.putFloat("utcOffset", s.utcOffsetHours);
-        p.putBool("observeDst", s.observeDst);
+        p.putString("posixTz", s.posixTz);
+        p.putUInt("ntpUpdHrs", s.ntpUpdateHours);
         p.end();
     }
 };

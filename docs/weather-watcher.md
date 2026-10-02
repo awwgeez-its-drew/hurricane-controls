@@ -114,7 +114,8 @@ The main page after logging in. Polls `/status-data` once per second:
   link that still reliably resolves. An alert that has triggered the siren
   carries a **"SIREN ACTIVATED"** tag. The list is rebuilt from scratch
   every poll, so an alert that's no longer active simply disappears on the
-  next cycle.
+  next cycle. When nothing's active, this card shows a green-outlined
+  checkmark box instead of just quiet empty space.
 - **Recent Alerts** — the last 5 alerts that triggered a siren activation,
   with a timestamp, most recent first. This is a running log, independent
   of what's currently active.
@@ -132,10 +133,14 @@ as the main Hurricane Controls board's Settings page.
 - **Trigger Modes** — which run mode (`WAIL`/`ATTACK`/`FASTWAIL`) to request
   for a qualifying Tornado Warning vs. a qualifying Severe Thunderstorm
   Warning, plus the re-trigger-on-escalation toggle described above.
-- **Time (NTP)** — NTP server (default `pool.ntp.org`), UTC offset in hours,
-  and a daylight-saving-time checkbox (+1h on top of the offset). Applied
-  immediately on save, no reboot needed — though it only has anything to
-  sync against while connected to WiFi with internet access.
+- **Time (NTP)** — NTP server (default `pool.ntp.org`), how often to
+  re-sync (default every 12 hours), and a **POSIX timezone string** (e.g.
+  `EST5EDT,M3.2.0,M11.1.0` for US Eastern) instead of a plain UTC offset —
+  the TZ string encodes the DST transition dates for that zone, so the
+  clock adjusts for daylight saving automatically; there's no separate DST
+  toggle to remember twice a year. Applied immediately on save, no reboot
+  needed — though it only has anything to sync against while connected to
+  WiFi with internet access.
 
 ## Login
 
@@ -228,8 +233,10 @@ the same model used for the main board's own physical buttons.
 7. Set a **User-Agent contact** (your email, or a website) — required by the
    [NWS API's usage policy](https://www.weather.gov/documentation/services-web-api),
    which asks every client to identify itself.
-8. Set your NTP server/UTC offset/DST in the Time card so the dashboard's
-   clock and alert timestamps are correct.
+8. Set your POSIX timezone string (and NTP server/update frequency if you
+   want something other than the defaults) in the Time card so the
+   dashboard's clock and alert timestamps are correct — and keep
+   adjusting for DST on their own.
 9. Choose which run mode each alert category should trigger, and whether
    escalation should re-trigger (Trigger Modes card).
 10. On the main Hurricane Controls board's Settings page, confirm "Automatic

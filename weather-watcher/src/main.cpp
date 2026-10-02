@@ -12,13 +12,17 @@ WiFiManager     wifiMgr;
 NwsClient       nwsClient;
 WeatherWebUI    webUI;
 
+static uint32_t lastNtpSyncMs_ = 0;
+
 // Also called from webserver.h after Settings are saved, so a new NTP
-// server/UTC offset/DST choice applies immediately without a reboot.
+// server/timezone choice applies immediately without a reboot. Uses a POSIX
+// TZ string (configTzTime), not a plain UTC offset — the TZ string encodes
+// the DST transition dates for that zone, so the clock adjusts for DST on
+// its own; no separate DST toggle to remember twice a year.
 void applyTimeConfig() {
     if (!wifiMgr.isConnected()) return; // AP mode / no internet — clock stays unsynced
-    long gmtOffsetSec = (long)(settingsMgr.s.utcOffsetHours * 3600.0f);
-    int  dstOffsetSec = settingsMgr.s.observeDst ? 3600 : 0;
-    configTime(gmtOffsetSec, dstOffsetSec, settingsMgr.s.ntpServer);
+    configTzTime(settingsMgr.s.posixTz, settingsMgr.s.ntpServer);
+    lastNtpSyncMs_ = millis();
 }
 
 void setup() {
@@ -39,4 +43,7 @@ void loop() {
     wifiMgr.update();
     nwsClient.update();
     webUI.update();
+
+    uint32_t intervalMs = settingsMgr.s.ntpUpdateHours * 3600000UL;
+    if (intervalMs > 0 && millis() - lastNtpSyncMs_ >= intervalMs) applyTimeConfig();
 }
