@@ -9,6 +9,12 @@ struct Settings {
     char     tornadoMode[16]     = "WAIL";  // mode sent for a qualifying Tornado Warning: WAIL/ATTACK/FASTWAIL
     char     thunderstormMode[16] = "WAIL"; // mode sent for a qualifying Severe Thunderstorm Warning
     char     userAgentContact[64] = "";     // e.g. an email — api.weather.gov requires a descriptive User-Agent
+    char     webPassword[33] = "Weather123!"; // login password for this board's own web UI
+    bool     repeatOnUpgrade = false;       // re-trigger if an already-triggered event's tier escalates further
+                                             // (e.g. confirmed Tornado Warning -> Tornado Emergency)
+    char     ntpServer[64] = "pool.ntp.org";
+    float    utcOffsetHours = 0.0f;         // e.g. -5 for US Eastern Standard Time
+    bool     observeDst     = false;        // adds +1h on top of utcOffsetHours
 };
 
 class SettingsManager {
@@ -27,6 +33,13 @@ public:
         strlcpy(s.thunderstormMode, tsm.c_str(), sizeof(s.thunderstormMode));
         String ua = p.getString("uaContact", s.userAgentContact);
         strlcpy(s.userAgentContact, ua.c_str(), sizeof(s.userAgentContact));
+        String pw = p.getString("webPwd", s.webPassword);
+        strlcpy(s.webPassword, pw.c_str(), sizeof(s.webPassword));
+        s.repeatOnUpgrade = p.getBool("repeatUpg", s.repeatOnUpgrade);
+        String ntp = p.getString("ntpServer", s.ntpServer);
+        strlcpy(s.ntpServer, ntp.c_str(), sizeof(s.ntpServer));
+        s.utcOffsetHours = p.getFloat("utcOffset", s.utcOffsetHours);
+        s.observeDst     = p.getBool("observeDst", s.observeDst);
         p.end();
     }
 
@@ -39,6 +52,11 @@ public:
         p.putString("torMode", s.tornadoMode);
         p.putString("tsMode", s.thunderstormMode);
         p.putString("uaContact", s.userAgentContact);
+        p.putString("webPwd", s.webPassword);
+        p.putBool("repeatUpg", s.repeatOnUpgrade);
+        p.putString("ntpServer", s.ntpServer);
+        p.putFloat("utcOffset", s.utcOffsetHours);
+        p.putBool("observeDst", s.observeDst);
         p.end();
     }
 };
