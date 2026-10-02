@@ -91,12 +91,22 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
+.navicons{display:flex;gap:14px;align-items:center}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
       box-shadow:0 1px 3px rgba(0,0,0,.35)}
 h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;margin-bottom:12px}
 .hint{font-size:.78rem;color:#9aa3af}
+.overlay{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:50}
+.mbox{background:var(--surface);border-radius:var(--radius);padding:28px 24px;text-align:center;
+      max-width:280px;width:calc(100% - 32px)}
+.mbox p{margin-bottom:20px;font-size:1rem}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mok{padding:12px;background:#7f1d1d;color:#fff;border:none;border-radius:var(--radius);
+     font-weight:700;cursor:pointer;font-family:inherit}
+.mcancel{padding:12px;background:#1b2438;color:#9aa3af;border:none;border-radius:var(--radius);
+         font-weight:700;cursor:pointer;font-family:inherit}
 .status-row{display:flex;align-items:center;cursor:pointer;padding:8px 0}
 .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:10px;background:#3a3f4a;flex-shrink:0}
 .dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
@@ -120,9 +130,14 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 <body>
 <div class="navbar">
   <h1>Weather Watcher</h1>
-  <a href="/settings" class="ibtn" title="Settings">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-  </a>
+  <div class="navicons">
+    <button class="ibtn" onclick="showRestart()" title="Restart">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+    </button>
+    <a href="/settings" class="ibtn" title="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </a>
+  </div>
 </div>
 
 <div class="content">
@@ -137,6 +152,7 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
   </div>
   <div class="status-detail" id="apiDetail"></div>
   <div class="clock mono" id="clock">--:--:--</div>
+  <div class="mono" style="font-size:.72rem;color:#8892a0;text-align:center;margin-bottom:8px">Watcher <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span></div>
   <div class="statline" id="lastPoll">Last polling attempt: —</div>
 </div>
 
@@ -151,6 +167,16 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
   <div id="recentAlerts"><p class="hint">None yet.</p></div>
 </div>
 
+</div>
+
+<div class="overlay" id="rmModal">
+  <div class="mbox">
+    <p>Restart the Weather Watcher?</p>
+    <div class="mgrid">
+      <button class="mok"     onclick="doRestart()">Restart</button>
+      <button class="mcancel" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
 </div>
 <script>
 function toggleDetail(id){document.getElementById(id).classList.toggle('show');}
@@ -177,6 +203,12 @@ function renderRecentAlerts(list){
   ).join('');
 }
 
+function fmtUp(s){
+  const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),
+        m=Math.floor((s%3600)/60),sc=s%60;
+  return (d?d+'d ':'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0');
+}
+
 function refresh(){
   fetch('/status-data').then(r=>r.json()).then(d=>{
     document.getElementById('wifiDot').className='dot '+(d.wifiConnected?'green':'red');
@@ -184,6 +216,8 @@ function refresh(){
     document.getElementById('apiDot').className='dot '+(d.apiGreen?'green':'red');
     document.getElementById('apiDetail').textContent=d.apiDetail;
     document.getElementById('clock').textContent=d.currentTime;
+    if(d.tempF!=null)document.getElementById('tempF').textContent=d.tempF;
+    if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);
     document.getElementById('lastPoll').textContent='Last polling attempt: '+d.lastPoll;
     renderCurrentAlerts(d.currentAlerts);
     renderRecentAlerts(d.recentAlerts);
@@ -191,6 +225,10 @@ function refresh(){
 }
 refresh();
 setInterval(refresh,1000);
+
+function showRestart(){document.getElementById('rmModal').style.display='flex';}
+function closeModal(){document.getElementById('rmModal').style.display='none';}
+function doRestart(){closeModal();fetch('/restart',{method:'POST'});}
 </script>
 </body></html>
 )rawliteral";
@@ -637,6 +675,12 @@ private:
             },
             nullptr, bodyAccumulator
         );
+
+        server_.on("/restart", HTTP_POST, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            req->send(200, "application/json", "{\"ok\":true}");
+            wifiMgr.scheduleRestart(500);
+        });
     }
 
     // ── JSON builders ────────────────────────────────────────────────────────
@@ -688,6 +732,9 @@ private:
 
         time_t t = time(nullptr);
         doc["currentTime"] = (t > 1000000000) ? formatEpoch((uint32_t)t, "%H:%M:%S") : String("Not synced");
+        doc["uptime"] = (uint32_t)(millis() / 1000);
+        float tempF = temperatureRead() * 9.0f / 5.0f + 32.0f;
+        doc["tempF"] = (int)roundf(tempF);
 
         if (!nwsClient.everPolled()) {
             doc["lastPoll"] = "Never";

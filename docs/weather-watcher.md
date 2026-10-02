@@ -94,9 +94,13 @@ The main page after logging in. Polls `/status-data` once per second:
   error code, "Wi-Fi not connected"). NWS API is only green once the
   location is configured *and* the most recent poll succeeded.
 - **Clock** — current time in 24-hour `HH:MM:SS`, from NTP (see below).
-  Shows "Not synced" until the clock has successfully synced.
+  Shows "Not synced" until the clock has successfully synced. Directly below
+  it: the board's own CPU temperature (internal die sensor, same caveat as
+  the main board's — reads warmer than ambient) and uptime.
 - **Last polling attempt** — timestamp of the most recent poll, success or
   failure.
+- **Restart icon** (top right, next to Settings) — same confirm-then-restart
+  flow as the main board.
 - **Current Alerts** — every alert in a visible tier (see table above),
   sorted most-severe-first, color-coded, each linking (opens in a new tab)
   to its raw `api.weather.gov` record — NWS retired their human-readable
