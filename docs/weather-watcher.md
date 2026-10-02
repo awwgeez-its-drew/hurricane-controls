@@ -88,11 +88,17 @@ tier it's already acted on hasn't increased.
 
 The main page after logging in. Polls `/status-data` once per second:
 
-- **Status lights** — green/red dots for **Wi-Fi** and **NWS API**. Tap
-  either to expand a plain-English detail line: "Status OK" when healthy, or
-  the specific problem otherwise (e.g. "Location not configured", an HTTP
-  error code, "Wi-Fi not connected"). NWS API is only green once the
-  location is configured *and* the most recent poll succeeded.
+- **Status lights** — green/red dots for **Wi-Fi**, **NWS API**, and
+  **Controller Link**. Tap any of them to expand a plain-English detail
+  line: "Status OK" when healthy, or the specific problem otherwise (e.g.
+  "Location not configured", an HTTP error code, "Wi-Fi not connected", a
+  wiring-check message). NWS API is only green once the location is
+  configured *and* the most recent poll succeeded. Controller Link reflects
+  the dedicated UART wire to the main board — it's tested automatically
+  once at startup, and **tapping it fires a fresh on-demand test** (unlike
+  the other two lights, which just show their already-known status). It
+  stays at its neutral default color until the first test resolves (up to
+  ~3 seconds).
 - **Clock** — current time in 24-hour `HH:MM:SS`, from NTP (see below).
   Shows "Not synced" until the clock has successfully synced. Directly below
   it: the board's own CPU temperature (internal die sensor, same caveat as
@@ -170,11 +176,18 @@ and `GROWL` are deliberately not reachable this way: `MANUAL` needs
 momentary-hold semantics that don't fit an autonomous trigger, and `GROWL`
 is a diagnostic test mode, not a warning tone.
 
+A second command, `WX PING`, is a pure link-health check — it never touches
+the state machine and isn't gated by anything (not the auto-trigger toggle,
+not TEST MODE). It's what powers the dashboard's **Controller Link** status
+light: sent once automatically at Weather Watcher startup, and again
+whenever that light is tapped.
+
 The main board replies on the same link:
 
 | Reply | Meaning |
 |---|---|
 | `OK: triggered` | The mode started successfully |
+| `OK: pong` | Reply to `WX PING` — the link is alive |
 | `ERR: busy` | The siren was already running something |
 | `ERR: disabled` | The Settings page "Automatic weather-triggered activation" toggle is off |
 | `ERR: test mode active` | TEST MODE is active — see "Interaction with TEST MODE and lockout" below |

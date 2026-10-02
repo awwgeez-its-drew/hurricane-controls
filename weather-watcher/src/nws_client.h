@@ -79,11 +79,25 @@ public:
 
     void update() {
         readReplies();
+        checkLinkTestTimeout();
         uint32_t now = millis();
         uint32_t intervalMs = settingsMgr.s.pollIntervalSec * 1000UL;
         if (now - lastPollTs_ < intervalMs) return;
         lastPollTs_ = now;
         poll();
+    }
+
+    // Sends "WX PING" over the dedicated UART link and waits (non-blocking,
+    // checked in update()) for the main board's "OK: pong" reply. Called
+    // once at startup and on-demand from the dashboard's Controller Link
+    // status row. A request while one is already in flight is ignored
+    // rather than queued — the in-flight one will resolve within
+    // LINK_TEST_TIMEOUT_MS either way.
+    void requestLinkTest() {
+        if (linkTestInProgress_) return;
+        linkTestInProgress_ = true;
+        linkTestSentMs_     = millis();
+        Serial1.println("WX PING");
     }
 
     // ── Status accessors (for the dashboard's /status-data endpoint) ───────
@@ -92,6 +106,11 @@ public:
     String lastPollError()   const { return lastPollError_; }
     uint32_t lastPollEpoch() const { return lastPollEpoch_; }
     bool   locationConfigured() const { return settingsMgr.s.latitude != 0.0f || settingsMgr.s.longitude != 0.0f; }
+
+    bool   everTestedLink()    const { return everTestedLink_; }
+    bool   linkTestInProgress() const { return linkTestInProgress_; }
+    bool   linkOk()            const { return linkOk_; }
+    String linkDetail()        const { return linkDetail_; }
 
     uint8_t currentAlertCount() const { return currentAlertCount_; }
     const CurrentAlert& currentAlert(uint8_t i) const { return currentAlerts_[i]; }
@@ -106,6 +125,14 @@ private:
     bool     lastPollSuccess_  = false;
     String   lastPollError_;
     uint32_t lastPollEpoch_    = 0;
+
+    // ── Controller link test (WX PING / OK: pong) ───────────────────────────
+    bool     everTestedLink_    = false;
+    bool     linkTestInProgress_ = false;
+    uint32_t linkTestSentMs_    = 0;
+    bool     linkOk_            = false;
+    String   linkDetail_        = "Not tested yet";
+    static constexpr uint32_t LINK_TEST_TIMEOUT_MS = 3000;
 
     // ── Current Alerts (rebuilt every poll) ─────────────────────────────────
     static constexpr uint8_t MAX_CURRENT = 8;
@@ -343,8 +370,23 @@ private:
                 Serial.print("Main board reply: ");
                 Serial.println(line);
                 digitalWrite(STATUS_LED, LOW);
+                if (linkTestInProgress_ && line.equalsIgnoreCase("OK: pong")) {
+                    linkTestInProgress_ = false;
+                    everTestedLink_     = true;
+                    linkOk_             = true;
+                    linkDetail_         = "Status OK";
+                }
             }
         }
+    }
+
+    void checkLinkTestTimeout() {
+        if (!linkTestInProgress_) return;
+        if (millis() - linkTestSentMs_ < LINK_TEST_TIMEOUT_MS) return;
+        linkTestInProgress_ = false;
+        everTestedLink_     = true;
+        linkOk_             = false;
+        linkDetail_         = "No response from main board — check wiring/baud rate (UART1, pins 16/17 by default)";
     }
 
     static uint32_t nowEpoch() {

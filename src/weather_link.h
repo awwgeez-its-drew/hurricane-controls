@@ -50,7 +50,9 @@ private:
 
     void reply(const char* msg) { Serial1.println(msg); }
 
-    // Only one command is understood: "WX <MODE>", MODE one of
+    // Two commands are understood: "WX PING" (a pure link-health check, no
+    // gating at all — used both at the Weather Watcher's own startup and
+    // on-demand from its dashboard) and "WX <MODE>", MODE one of
     // WAIL/ATTACK/FASTWAIL. MANUAL is excluded (it needs momentary-hold
     // semantics that don't fit an autonomous trigger) and so is GROWL (a
     // diagnostic test mode, not a warning tone).
@@ -64,6 +66,8 @@ private:
         if (strncmp(line, "WX", 2) != 0) return;
         char* cmd = line + 2;
         while (*cmd == ' ') cmd++;
+
+        if (!strcmp(cmd, "PING")) { reply("OK: pong"); return; }
 
         RunMode mode;
         if      (!strcmp(cmd, "WAIL"))     mode = RunMode::WAIL;

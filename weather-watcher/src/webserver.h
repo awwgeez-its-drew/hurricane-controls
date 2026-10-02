@@ -151,6 +151,10 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
     <span class="dot" id="apiDot"></span><span class="status-label">NWS API</span>
   </div>
   <div class="status-detail" id="apiDetail"></div>
+  <div class="status-row" onclick="testLink()">
+    <span class="dot" id="linkDot"></span><span class="status-label">Controller Link</span>
+  </div>
+  <div class="status-detail" id="linkDetail"></div>
   <div class="clock mono" id="clock">--:--:--</div>
   <div class="mono" style="font-size:.72rem;color:#8892a0;text-align:center;margin-bottom:8px">Watcher <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span></div>
   <div class="statline" id="lastPoll">Last polling attempt: —</div>
@@ -209,12 +213,19 @@ function fmtUp(s){
   return (d?d+'d ':'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0');
 }
 
+function testLink(){
+  toggleDetail('linkDetail');
+  fetch('/test-link',{method:'POST'});
+}
+
 function refresh(){
   fetch('/status-data').then(r=>r.json()).then(d=>{
     document.getElementById('wifiDot').className='dot '+(d.wifiConnected?'green':'red');
     document.getElementById('wifiDetail').textContent=d.wifiDetail;
     document.getElementById('apiDot').className='dot '+(d.apiGreen?'green':'red');
     document.getElementById('apiDetail').textContent=d.apiDetail;
+    document.getElementById('linkDot').className='dot'+(d.everTestedLink?(d.linkOk?' green':' red'):'');
+    document.getElementById('linkDetail').textContent=d.linkDetail;
     document.getElementById('clock').textContent=d.currentTime;
     if(d.tempF!=null)document.getElementById('tempF').textContent=d.tempF;
     if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);
@@ -681,6 +692,12 @@ private:
             req->send(200, "application/json", "{\"ok\":true}");
             wifiMgr.scheduleRestart(500);
         });
+
+        server_.on("/test-link", HTTP_POST, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            nwsClient.requestLinkTest();
+            req->send(200, "application/json", "{\"ok\":true}");
+        });
     }
 
     // ── JSON builders ────────────────────────────────────────────────────────
@@ -729,6 +746,10 @@ private:
         else if (!nwsClient.lastPollSuccess()) apiDetail = nwsClient.lastPollError();
         else apiDetail = "Status OK";
         doc["apiDetail"] = apiDetail;
+
+        doc["everTestedLink"] = nwsClient.everTestedLink();
+        doc["linkOk"]         = nwsClient.linkOk();
+        doc["linkDetail"]     = nwsClient.linkTestInProgress() ? String("Testing...") : nwsClient.linkDetail();
 
         time_t t = time(nullptr);
         doc["currentTime"] = (t > 1000000000) ? formatEpoch((uint32_t)t, "%H:%M:%S") : String("Not synced");

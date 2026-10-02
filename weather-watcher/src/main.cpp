@@ -29,6 +29,7 @@ void setup() {
     wifiMgr.begin();
     applyTimeConfig();
     nwsClient.begin();
+    nwsClient.requestLinkTest(); // confirm the UART link to the main board on boot
     webUI.begin();
 
     Serial.println("Weather Watcher ready.");
