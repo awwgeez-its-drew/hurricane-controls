@@ -74,7 +74,7 @@ private:
         if (!settingsMgr.s.weatherAutoTriggerEnabled) { reply("ERR: disabled"); return; }
         if (buttons.testModeActive) { reply("ERR: test mode active"); return; }
 
-        if (sm.trigger(mode, TriggerSource::WEATHER)) reply("OK: triggered");
+        if (sm.trigger(mode, TriggerSource::NWS_ALERT)) reply("OK: triggered");
         else reply("ERR: busy");
     }
 };

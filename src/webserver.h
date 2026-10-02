@@ -325,11 +325,18 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
       box-shadow:0 1px 3px rgba(0,0,0,.35)}
-h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;margin-bottom:14px}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af}
+.card-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:12px}
+.card-head h2{margin-bottom:0}
+.chevron{color:#9aa3af;flex-shrink:0;transition:transform .15s}
+.card.expanded .chevron{transform:rotate(180deg)}
+.card-body{display:none;margin-top:14px}
+.card.expanded .card-body{display:block}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
 .row{margin-bottom:10px}
 .hint{font-size:.78rem;color:#9aa3af;margin-bottom:12px}
 label{font-size:.78rem;color:#9aa3af;display:block;margin-bottom:3px}
+label.strong{font-weight:700;color:#eaeaea}
 input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
       border-radius:var(--radius);padding:9px 11px;font-size:.9rem;font-family:inherit}
 input:focus{outline:none;border-color:var(--cyan)}
@@ -373,7 +380,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
 
 <!-- WiFi -->
 <div class="card">
-  <h2>Wi-Fi</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Wi-Fi</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div id="ws" class="ws">Checking&hellip;</div>
   <div class="row"><label>Network SSID</label>
     <input type="text" id="wSSID" placeholder="Your WiFi name" autocomplete="off"></div>
@@ -382,11 +390,13 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <button class="btn save" onclick="saveWifi()">Connect to Network</button>
   <button class="btn danger" onclick="clearWifi()">Use AP Mode Only</button>
   <div class="msg" id="wm"></div>
+  </div>
 </div>
 
 <!-- Security -->
 <div class="card">
-  <h2>Security</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Security</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="row"><label>New Password</label>
     <input type="password" id="p1" placeholder="New password" autocomplete="new-password"></div>
   <div class="row"><label>Confirm Password</label>
@@ -394,33 +404,39 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <button class="btn save" onclick="savePw()">Change Password</button>
   <button class="btn logout" onclick="logout()">Log Out</button>
   <div class="msg" id="pm"></div>
+  </div>
 </div>
 
 <!-- Mesh Settings -->
 <div class="card">
-  <h2>Mesh Settings</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Mesh Settings</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="row"><label>Allowed sender IDs (comma-separated, leave empty to block all)</label>
     <input type="text" id="meshWL" placeholder="e.g. 3A3C, 1B93"></div>
   <div class="row"><label>Command Password (optional, plaintext)</label>
     <input type="text" id="meshPW" placeholder="leave blank for no password"></div>
   <button class="btn save" onclick="saveMeshWL()">Save Mesh Settings</button>
   <div class="msg" id="mwlm"></div>
+  </div>
 </div>
 
 <!-- Weather Watcher -->
 <div class="card">
-  <h2>Weather Watcher</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Weather Watcher</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <p class="hint">Allows a second, separately-wired ESP32 polling National Weather Service alerts to automatically trigger the siren. See docs/weather-watcher.md. This does not bypass TEST MODE.</p>
   <div class="trow">
     <label for="wxAutoTrig">Automatic weather-triggered activation</label>
     <input type="checkbox" id="wxAutoTrig" onchange="saveWeatherAutoTrigger()">
   </div>
   <div class="msg" id="wxm"></div>
+  </div>
 </div>
 
 <!-- Startup Sequence -->
 <div class="card">
-  <h2>Startup Sequence</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Startup Sequence</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="grid2">
     <div><label>Chopper delay (sec)</label><input type="number" id="s_chopperDelay" min="0" step="0.1"></div>
     <div><label>Blower delay (sec)</label><input type="number" id="s_blowerDelay" min="0" step="0.1"></div>
@@ -428,11 +444,13 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
   <button class="btn save" onclick="saveTiming()">Save Startup Sequence</button>
   <div class="msg" id="tmStart"></div>
+  </div>
 </div>
 
 <!-- Shutdown Sequence -->
 <div class="card">
-  <h2>Shutdown Sequence</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Shutdown Sequence</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="grid2">
     <div><label>Chopper delay (sec)</label><input type="number" id="s_stopChopperDelay" min="0" step="0.1"></div>
     <div><label>Blower delay (sec)</label><input type="number" id="s_stopBlowerDelay" min="0" step="0.1"></div>
@@ -440,23 +458,27 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
   <button class="btn save" onclick="saveTiming()">Save Shutdown Sequence</button>
   <div class="msg" id="tmStop"></div>
+  </div>
 </div>
 
 <!-- General Timing -->
 <div class="card">
-  <h2>Timing</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Timing</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="grid2">
-    <div><label>Wail duration (sec)</label><input type="number" id="s_wailDuration" min="1" step="1"></div>
+    <div><label class="strong">Wail duration (sec)</label><input type="number" id="s_wailDuration" min="1" step="1"></div>
     <div><label>Long-press threshold (sec)</label><input type="number" id="s_longPressMs" min="0.1" step="0.1"></div>
     <div><label>Button debounce (sec)</label><input type="number" id="s_buttonDebounceMs" min="0" step="0.01"></div>
   </div>
   <button class="btn save" onclick="saveTiming()">Save Timing</button>
   <div class="msg" id="tm"></div>
+  </div>
 </div>
 
 <!-- Attack Mode -->
 <div class="card">
-  <h2>Attack Mode</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Attack Mode</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="grid2">
     <div><label>Attack duration (sec)</label><input type="number" id="s_attackDuration" min="1" step="1"></div>
     <div><label>Attack ON time (sec)</label><input type="number" id="s_attackOnTime" min="0.1" step="0.1"></div>
@@ -465,11 +487,13 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
   <button class="btn save" onclick="saveTiming()">Save Attack Settings</button>
   <div class="msg" id="tm2"></div>
+  </div>
 </div>
 
 <!-- Fast Wail Mode -->
 <div class="card">
-  <h2>Fast Wail Mode</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Fast Wail Mode</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="grid2">
     <div><label>Fast Wail duration (sec)</label><input type="number" id="s_fastWailDuration" min="1" step="1"></div>
     <div><label>Fast Wail ON time (sec)</label><input type="number" id="s_fastWailOnTime" min="0.1" step="0.1"></div>
@@ -478,11 +502,13 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
   <button class="btn save" onclick="saveTiming()">Save Fast Wail Settings</button>
   <div class="msg" id="tm3"></div>
+  </div>
 </div>
 
 <!-- Growl Test -->
 <div class="card">
-  <h2>Growl Test</h2>
+  <div class="card-head" onclick="toggleCard(this)"><h2>Growl Test</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
   <div class="grid2">
     <div><label>Blower time (sec)</label><input type="number" id="s_growlBlowerTime" min="0.1" step="0.1"></div>
     <div><label>Rotator time (sec)</label><input type="number" id="s_growlRotatorTime" min="0.1" step="0.1"></div>
@@ -490,6 +516,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
   <button class="btn save" onclick="saveTiming()">Save Growl Settings</button>
   <div class="msg" id="tm4"></div>
+  </div>
 </div>
 
 <div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Hurricane Controls &middot; v<span id="verNum">—</span></a></div>
@@ -523,6 +550,10 @@ fetch('/wifi-data').then(r=>r.json()).then(d=>{
   else{el.textContent='AP mode — '+d.ip;el.className='ws';}
   if(d.ssid)document.getElementById('wSSID').value=d.ssid;
 });
+
+function toggleCard(headEl){
+  headEl.parentElement.classList.toggle('expanded');
+}
 
 function msg(id,txt,ok){
   const e=document.getElementById(id);e.textContent=txt;e.className='msg '+(ok?'ok':'er');

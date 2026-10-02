@@ -209,8 +209,8 @@ another unit sharing the channel:
 
 | Event | Message |
 |---|---|
-| Any run mode starts | `\x07<MODE> ACTIVATED (activation point: LOCAL/WEB/MESH)` |
-| Stop is invoked (even if nothing was running) | `\x07STOP ACTIVATED (activation point: LOCAL/WEB/MESH)` |
+| Any run mode starts | `\x07<MODE> ACTIVATED (activation point: LOCAL/WEB/MESH/NWS ALERT)` |
+| Stop is invoked (even if nothing was running) | `\x07STOP ACTIVATED (activation point: LOCAL/WEB/MESH/NWS ALERT)` |
 | A run cycle finishes, for any reason | `<MODE> CYCLE COMPLETED - SIREN STOPPED` |
 | Physical-button lockout changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
 | A physical button is pressed while locked out | `\x07<BUTTON> PRESSED - LOCKED OUT` (`BUTTON` = `STOP`/`WAIL`/`ATTACK`) |
