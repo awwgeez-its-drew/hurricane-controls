@@ -28,11 +28,25 @@ static bool isStrongPassword(const char* pw) {
     return hasUpper && hasLower && hasDigit && hasSpecial;
 }
 
+// Valid DHCP/mDNS hostname: 1-32 chars, letters/digits/hyphens only, no
+// leading or trailing hyphen.
+static bool isValidHostname(const char* h) {
+    size_t len = strlen(h);
+    if (len < 1 || len > 32) return false;
+    if (h[0] == '-' || h[len - 1] == '-') return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = h[i];
+        if (!isalnum((unsigned char)c) && c != '-') return false;
+    }
+    return true;
+}
+
 // ── Login page ────────────────────────────────────────────────────────────────
 static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -85,6 +99,7 @@ static const char MAIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -305,6 +320,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Hurricane Controls</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -383,7 +399,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-head" onclick="toggleCard(this)"><h2>Wi-Fi</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
   <div class="card-body">
   <div id="ws" class="ws">Checking&hellip;</div>
-  <div class="row"><label>Network SSID</label>
+  <div class="row"><label>Device Hostname</label>
+    <input type="text" id="wHost" placeholder="hurricane" maxlength="32" autocomplete="off"></div>
+  <p class="hint">Letters, numbers, and hyphens only. Sets both the name your router shows for this device and its <code>http://&lt;hostname&gt;.local</code> address. Takes effect after a restart.</p>
+  <button class="btn save" onclick="saveHostname()">Save Hostname</button>
+  <div class="msg" id="hm"></div>
+  <div class="row" style="margin-top:14px"><label>Network SSID</label>
     <input type="text" id="wSSID" placeholder="Your WiFi name" autocomplete="off"></div>
   <div class="row"><label>Password</label>
     <input type="password" id="wPass" placeholder="WiFi password" autocomplete="new-password"></div>
@@ -549,6 +570,7 @@ fetch('/wifi-data').then(r=>r.json()).then(d=>{
   else if(d.ssid){el.textContent='Not connected — last: '+d.ssid;el.className='ws';}
   else{el.textContent='AP mode — '+d.ip;el.className='ws';}
   if(d.ssid)document.getElementById('wSSID').value=d.ssid;
+  document.getElementById('wHost').value=d.hostname||'hurricane';
 });
 
 function toggleCard(headEl){
@@ -594,6 +616,12 @@ function clearWifi(){
   if(!confirm('Switch to AP-only mode? Device will restart.'))return;
   post('/wifi-data',{clear:true}).then(d=>msg('wm',d.ok?'Restarting in AP mode…':'Failed',d.ok));
 }
+function saveHostname(){
+  const hostname=document.getElementById('wHost').value.trim();
+  const valid=/^[A-Za-z0-9-]{1,32}$/.test(hostname) && !hostname.startsWith('-') && !hostname.endsWith('-');
+  if(!valid){msg('hm','Letters, numbers, and hyphens only (no leading/trailing hyphen)',false);return;}
+  post('/wifi-data',{hostname}).then(d=>msg('hm',d.ok?'Saved — restarting…':'Failed',d.ok));
+}
 function savePw(){
   const p1=document.getElementById('p1').value;
   const p2=document.getElementById('p2').value;
@@ -630,6 +658,7 @@ static const char TEST_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Component Test — Hurricane Controls</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -1055,14 +1084,29 @@ private:
                     deserializeJson(doc, (const char*)req->_tempObject);
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
+                    bool changed = false;
                     if (doc["clear"].as<bool>()) {
                         wifiMgr.clearCredentials();
-                    } else {
+                        changed = true;
+                    } else if (!doc["hostname"].is<const char*>()) {
+                        // Only touch ssid/pass on a request that isn't a
+                        // hostname-only save — the password field is never
+                        // pre-filled, so bundling them would force
+                        // re-entering credentials just to rename the device.
                         const char* ssid = doc["ssid"] | "";
                         const char* pass = doc["pass"] | "";
-                        if (strlen(ssid) > 0) wifiMgr.saveCredentials(ssid, pass);
+                        if (strlen(ssid) > 0) { wifiMgr.saveCredentials(ssid, pass); changed = true; }
                     }
-                    wifiMgr.scheduleRestart(1500);
+                    if (doc["hostname"].is<const char*>()) {
+                        const char* hostname = doc["hostname"].as<const char*>();
+                        if (!isValidHostname(hostname)) {
+                            req->send(200, "application/json", "{\"ok\":false}");
+                            return;
+                        }
+                        wifiMgr.saveHostname(hostname);
+                        changed = true;
+                    }
+                    if (changed) wifiMgr.scheduleRestart(1500);
                 }
                 req->send(200, "application/json", "{\"ok\":true}");
             },
@@ -1197,6 +1241,7 @@ private:
         doc["connected"] = wifiMgr.isConnected();
         doc["ssid"]      = wifiMgr.getSSID();
         doc["ip"]        = wifiMgr.getIP();
+        doc["hostname"]  = wifiMgr.getHostname();
         String out;
         serializeJson(doc, out);
         return out;

@@ -48,15 +48,36 @@ public:
                                     : WiFi.softAPIP().toString();
     }
 
+    // Device name shown in a router's DHCP client list and used for the
+    // ".local" mDNS address — these were previously two separate, both
+    // hardcoded identities (nothing set WiFi.setHostname() at all, and
+    // MDNS.begin() always used the compile-time MDNS_NAME); now both follow
+    // this single configurable value.
+    String getHostname() const { return effectiveHostname(); }
+
+    void saveHostname(const String& h) {
+        hostname_ = h;
+        Preferences p;
+        p.begin("wifi_cfg", false);
+        p.putString("hostname", h);
+        p.end();
+    }
+
 private:
     String   ssid_;
     String   pass_;
+    String   hostname_;       // empty = not set yet -> falls back to MDNS_NAME
     Mode     mode_           = Mode::AP;
     bool     restartPending_ = false;
     uint32_t restartAt_      = 0;
 
+    String effectiveHostname() const {
+        return hostname_.length() ? hostname_ : String(MDNS_NAME);
+    }
+
     bool connectSTA() {
         WiFi.mode(WIFI_STA);
+        WiFi.setHostname(effectiveHostname().c_str()); // must be set before WiFi.begin()
         WiFi.begin(ssid_.c_str(), pass_.c_str());
         uint32_t start = millis();
         while (WiFi.status() != WL_CONNECTED) {
@@ -68,7 +89,7 @@ private:
             delay(200);
         }
         mode_ = Mode::STA;
-        MDNS.begin(MDNS_NAME);
+        MDNS.begin(effectiveHostname());
         Serial.print("WiFi STA IP: ");
         Serial.println(WiFi.localIP());
         return true;
@@ -76,6 +97,7 @@ private:
 
     void startAP() {
         WiFi.mode(WIFI_AP);
+        WiFi.softAPsetHostname(effectiveHostname().c_str());
         WiFi.softAP(WIFI_SSID);
         mode_ = Mode::AP;
         Serial.print("WiFi AP IP: ");
@@ -85,8 +107,9 @@ private:
     void loadCreds() {
         Preferences p;
         p.begin("wifi_cfg", true);
-        ssid_ = p.getString("ssid", "");
-        pass_ = p.getString("pass", "");
+        ssid_     = p.getString("ssid", "");
+        pass_     = p.getString("pass", "");
+        hostname_ = p.getString("hostname", "");
         p.end();
     }
 

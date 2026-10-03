@@ -142,8 +142,9 @@ join the 2.4 GHz one.
    pio run -t upload
    ```
 3. On first boot, connect to the `HurricaneControls` WiFi access point (see
-   Default credentials above) and browse to `http://hurricane.local` or the
-   device's AP IP.
+   Default credentials above) and browse to `http://hurricane.local` (or
+   whatever hostname you later set from Settings > Wi-Fi) or the device's AP
+   IP.
 4. Log in with the default password.
 5. **Change the default password immediately** from the Settings page.
    Passwords must be at least 8 characters and include an uppercase letter,
