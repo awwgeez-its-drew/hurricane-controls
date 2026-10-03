@@ -156,7 +156,14 @@ title to expand) — same pattern as the main Hurricane Controls board's
 Settings page. The restart icon (confirm-then-restart, same flow as the main
 board) lives in this page's navbar, not the public Dashboard's.
 
-- **Wi-Fi** — join a network or fall back to AP-only mode.
+- **Wi-Fi** — a **Device Hostname** field (letters/digits/hyphens, default
+  `weather-watcher`) that sets both the name your router shows for this
+  device in its connected-devices list and its `http://<hostname>.local`
+  mDNS address — previously only the `.local` address was configurable (as
+  a compile-time constant), and nothing set the router-visible name at all.
+  Saved independently of the SSID/password below, since changing it
+  shouldn't require re-entering Wi-Fi credentials. Below that: join a
+  network or fall back to AP-only mode.
 - **Security** — change the login password (same complexity policy as the
   main board: 8+ characters, upper/lower/digit/special).
 - **Alert Location** — latitude/longitude (not a zip/city), poll interval,
@@ -263,7 +270,8 @@ the same model used for the main board's own physical buttons.
    upload` from inside that directory) onto a second ESP32.
 2. Wire it to the main board per the table above.
 3. On first boot it starts its own open WiFi AP, `WeatherWatcher` — connect
-   to it and browse to `http://weather-watcher.local` or its AP IP.
+   to it and browse to `http://weather-watcher.local` (or whatever hostname
+   you later set, see below) or its AP IP.
 4. Log in with the default password (`Weather123!`) and **change it
    immediately** from the Security card.
 5. Join it to your home WiFi network (Wi-Fi card).

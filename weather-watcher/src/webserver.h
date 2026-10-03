@@ -28,6 +28,19 @@ static bool isStrongPassword(const char* pw) {
     return hasUpper && hasLower && hasDigit && hasSpecial;
 }
 
+// Valid DHCP/mDNS hostname: 1-32 chars, letters/digits/hyphens only, no
+// leading or trailing hyphen.
+static bool isValidHostname(const char* h) {
+    size_t len = strlen(h);
+    if (len < 1 || len > 32) return false;
+    if (h[0] == '-' || h[len - 1] == '-') return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = h[i];
+        if (!isalnum((unsigned char)c) && c != '-') return false;
+    }
+    return true;
+}
+
 // ── Login page ───────────────────────────────────────────────────────────────
 static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
@@ -323,7 +336,11 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-head" onclick="toggleCard(this)"><h2>Wi-Fi</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
   <div class="card-body">
   <div id="ws" class="ws">Checking&hellip;</div>
-  <div class="row"><label>Network SSID</label><input type="text" id="wSSID" placeholder="Your WiFi name"></div>
+  <div class="row"><label>Device Hostname</label><input type="text" id="wHost" placeholder="weather-watcher" maxlength="32"></div>
+  <p class="hint">Letters, numbers, and hyphens only. Sets both the name your router shows for this device and its <code>http://&lt;hostname&gt;.local</code> address. Takes effect after a restart.</p>
+  <button class="btn save" onclick="saveHostname()">Save Hostname</button>
+  <div class="msg" id="hm"></div>
+  <div class="row" style="margin-top:14px"><label>Network SSID</label><input type="text" id="wSSID" placeholder="Your WiFi name"></div>
   <div class="row"><label>Password</label><input type="password" id="wPass" placeholder="WiFi password"></div>
   <button class="btn save" onclick="saveWifi()">Connect to Network</button>
   <button class="btn danger" onclick="clearWifi()">Use AP Mode Only</button>
@@ -494,6 +511,7 @@ fetch('/wifi-data').then(r=>r.json()).then(d=>{
   else if(d.ssid){el.textContent='Not connected — last: '+d.ssid;el.className='ws';}
   else{el.textContent='AP mode — '+d.ip;el.className='ws';}
   if(d.ssid)document.getElementById('wSSID').value=d.ssid;
+  document.getElementById('wHost').value=d.hostname||'weather-watcher';
 });
 
 function saveWifi(){
@@ -503,6 +521,12 @@ function saveWifi(){
 }
 function clearWifi(){
   post('/wifi-data',{clear:true}).then(()=>msg('wm','Cleared — rebooting into AP mode...',true));
+}
+function saveHostname(){
+  const hostname=document.getElementById('wHost').value.trim();
+  const valid=/^[A-Za-z0-9-]{1,32}$/.test(hostname) && !hostname.startsWith('-') && !hostname.endsWith('-');
+  if(!valid){msg('hm','Letters, numbers, and hyphens only (no leading/trailing hyphen)',false);return;}
+  post('/wifi-data',{hostname}).then(d=>msg('hm',d.ok?'Saved — rebooting...':'Failed',d.ok));
 }
 function savePw(){
   const p1=document.getElementById('p1').value;
@@ -765,6 +789,7 @@ private:
             doc["connected"] = wifiMgr.isConnected();
             doc["ssid"]      = wifiMgr.getSSID();
             doc["ip"]        = wifiMgr.getIP();
+            doc["hostname"]  = wifiMgr.getHostname();
             String out;
             serializeJson(doc, out);
             req->send(200, "application/json", out);
@@ -778,14 +803,29 @@ private:
                     deserializeJson(doc, (const char*)req->_tempObject);
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
+                    bool changed = false;
                     if (doc["clear"].as<bool>()) {
                         wifiMgr.clearCredentials();
-                    } else {
+                        changed = true;
+                    } else if (!doc["hostname"].is<const char*>()) {
+                        // Only touch ssid/pass on a request that isn't a
+                        // hostname-only save — the password field is never
+                        // pre-filled, so bundling them would force
+                        // re-entering credentials just to rename the device.
                         const char* ssid = doc["ssid"] | "";
                         const char* pass = doc["pass"] | "";
-                        if (strlen(ssid) > 0) wifiMgr.saveCredentials(ssid, pass);
+                        if (strlen(ssid) > 0) { wifiMgr.saveCredentials(ssid, pass); changed = true; }
                     }
-                    wifiMgr.scheduleRestart(1500);
+                    if (doc["hostname"].is<const char*>()) {
+                        const char* hostname = doc["hostname"].as<const char*>();
+                        if (!isValidHostname(hostname)) {
+                            req->send(200, "application/json", "{\"ok\":false}");
+                            return;
+                        }
+                        wifiMgr.saveHostname(hostname);
+                        changed = true;
+                    }
+                    if (changed) wifiMgr.scheduleRestart(1500);
                 }
                 req->send(200, "application/json", "{\"ok\":true}");
             },
