@@ -44,18 +44,33 @@ public:
         }
     }
 
+    // ── Weather Watcher's self-reported health, pushed unprompted over this
+    // same link (see "WX STATUS" below) — used for the Settings page status
+    // indicator and folded into the mesh STATUS/PING messages. everReported()
+    // is false until the first one arrives (e.g. link never wired, or the
+    // Weather Watcher board isn't powered), distinct from an actual error.
+    bool        everReported() const { return everReported_; }
+    bool        reportedOk()   const { return ok_; }
+    const char* detail()       const { return detail_; }
+
 private:
-    char    line_[32];
+    char    line_[96];
     uint8_t lineLen_ = 0;
+
+    bool everReported_ = false;
+    bool ok_            = false;
+    char detail_[64]    = "Not yet reported";
 
     void reply(const char* msg) { Serial1.println(msg); }
 
-    // Two commands are understood: "WX PING" (a pure link-health check, no
+    // Three commands are understood: "WX PING" (a pure link-health check, no
     // gating at all — used both at the Weather Watcher's own startup and
-    // on-demand from its dashboard) and "WX <MODE>", MODE one of
-    // WAIL/ATTACK/FASTWAIL. MANUAL is excluded (it needs momentary-hold
-    // semantics that don't fit an autonomous trigger) and so is GROWL (a
-    // diagnostic test mode, not a warning tone).
+    // on-demand from its dashboard), "WX STATUS <OK|ERROR> <detail>" (an
+    // unprompted periodic push of the Weather Watcher's own WiFi/NWS API
+    // health — no reply expected, it's fire-and-forget), and "WX <MODE>",
+    // MODE one of WAIL/ATTACK/FASTWAIL. MANUAL is excluded (it needs
+    // momentary-hold semantics that don't fit an autonomous trigger) and so
+    // is GROWL (a diagnostic test mode, not a warning tone).
     void handleCommand(char* raw) {
         char* line = raw;
         while (*line == ' ') line++;
@@ -68,6 +83,17 @@ private:
         while (*cmd == ' ') cmd++;
 
         if (!strcmp(cmd, "PING")) { reply("OK: pong"); return; }
+
+        if (!strncmp(cmd, "STATUS", 6)) {
+            char* arg = cmd + 6;
+            while (*arg == ' ') arg++;
+            ok_ = !strncmp(arg, "OK", 2);
+            char* detail = strchr(arg, ' ');
+            if (detail) { while (*detail == ' ') detail++; } else detail = arg + strlen(arg);
+            strlcpy(detail_, detail, sizeof(detail_));
+            everReported_ = true;
+            return;
+        }
 
         RunMode mode;
         if      (!strcmp(cmd, "WAIL"))     mode = RunMode::WAIL;

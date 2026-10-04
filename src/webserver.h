@@ -11,6 +11,8 @@
 #include "motors.h"
 #include "wifi_manager.h"
 #include "buttons.h"
+#include "weather_link.h"
+#include "assets.h"
 
 // Enforces the public-facing password policy: 8+ chars with at least one
 // uppercase, lowercase, digit, and special character.
@@ -46,7 +48,7 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/brand-icon.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -60,6 +62,7 @@ body{background:var(--bg);color:#eaeaea;
 .card{background:var(--surface);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:340px;
       text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 h1{font-size:1.5rem;color:var(--cyan);letter-spacing:1px;margin-bottom:4px}
+.login-siren{width:120px;height:120px;display:block;margin:0 auto 12px}
 .sub{color:#9aa3af;font-size:.85rem;margin-bottom:28px}
 input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
       border-radius:var(--radius);padding:13px 16px;font-size:1rem;margin-bottom:12px;font-family:inherit}
@@ -71,7 +74,8 @@ button:active{opacity:.8}
 .err{color:#f87171;font-size:.85rem;margin-top:10px;min-height:1.1em}
 </style></head><body>
 <div class="card">
-  <h1>&#x1F32A; Hurricane Controls</h1>
+  <img class="login-siren" src="/login-siren.png" alt="">
+  <h1>Hurricane Controls</h1>
   <p class="sub">Siren Controller</p>
   <form onsubmit="login(event)">
     <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus>
@@ -99,7 +103,7 @@ static const char MAIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/brand-icon.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -114,7 +118,9 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
-.navbar .brand{display:flex;flex-direction:column;justify-content:center;overflow:hidden;margin-right:8px}
+.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden;margin-right:8px}
+.brand-icon{width:28px;height:28px;flex-shrink:0}
+.navbar .brand{display:flex;flex-direction:column;justify-content:center;overflow:hidden}
 .navbar h1{font-size:.82rem;color:var(--cyan);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .navbar .subtitle{font-size:.62rem;color:#8892a0;letter-spacing:1px}
 .navicons{display:flex;gap:14px;align-items:center;flex-shrink:0}
@@ -168,9 +174,12 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .stopbar:active{opacity:.85}
 </style></head><body>
 <div class="navbar">
-  <div class="brand">
-    <h1>Hurricane Controls</h1>
-    <span class="subtitle">CONTROL PANEL</span>
+  <div class="brandrow">
+    <img class="brand-icon" src="/brand-icon.png" alt="">
+    <div class="brand">
+      <h1>Hurricane Controls</h1>
+      <span class="subtitle">CONTROL PANEL</span>
+    </div>
   </div>
   <div class="navicons">
     <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons">
@@ -320,7 +329,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Hurricane Controls</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/brand-icon.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -336,6 +345,8 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
+.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
+.brand-icon{width:26px;height:26px;flex-shrink:0}
 .navicons{display:flex;gap:14px;align-items:center}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
@@ -360,6 +371,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
 .ws{font-size:.8rem;padding:9px 12px;background:#0a0e18;border-radius:var(--radius);
     margin-bottom:12px;color:#9aa3af;display:flex;align-items:center;gap:8px;border-left:3px solid transparent}
 .ws.ok{color:var(--green);border-left-color:var(--green)}
+.ws.er{color:#f87171;border-left-color:#f87171}
 .btn{width:100%;margin-top:12px;padding:12px;font-weight:700;border:none;
      border-radius:var(--radius);cursor:pointer;font-size:.95rem;letter-spacing:.5px;font-family:inherit}
 .btn:active{opacity:.8}
@@ -384,7 +396,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <a href="/" class="ibtn" title="Back">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
-  <h1>Settings</h1>
+  <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Settings</h1></div>
   <div class="navicons">
     <a href="/test" class="ibtn" title="Component Test">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
@@ -446,6 +458,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-head" onclick="toggleCard(this)"><h2>Weather Watcher</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
   <div class="card-body">
   <p class="hint">Allows a second, separately-wired ESP32 polling National Weather Service alerts to automatically trigger the siren. See docs/weather-watcher.md. This does not bypass TEST MODE.</p>
+  <div id="wwStatus" class="ws">Checking&hellip;</div>
   <div class="trow">
     <label for="wxAutoTrig">Automatic weather-triggered activation</label>
     <input type="checkbox" id="wxAutoTrig" onchange="saveWeatherAutoTrigger()">
@@ -561,6 +574,11 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('meshWL').value=d.meshWhitelist||'';
   document.getElementById('meshPW').value=d.meshPassword||'';
   document.getElementById('wxAutoTrig').checked=!!d.weatherAutoTriggerEnabled;
+  const wwEl=document.getElementById('wwStatus');
+  if(!d.weatherAutoTriggerEnabled){wwEl.textContent='Disabled';wwEl.className='ws';}
+  else if(!d.wwEverReported){wwEl.textContent='No status received yet from the Weather Watcher board';wwEl.className='ws';}
+  else if(d.wwOk){wwEl.textContent='OK — '+d.wwDetail;wwEl.className='ws ok';}
+  else{wwEl.textContent='Error — '+d.wwDetail;wwEl.className='ws er';}
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -658,7 +676,7 @@ static const char TEST_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Component Test — Hurricane Controls</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' d='M12 3c-4 0-7 2-7 5s3 4 6 4-2 3-5 3m13-9c3 1 5 3 5 6s-3 5-7 5'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/brand-icon.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -673,6 +691,8 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         border-bottom:1px solid #1b2438;display:flex;align-items:center;gap:12px;
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
+.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
+.brand-icon{width:26px;height:26px;flex-shrink:0}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
@@ -708,7 +728,7 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
   <a href="/settings" class="ibtn" title="Back">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
-  <h1>Component Test</h1>
+  <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Component Test</h1></div>
 </div>
 
 <div class="content">
@@ -899,6 +919,20 @@ private:
         // Login page (no auth)
         server_.on("/login", HTTP_GET, [](AsyncWebServerRequest* req) {
             req->send(200, "text/html", LOGIN_HTML);
+        });
+
+        // Image assets (no auth — the login page and favicon need to load
+        // before a session exists). Long cache lifetime since these only
+        // change on a firmware reflash.
+        server_.on("/brand-icon.png", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
+        });
+        server_.on("/login-siren.png", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", LOGIN_SIREN_PNG, LOGIN_SIREN_PNG_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
         });
 
         // Root → main page (auth required)
@@ -1229,6 +1263,9 @@ private:
         doc["meshWhitelist"]       = s.meshWhitelist;
         doc["meshPassword"]        = s.meshPassword;
         doc["weatherAutoTriggerEnabled"] = s.weatherAutoTriggerEnabled;
+        doc["wwEverReported"] = weatherLink.everReported();
+        doc["wwOk"]           = weatherLink.reportedOk();
+        doc["wwDetail"]       = weatherLink.detail();
         doc["fwVersion"]           = FW_VERSION;
         String out;
         serializeJson(doc, out);

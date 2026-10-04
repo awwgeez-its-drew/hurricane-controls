@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "statemachine.h"
 #include "buttons.h"
+#include "weather_link.h"
 
 // Bridges a Meshtastic node (wired via UART2, running its Serial Module in
 // Text Message mode) to the state machine, so the siren can be triggered/
@@ -35,6 +36,7 @@ public:
         wasLocked_              = buttons.locked;
         lastSeenStopSeq_        = sm.stopCallSeq;
         lastSeenLockedPressSeq_ = buttons.lockedPressSeq;
+        wasWeatherEnabled_      = settingsMgr.s.weatherAutoTriggerEnabled;
     }
 
     void update() {
@@ -95,6 +97,14 @@ public:
             reply(String("\x07") + lockedButtonWord(buttons.lastLockedPress) + " PRESSED - LOCKED OUT");
         }
 
+        // Automatic weather-triggered activation toggled — regardless of
+        // whether it came from a mesh command or the Settings page, same
+        // "broadcast on change, from any source" treatment as the lockout.
+        if (settingsMgr.s.weatherAutoTriggerEnabled != wasWeatherEnabled_) {
+            wasWeatherEnabled_ = settingsMgr.s.weatherAutoTriggerEnabled;
+            reply(wasWeatherEnabled_ ? "WEATHER TRIGGER ENABLED" : "WEATHER TRIGGER DISABLED");
+        }
+
         // Periodic status line.
         uint32_t now = millis();
         if (now - lastStatusTs_ >= STATUS_INTERVAL_MS) {
@@ -122,6 +132,7 @@ private:
     bool     wasLocked_        = false;
     uint32_t lastStatusTs_     = 0;
     uint32_t lastSeenLockedPressSeq_ = 0;
+    bool     wasWeatherEnabled_ = false;
 
     void reply(const char* msg) { Serial2.println(msg); }
     void reply(const String& msg) { Serial2.println(msg); }
@@ -170,6 +181,17 @@ private:
 
     static String modeOrStandby() { return sm.isIdle() ? "STANDBY" : String(modeWord(sm.runMode)); }
 
+    // OFF = the owner's kill-switch is off; N/A = enabled but nothing has
+    // ever been heard from the Weather Watcher board (link never wired, or
+    // it's not powered); OK/ERROR = its own self-reported WiFi/NWS API
+    // health, pushed unprompted over the dedicated UART link (see
+    // weather_link.h's "WX STATUS" handling).
+    static const char* weatherWatcherWord() {
+        if (!settingsMgr.s.weatherAutoTriggerEnabled) return "OFF";
+        if (!weatherLink.everReported()) return "N/A";
+        return weatherLink.reportedOk() ? "OK" : "ERROR";
+    }
+
     // ESP32's own internal die-temperature sensor — not ambient, and known
     // to be a rough reading, but needs no extra hardware.
     static int cpuTempF() {
@@ -178,12 +200,14 @@ private:
 
     static String buildStatusMessage() {
         return "STATUS: " + modeOrStandby() + " - LOCAL CONTROL " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
-               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F";
+               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F" +
+               " // WW: " + weatherWatcherWord();
     }
 
     static String buildPingReply() {
         return "MODE: " + modeOrStandby() + " // LOCAL CONTROLS " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
-               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F";
+               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F" +
+               " // WW: " + weatherWatcherWord();
     }
 
     // Comma-separated, case-insensitive, whitespace-trimmed match against
@@ -312,6 +336,15 @@ private:
         } else if (!strcmp(cmd, "UNLOCK")) {
             buttons.setLocked(false, false);
             // "LOCAL BUTTON LOCKOUT INACTIVE" covers this the same way.
+        } else if (!strcmp(cmd, "WEATHERON")) {
+            settingsMgr.s.weatherAutoTriggerEnabled = true;
+            settingsMgr.save();
+            // "WEATHER TRIGGER ENABLED" is broadcast generically in update()
+            // whenever the setting changes, covering this too.
+        } else if (!strcmp(cmd, "WEATHEROFF")) {
+            settingsMgr.s.weatherAutoTriggerEnabled = false;
+            settingsMgr.save();
+            // "WEATHER TRIGGER DISABLED" covers this the same way.
         } else if (!strcmp(cmd, "REBOOT")) {
             reply("OK: rebooting");
             Serial2.flush();

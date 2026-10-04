@@ -105,7 +105,17 @@ public:
     void update() {
         readReplies();
         checkLinkTestTimeout();
+
+        // Pushed to the main board independently of the NWS poll cadence
+        // (which can be as slow as minutes) so a WiFi drop shows up there
+        // reasonably quickly. Fires immediately on the very first update()
+        // call too, since lastStatusPushTs_ starts at 0.
         uint32_t now = millis();
+        if (now - lastStatusPushTs_ >= STATUS_PUSH_INTERVAL_MS) {
+            lastStatusPushTs_ = now;
+            sendStatusToController();
+        }
+
         uint32_t intervalMs = settingsMgr.s.pollIntervalSec * 1000UL;
         if (now - lastPollTs_ < intervalMs) return;
         lastPollTs_ = now;
@@ -145,6 +155,10 @@ public:
 
 private:
     uint32_t lastPollTs_ = 0;
+
+    // ── Periodic "WX STATUS <OK|ERROR> <detail>" push to the main board ─────
+    uint32_t lastStatusPushTs_ = 0;
+    static constexpr uint32_t STATUS_PUSH_INTERVAL_MS = 30000; // 30s
 
     bool     everPolled_       = false;
     bool     lastPollSuccess_  = false;
@@ -409,6 +423,26 @@ private:
         digitalWrite(STATUS_LED, HIGH);
         Serial1.print("WX ");
         Serial1.println(mode);
+    }
+
+    // Unprompted, fire-and-forget push of this board's own WiFi/NWS API
+    // health, so the main board's Settings page can show something more
+    // useful than just "the link is alive" — mirrors the exact classification
+    // already used for the dashboard's own status lights (see buildStatusJson()
+    // in webserver.h), condensed into one line. Truncated well under the main
+    // board's line buffer, since wifiDetail/lastPollError_ can run long.
+    void sendStatusToController() {
+        bool wifiOk = WiFi.status() == WL_CONNECTED;
+        bool ok;
+        String detail;
+        if (!wifiOk)            { ok = false; detail = "WiFi not connected"; }
+        else if (!everPolled_)  { ok = true;  detail = "Waiting for first poll"; }
+        else if (!lastPollSuccess_) { ok = false; detail = lastPollError_; }
+        else                    { ok = true;  detail = "All systems normal"; }
+        if (detail.length() > 48) detail = detail.substring(0, 48);
+        Serial1.print("WX STATUS ");
+        Serial1.print(ok ? "OK " : "ERROR ");
+        Serial1.println(detail);
     }
 
     void readReplies() {

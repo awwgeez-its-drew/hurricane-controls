@@ -233,6 +233,19 @@ not TEST MODE). It's what powers the dashboard's **Controller Link** status
 light: sent once automatically at Weather Watcher startup, and again
 whenever that light is tapped.
 
+A third message, `WX STATUS <OK|ERROR> <detail>`, is unprompted and
+fire-and-forget (no reply expected) — the Weather Watcher pushes its own
+WiFi/NWS API health to the main board every 30 seconds (independent of the
+NWS poll interval, so a WiFi drop shows up promptly even with a slow poll
+cadence), plus once immediately at startup. `detail` mirrors the exact
+classification the dashboard's own status lights use (WiFi down → `ERROR
+WiFi not connected`; WiFi up but no poll yet → `OK Waiting for first poll`;
+last poll failed → `ERROR <the poll error, truncated>`; otherwise `OK All
+systems normal`), truncated to fit the main board's line buffer. The main
+board surfaces this on its own Settings page (Weather Watcher card) and
+folds it into its mesh `STATUS`/`PING` messages as `WW: OK`/`ERROR` — see
+`README.md` and `docs/meshtastic-integration.md`.
+
 The main board replies on the same link:
 
 | Reply | Meaning |

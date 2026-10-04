@@ -197,8 +197,9 @@ by an optional password (see below): `SIREN <command> <password>`, e.g.
 | `SIREN WAIL` / `SIREN ATTACK` / `SIREN FASTWAIL` / `SIREN GROWL` | Starts that run mode (Growl Test runs blower, then rotator, then chopper, one at a time, for their configured durations — see Settings → Growl Test) | `<MODE> ACTIVATED (activation point: MESH)` (or `ERR: busy` if already running) |
 | `SIREN STOP` | Stops the current run | `STOP ACTIVATED (activation point: MESH)`, then `<MODE> CYCLE COMPLETED - SIREN STOPPED` once shutdown completes |
 | `SIREN LOCK` / `SIREN UNLOCK` | Locks/unlocks the physical buttons (same as the Main page's lock icon) | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
+| `SIREN WEATHERON` / `SIREN WEATHEROFF` | Enables/disables automatic weather-triggered activation (same as the Settings page toggle) | `WEATHER TRIGGER ENABLED` / `DISABLED` |
 | `SIREN REBOOT` | Restarts the device | `OK: rebooting` |
-| `SIREN PING` | Connectivity check (no password needed) | `MODE: ... // LOCAL CONTROLS ... // UPTIME: ... // CPU TEMP: ...` |
+| `SIREN PING` | Connectivity check (no password needed) | `MODE: ... // LOCAL CONTROLS ... // UPTIME: ... // CPU TEMP: ... // WW: ...` |
 
 ### Outgoing mesh broadcasts
 
@@ -215,8 +216,15 @@ another unit sharing the channel:
 | A run cycle finishes, for any reason | `<MODE> CYCLE COMPLETED - SIREN STOPPED` |
 | Physical-button lockout changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
 | A physical button is pressed while locked out | `\x07<BUTTON> PRESSED - LOCKED OUT` (`BUTTON` = `STOP`/`WAIL`/`ATTACK`) |
+| Automatic weather-triggered activation toggled (mesh command or Settings page, either source) | `WEATHER TRIGGER ENABLED` / `DISABLED` |
 | Boot, once, after the device is fully up | `STARTUP COMPLETE`, followed immediately by one STATUS line |
-| Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F` |
+| Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|OK\|ERROR>` |
+
+`WW` reflects the Weather Watcher sub-board's own self-reported health (see
+`docs/weather-watcher.md`): `OFF` if the weather-trigger toggle itself is
+off, `N/A` if it's on but nothing has ever been heard from that board (link
+never wired, or it's unpowered), otherwise `OK`/`ERROR` from its own last
+WiFi/NWS API status push.
 
 The activation, stop, and locked-button-press broadcasts carry a leading
 BEL character (`\x07`), which Meshtastic is understood to treat as an
