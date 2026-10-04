@@ -108,11 +108,10 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
-.navbar h1{font-size:1.05rem;color:var(--cyan)}
-.navbar h1 a{color:inherit;text-decoration:none}
-.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
-.brand-icon{width:26px;height:26px;flex-shrink:0}
 .navicons{display:flex;gap:14px;align-items:center}
+.ww-hero{display:block;width:180px;max-width:60%;height:auto;margin:6px auto 0}
+.ww-hero-title{text-align:center;margin-bottom:18px}
+.ww-hero-title a{color:var(--cyan);text-decoration:none;font-size:1.3rem;font-weight:700;letter-spacing:.5px}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
@@ -146,11 +145,7 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 .recent-time{color:#9aa3af;font-size:.75rem}
 </style></head>
 <body>
-<div class="navbar">
-  <div class="brandrow">
-    <img class="brand-icon" src="/brand-icon.png" alt="">
-    <h1><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher</a></h1>
-  </div>
+<div class="navbar" style="justify-content:flex-end">
   <div class="navicons">
     <a href="/settings" class="ibtn" title="Settings">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -159,6 +154,9 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 </div>
 
 <div class="content">
+
+<img class="ww-hero" src="/dashboard-hero.png" alt="Weather Watcher">
+<div class="ww-hero-title"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher</a></div>
 
 <div class="card">
   <div class="status-row" onclick="toggleDetail('wifiDetail')">
@@ -664,6 +662,11 @@ private:
         });
         server_.on("/brand-icon.png", HTTP_GET, [](AsyncWebServerRequest* req) {
             AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
+        });
+        server_.on("/dashboard-hero.png", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", DASHBOARD_HERO_PNG, DASHBOARD_HERO_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
