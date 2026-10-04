@@ -66,9 +66,11 @@ button{width:100%;padding:14px;background:var(--green);color:#04220f;border:none
        font-family:inherit}
 button:active{opacity:.8}
 .err{color:#f87171;font-size:.85rem;margin-top:10px;min-height:1.1em}
+.login-hero{width:120px;height:auto;display:block;margin:0 auto 12px}
 </style></head><body>
 <div class="card">
-  <h1>&#x26C8; Weather Watcher</h1>
+  <img class="login-hero" src="/dashboard-hero.png" alt="">
+  <h1>Weather Watcher</h1>
   <p class="sub">NWS Alert Monitor</p>
   <form onsubmit="login(event)">
     <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus>
