@@ -48,7 +48,7 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
-<link rel="icon" type="image/png" href="/brand-icon.png">
+<link rel="icon" href="/favicon.ico">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -103,7 +103,7 @@ static const char MAIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
-<link rel="icon" type="image/png" href="/brand-icon.png">
+<link rel="icon" href="/favicon.ico">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -329,7 +329,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Hurricane Controls</title>
-<link rel="icon" type="image/png" href="/brand-icon.png">
+<link rel="icon" href="/favicon.ico">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -676,7 +676,7 @@ static const char TEST_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Component Test — Hurricane Controls</title>
-<link rel="icon" type="image/png" href="/brand-icon.png">
+<link rel="icon" href="/favicon.ico">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -924,6 +924,11 @@ private:
         // Image assets (no auth — the login page and favicon need to load
         // before a session exists). Long cache lifetime since these only
         // change on a firmware reflash.
+        server_.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
+        });
         server_.on("/brand-icon.png", HTTP_GET, [](AsyncWebServerRequest* req) {
             AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
