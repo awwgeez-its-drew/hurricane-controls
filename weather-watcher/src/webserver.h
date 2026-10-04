@@ -9,6 +9,7 @@
 #include "settings.h"
 #include "wifi_manager.h"
 #include "nws_client.h"
+#include "assets.h"
 
 extern void applyTimeConfig(); // src/main.cpp
 
@@ -46,7 +47,7 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Weather Watcher</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M6 16a4 4 0 0 1 .4-7.97 5.5 5.5 0 0 1 10.6 1.5A4 4 0 0 1 17 16H6z'/%3E%3Cpath fill='%23fbbf24' d='M13 17l-2 4h2l-1 3 4-5h-2l1-2z'/%3E%3C/svg%3E">
+<link rel="icon" href="/favicon.ico">
 <style>
 :root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -95,7 +96,7 @@ static const char DASHBOARD_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Weather Watcher</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M6 16a4 4 0 0 1 .4-7.97 5.5 5.5 0 0 1 10.6 1.5A4 4 0 0 1 17 16H6z'/%3E%3Cpath fill='%23fbbf24' d='M13 17l-2 4h2l-1 3 4-5h-2l1-2z'/%3E%3C/svg%3E">
+<link rel="icon" href="/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -109,6 +110,8 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
 .navbar h1 a{color:inherit;text-decoration:none}
+.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
+.brand-icon{width:26px;height:26px;flex-shrink:0}
 .navicons{display:flex;gap:14px;align-items:center}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
@@ -144,7 +147,10 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 </style></head>
 <body>
 <div class="navbar">
-  <h1><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher</a></h1>
+  <div class="brandrow">
+    <img class="brand-icon" src="/brand-icon.png" alt="">
+    <h1><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher</a></h1>
+  </div>
   <div class="navicons">
     <a href="/settings" class="ibtn" title="Settings">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -255,7 +261,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Weather Watcher</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M6 16a4 4 0 0 1 .4-7.97 5.5 5.5 0 0 1 10.6 1.5A4 4 0 0 1 17 16H6z'/%3E%3Cpath fill='%23fbbf24' d='M13 17l-2 4h2l-1 3 4-5h-2l1-2z'/%3E%3C/svg%3E">
+<link rel="icon" href="/favicon.ico">
 <style>
 :root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -266,6 +272,8 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
+.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
+.brand-icon{width:26px;height:26px;flex-shrink:0}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
@@ -323,7 +331,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <a href="/" class="ibtn" title="Back">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
-  <h1>Settings</h1>
+  <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Settings</h1></div>
   <button class="ibtn" onclick="showRestart()" title="Restart">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
   </button>
@@ -644,6 +652,20 @@ private:
     void setupRoutes() {
         server_.on("/login", HTTP_GET, [](AsyncWebServerRequest* req) {
             req->send(200, "text/html", LOGIN_HTML);
+        });
+
+        // Image assets (no auth — the login page and favicon need to load
+        // before a session exists). Long cache lifetime since these only
+        // change on a firmware reflash.
+        server_.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
+        });
+        server_.on("/brand-icon.png", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
         });
 
         server_.on("/", HTTP_GET, [this](AsyncWebServerRequest* req) {

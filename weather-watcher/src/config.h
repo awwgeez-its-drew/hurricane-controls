@@ -18,4 +18,4 @@ constexpr char WIFI_SSID[] = "WeatherWatcher";
 constexpr char WIFI_PASS[] = "";
 constexpr char MDNS_NAME[] = "weather-watcher";
 
-constexpr char FW_VERSION[] = "1.4.2";
+constexpr char FW_VERSION[] = "1.4.3";
