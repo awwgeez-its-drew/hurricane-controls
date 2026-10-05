@@ -73,8 +73,9 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 body{background:var(--bg);color:#eaeaea;
      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
      display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
-.card{background:var(--surface);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:340px;
+.card{position:relative;background:var(--surface);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:340px;
       text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.back-btn{position:absolute;top:14px;left:14px;color:var(--cyan);display:inline-flex;text-decoration:none}
 h1{font-size:1.4rem;color:var(--cyan);letter-spacing:1px;margin-bottom:4px}
 .sub{color:#9aa3af;font-size:.85rem;margin-bottom:28px}
 input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
@@ -88,6 +89,9 @@ button:active{opacity:.8}
 .login-hero{width:120px;height:auto;display:block;margin:0 auto 12px}
 </style></head><body>
 <div class="card">
+  <a href="/" class="back-btn" title="Back to Dashboard">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  </a>
   <img class="login-hero" src="/dashboard-hero.png" alt="">
   <h1>Weather Watcher</h1>
   <p class="sub">NWS Alert Monitor</p>
@@ -295,8 +299,8 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
         border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
         padding:0 16px;z-index:20}
 .navbar h1{font-size:1.05rem;color:var(--cyan)}
-.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
-.brand-icon{width:26px;height:26px;flex-shrink:0}
+.navbar .brand{display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.navbar .subtitle{font-size:.62rem;color:#8892a0;letter-spacing:1px}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
@@ -354,7 +358,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <a href="/" class="ibtn" title="Back">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
-  <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Settings</h1></div>
+  <div class="brand"><span class="subtitle">WEATHER WATCHER</span><h1>Settings</h1></div>
   <button class="ibtn" onclick="showRestart()" title="Restart">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
   </button>
@@ -682,11 +686,6 @@ private:
         // change on a firmware reflash.
         server_.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* req) {
             AsyncWebServerResponse* r = req->beginResponse_P(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
-            r->addHeader("Cache-Control", "public, max-age=604800");
-            req->send(r);
-        });
-        server_.on("/brand-icon.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
