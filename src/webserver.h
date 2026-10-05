@@ -43,12 +43,31 @@ static bool isValidHostname(const char* h) {
     return true;
 }
 
+// Web App Manifest — lets Android/Chrome find a large enough icon for a
+// home-screen bookmark instead of falling back to a generic letter
+// monogram (the small favicon.ico alone isn't trusted for that).
+static const char MANIFEST_JSON[] PROGMEM = R"json({
+  "name": "Hurricane Controls",
+  "short_name": "Hurricane",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#848482",
+  "theme_color": "#0e1320",
+  "icons": [
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+})json";
+
 // ── Login page ────────────────────────────────────────────────────────────────
 static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
 <link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -104,6 +123,8 @@ static const char MAIN_HTML[] PROGMEM = R"rawliteral(
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hurricane Controls</title>
 <link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -330,6 +351,8 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Settings — Hurricane Controls</title>
 <link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -677,6 +700,8 @@ static const char TEST_HTML[] PROGMEM = R"rawliteral(
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Component Test — Hurricane Controls</title>
 <link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 :root{
   --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
@@ -938,6 +963,19 @@ private:
             AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", LOGIN_SIREN_PNG, LOGIN_SIREN_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
+        });
+        server_.on("/icon-192.png", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", ICON_192_PNG, ICON_192_PNG_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
+        });
+        server_.on("/icon-512.png", HTTP_GET, [](AsyncWebServerRequest* req) {
+            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", ICON_512_PNG, ICON_512_PNG_LEN);
+            r->addHeader("Cache-Control", "public, max-age=604800");
+            req->send(r);
+        });
+        server_.on("/manifest.json", HTTP_GET, [](AsyncWebServerRequest* req) {
+            req->send(200, "application/manifest+json", MANIFEST_JSON);
         });
 
         // Root → main page (auth required)
