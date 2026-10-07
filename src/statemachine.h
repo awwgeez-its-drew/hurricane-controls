@@ -1,18 +1,16 @@
 #pragma once
 #include <Arduino.h>
+#include <time.h>
 #include "motors.h"
 #include "settings.h"
+#include "runlog.h"
 
 enum class State : uint8_t {
     IDLE,
     STARTING,          // independent per-component startup delays, mirrors STOPPING
     RUN_WAIL,
-    RUN_ATTACK_ON,      // chopper ON (blower/rotator steady on)
-    RUN_ATTACK_OFF,     // chopper OFF, waiting attackOffTime
-    RUN_ATTACK_PREON,   // chopper still OFF, waiting attackChopperDelay before re-energising
-    RUN_FASTWAIL_ON,    // chopper ON (blower/rotator steady on)
-    RUN_FASTWAIL_OFF,   // chopper OFF, waiting fastWailOffTime
-    RUN_FASTWAIL_PREON, // chopper still OFF, waiting fastWailChopperDelay before re-energising
+    RUN_PULSE_ON,       // Attack/Fast Wail: chopper ON (blower/rotator steady on)
+    RUN_PULSE_OFF,      // Attack/Fast Wail: chopper OFF, waiting the mode's OFF time
     RUN_MANUAL,
     RUN_GROWL_BLOWER,   // Growl Test: blower alone
     RUN_GROWL_ROTATOR,  // Growl Test: rotator alone
@@ -31,7 +29,7 @@ enum class TriggerSource : uint8_t { LOCAL, WEB, MESH, NWS_ALERT, AUTO };
 
 struct TimerInfo {
     uint32_t totalElapsedMs   = 0;
-    uint32_t totalRemainingMs = 0;  // wail/attack/fast-wail: time left
+    uint32_t totalRemainingMs = 0;  // wail/attack/fast-wail/growl: time left
     bool     hasRemaining     = false;
 };
 
@@ -42,6 +40,11 @@ public:
     TriggerSource lastTriggerSource = TriggerSource::LOCAL;
     TriggerSource lastStopSource    = TriggerSource::AUTO;
     uint32_t      stopCallSeq       = 0;   // bumped once per external stop() call, even a no-op one
+
+    // Set by the OTA upload handler while new firmware is being written —
+    // refuses every new run (web, mesh, buttons, NWS) so nothing starts only
+    // to be cut off by the post-update reboot.
+    volatile bool otaActive = false;
 
     void begin() {
         allOff();
@@ -55,13 +58,23 @@ public:
     }
 
     bool trigger(RunMode mode, TriggerSource source = TriggerSource::LOCAL) {
-        if (state != State::IDLE) return false;
+        if (state != State::IDLE || otaActive) return false;
         lastTriggerSource = source;
         runMode     = mode;
         stateTs     = millis();
         ledBlinkTs_ = millis();
         ledOn_      = true;
         digitalWrite(STATUS_LED, HIGH);
+
+        // Run-log bookkeeping — captured now, since runMode is cleared the
+        // moment stop() runs, well before the run actually reaches IDLE.
+        logMode_        = mode;
+        logStartMs_     = stateTs;
+        time_t t        = time(nullptr);
+        logEpoch_       = (t > 1600000000) ? (uint32_t)t : 0;  // 0 = clock not set yet
+        failsafeStop_   = false;
+        webKeepaliveTs_ = stateTs;
+
         if (mode == RunMode::GROWL) {
             // Growl Test bypasses the independent-delay STARTING sequence
             // entirely — only one component is ever on at a time, by design.
@@ -80,6 +93,13 @@ public:
         lastStopSource = source;
         if (source != TriggerSource::AUTO) stopCallSeq++;
         if (state == State::IDLE) return;
+        // Record how the run ended only on the first stop() of a run — a
+        // second stop() during STOPPING just restarts the shutdown sequence.
+        if (state != State::STOPPING) {
+            logEnd_ = failsafeStop_ ? RunEnd::FAILSAFE
+                    : (source == TriggerSource::AUTO) ? RunEnd::COMPLETED : RunEnd::STOPPED;
+            logStopSource_ = source;
+        }
         stateTs         = millis();
         state           = State::STOPPING;
         runMode         = RunMode::NONE;
@@ -87,6 +107,11 @@ public:
         doneTs_         = 0;
         digitalWrite(STATUS_LED, HIGH);  // steady on while stopping
     }
+
+    // Web-UI Manual is momentary: the page refreshes this every ~500 ms while
+    // the button is held. If the phone drops off Wi-Fi or locks mid-hold,
+    // the release never arrives — update() stops the run once these stop.
+    void webKeepalive() { webKeepaliveTs_ = millis(); }
 
     void update() {
         uint32_t now     = millis();
@@ -116,16 +141,23 @@ public:
             }
         }
 
-        // Auto-terminate timed modes when their total duration expires
-        if (runMode == RunMode::ATTACK && runStartTs_ > 0 &&
-            (now - runStartTs_) >= s.attackDuration) {
+        // Web Manual failsafe — see webKeepalive(). Uses an AUTO stop, so the
+        // mesh reports "MANUAL CYCLE COMPLETED" rather than a user STOP.
+        if (runMode == RunMode::MANUAL && lastTriggerSource == TriggerSource::WEB &&
+            now - webKeepaliveTs_ >= WEB_KEEPALIVE_TIMEOUT_MS) {
+            failsafeStop_ = true;
             stop();
             return;
         }
-        if (runMode == RunMode::FAST_WAIL && runStartTs_ > 0 &&
-            (now - runStartTs_) >= s.fastWailDuration) {
-            stop();
-            return;
+
+        // Auto-terminate timed modes when their total duration expires.
+        // (Growl Test ends itself when its last stage finishes.)
+        if (runMode != RunMode::GROWL && runStartTs_ > 0) {
+            uint32_t dur = modeDuration();
+            if (dur && (now - runStartTs_) >= dur) {
+                stop();
+                return;
+            }
         }
 
         switch (state) {
@@ -140,10 +172,10 @@ public:
                 runStartTs_ = now;
                 stateTs     = now;
                 switch (runMode) {
-                case RunMode::WAIL:      state = State::RUN_WAIL;        break;
-                case RunMode::ATTACK:    state = State::RUN_ATTACK_ON;   break;
-                case RunMode::FAST_WAIL: state = State::RUN_FASTWAIL_ON; break;
-                case RunMode::MANUAL:    state = State::RUN_MANUAL;      break;
+                case RunMode::WAIL:      state = State::RUN_WAIL;     break;
+                case RunMode::ATTACK:
+                case RunMode::FAST_WAIL: state = State::RUN_PULSE_ON; break;
+                case RunMode::MANUAL:    state = State::RUN_MANUAL;   break;
                 default:                 stop(); break;
                 }
             }
@@ -151,55 +183,24 @@ public:
         }
 
         // ── Run ───────────────────────────────────────────────────────────
+        // Wail's duration is enforced by the auto-terminate check above.
         case State::RUN_WAIL:
-            if (elapsed >= s.wailDuration) stop();
             break;
 
-        // Chopper cycles; blower/rotator stay steady on
-        case State::RUN_ATTACK_ON:
-            if (elapsed >= s.attackOnTime) {
+        // Attack/Fast Wail: chopper cycles; blower/rotator stay steady on
+        case State::RUN_PULSE_ON:
+            if (elapsed >= pulseOnTime()) {
                 chopperOff();
                 stateTs = now;
-                state   = State::RUN_ATTACK_OFF;
+                state   = State::RUN_PULSE_OFF;
             }
             break;
 
-        case State::RUN_ATTACK_OFF:
-            if (elapsed >= s.attackOffTime) {
-                stateTs = now;
-                state   = State::RUN_ATTACK_PREON;
-            }
-            break;
-
-        case State::RUN_ATTACK_PREON:
-            if (elapsed >= s.attackChopperDelay) {
+        case State::RUN_PULSE_OFF:
+            if (elapsed >= pulseOffTime()) {
                 chopperOn();
                 stateTs = now;
-                state   = State::RUN_ATTACK_ON;
-            }
-            break;
-
-        // Chopper cycles; blower/rotator stay steady on
-        case State::RUN_FASTWAIL_ON:
-            if (elapsed >= s.fastWailOnTime) {
-                chopperOff();
-                stateTs = now;
-                state   = State::RUN_FASTWAIL_OFF;
-            }
-            break;
-
-        case State::RUN_FASTWAIL_OFF:
-            if (elapsed >= s.fastWailOffTime) {
-                stateTs = now;
-                state   = State::RUN_FASTWAIL_PREON;
-            }
-            break;
-
-        case State::RUN_FASTWAIL_PREON:
-            if (elapsed >= s.fastWailChopperDelay) {
-                chopperOn();
-                stateTs = now;
-                state   = State::RUN_FASTWAIL_ON;
+                state   = State::RUN_PULSE_ON;
             }
             break;
 
@@ -242,6 +243,7 @@ public:
                     digitalWrite(STATUS_LED, LOW);
                     heartbeatTs_ = now;
                     heartbeatOn_ = false;
+                    recordRun(now);
                 }
             }
             break;
@@ -260,12 +262,8 @@ public:
         switch (state) {
         case State::STARTING:          return "seq";
         case State::RUN_WAIL:          return "wail";
-        case State::RUN_ATTACK_ON:     return "attack_on";
-        case State::RUN_ATTACK_OFF:
-        case State::RUN_ATTACK_PREON:  return "attack_off";
-        case State::RUN_FASTWAIL_ON:   return "fastwail_on";
-        case State::RUN_FASTWAIL_OFF:
-        case State::RUN_FASTWAIL_PREON: return "fastwail_off";
+        case State::RUN_PULSE_ON:      return runMode == RunMode::FAST_WAIL ? "fastwail_on"  : "attack_on";
+        case State::RUN_PULSE_OFF:     return runMode == RunMode::FAST_WAIL ? "fastwail_off" : "attack_off";
         case State::RUN_MANUAL:        return "manual";
         case State::RUN_GROWL_BLOWER:
         case State::RUN_GROWL_ROTATOR:
@@ -275,8 +273,10 @@ public:
         }
     }
 
-    const char* modeName() const {
-        switch (runMode) {
+    const char* modeName() const { return modeNameOf(runMode); }
+
+    static const char* modeNameOf(RunMode m) {
+        switch (m) {
         case RunMode::WAIL:      return "wail";
         case RunMode::ATTACK:    return "attack";
         case RunMode::FAST_WAIL: return "fastwail";
@@ -286,45 +286,29 @@ public:
         }
     }
 
+    static const char* sourceNameOf(TriggerSource s) {
+        switch (s) {
+        case TriggerSource::LOCAL:     return "local";
+        case TriggerSource::WEB:       return "web";
+        case TriggerSource::MESH:      return "mesh";
+        case TriggerSource::NWS_ALERT: return "nws";
+        default:                       return "auto";
+        }
+    }
+
     TimerInfo getTimerInfo() const {
         TimerInfo t;
         if (state == State::IDLE || runStartTs_ == 0) return t;
 
-        uint32_t now = millis();
-        const Settings& s = settingsMgr.s;
-        t.totalElapsedMs = now - runStartTs_;
+        t.totalElapsedMs = millis() - runStartTs_;
 
-        switch (state) {
-        case State::RUN_WAIL: {
-            t.hasRemaining     = true;
-            t.totalRemainingMs = (t.totalElapsedMs < s.wailDuration)
-                                 ? s.wailDuration - t.totalElapsedMs : 0;
-            break;
-        }
-        case State::RUN_ATTACK_ON:
-        case State::RUN_ATTACK_OFF:
-        case State::RUN_ATTACK_PREON:
-            t.hasRemaining     = true;
-            t.totalRemainingMs = (t.totalElapsedMs < s.attackDuration)
-                                 ? s.attackDuration - t.totalElapsedMs : 0;
-            break;
-        case State::RUN_FASTWAIL_ON:
-        case State::RUN_FASTWAIL_OFF:
-        case State::RUN_FASTWAIL_PREON:
-            t.hasRemaining     = true;
-            t.totalRemainingMs = (t.totalElapsedMs < s.fastWailDuration)
-                                 ? s.fastWailDuration - t.totalElapsedMs : 0;
-            break;
-        case State::RUN_GROWL_BLOWER:
-        case State::RUN_GROWL_ROTATOR:
-        case State::RUN_GROWL_CHOPPER: {
-            uint32_t total = s.growlBlowerTime + s.growlRotatorTime + s.growlChopperTime;
+        bool timedRunState = state == State::RUN_WAIL || state == State::RUN_PULSE_ON ||
+                             state == State::RUN_PULSE_OFF || state == State::RUN_GROWL_BLOWER ||
+                             state == State::RUN_GROWL_ROTATOR || state == State::RUN_GROWL_CHOPPER;
+        if (timedRunState) {
+            uint32_t total     = modeDuration();
             t.hasRemaining     = true;
             t.totalRemainingMs = (t.totalElapsedMs < total) ? total - t.totalElapsedMs : 0;
-            break;
-        }
-        default:
-            break;
         }
         return t;
     }
@@ -333,6 +317,38 @@ private:
     static constexpr uint32_t LED_BLINK_MS = 250;
     static constexpr uint32_t HEARTBEAT_INTERVAL_MS = 30000;  // idle "still alive" flash every 30s
     static constexpr uint32_t HEARTBEAT_FLASH_MS    = 150;    // flash duration
+    static constexpr uint32_t WEB_KEEPALIVE_TIMEOUT_MS = 2000;
+
+    // Total run length for the current mode, 0 = untimed (Manual).
+    uint32_t modeDuration() const {
+        const Settings& s = settingsMgr.s;
+        switch (runMode) {
+        case RunMode::WAIL:      return s.wailDuration;
+        case RunMode::ATTACK:    return s.attackDuration;
+        case RunMode::FAST_WAIL: return s.fastWailDuration;
+        case RunMode::GROWL:     return s.growlBlowerTime + s.growlRotatorTime + s.growlChopperTime;
+        default:                 return 0;
+        }
+    }
+
+    uint32_t pulseOnTime() const {
+        return runMode == RunMode::FAST_WAIL ? settingsMgr.s.fastWailOnTime : settingsMgr.s.attackOnTime;
+    }
+    uint32_t pulseOffTime() const {
+        return runMode == RunMode::FAST_WAIL ? settingsMgr.s.fastWailOffTime : settingsMgr.s.attackOffTime;
+    }
+
+    void recordRun(uint32_t now) {
+        RunEntry e;
+        e.epoch          = logEpoch_;
+        e.startUptimeSec = logStartMs_ / 1000;
+        e.durationSec    = (now - logStartMs_ + 500) / 1000;
+        e.mode           = (uint8_t)logMode_;
+        e.source         = (uint8_t)lastTriggerSource;
+        e.end            = (uint8_t)logEnd_;
+        e.stopSource     = (uint8_t)logStopSource_;
+        runLog.record(e);
+    }
 
     uint32_t stateTs        = 0;
     uint32_t runStartTs_    = 0;
@@ -347,6 +363,14 @@ private:
     bool     ledOn_          = false;
     uint32_t heartbeatTs_    = 0;
     bool     heartbeatOn_    = false;
+    uint32_t webKeepaliveTs_ = 0;
+    bool     failsafeStop_   = false;
+
+    RunMode       logMode_       = RunMode::NONE;
+    uint32_t      logStartMs_    = 0;
+    uint32_t      logEpoch_      = 0;
+    RunEnd        logEnd_        = RunEnd::COMPLETED;
+    TriggerSource logStopSource_ = TriggerSource::AUTO;
 };
 
 extern StateMachine sm;

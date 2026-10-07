@@ -14,13 +14,11 @@ struct Settings {
     uint32_t fastWailDuration     = 180000;
     uint32_t fastWailOnTime       = 3000;   // 3s chopper ON
     uint32_t fastWailOffTime      = 3000;   // 3s chopper OFF
-    uint32_t fastWailChopperDelay = 0;      // ms delay before chopper re-activates each fast-wail cycle
     uint32_t stopBlowerDelay  = 0;      // ms from stop() before blower off
     uint32_t stopChopperDelay = 2000;   // ms from stop() before chopper off
     uint32_t stopRotDelay     = 3000;   // ms from stop() before rotator off
     uint32_t longPressMs          = 800;   // shared long-press threshold: WAIL->MANUAL and ATTACK->FAST_WAIL
     uint32_t buttonDebounceMs     = 50;    // ms any physical button must be held LOW before its press is trusted (filters transient/EMI glitches)
-    uint32_t attackChopperDelay   = 0;     // ms delay before chopper re-activates each attack cycle
     uint32_t growlBlowerTime  = 5000;   // Growl Test: blower-alone duration
     uint32_t growlRotatorTime = 5000;   // Growl Test: rotator-alone duration
     uint32_t growlChopperTime = 5000;   // Growl Test: chopper-alone duration
@@ -47,13 +45,11 @@ public:
         s.fastWailDuration     = prefs.getUInt("fwDuration",  s.fastWailDuration);
         s.fastWailOnTime       = prefs.getUInt("fwOnTime",    s.fastWailOnTime);
         s.fastWailOffTime      = prefs.getUInt("fwOffTime",   s.fastWailOffTime);
-        s.fastWailChopperDelay = prefs.getUInt("fwChopDelay", s.fastWailChopperDelay);
         s.stopBlowerDelay  = prefs.getUInt("stopBlwDelay",  s.stopBlowerDelay);
         s.stopChopperDelay = prefs.getUInt("stopChpDelay",  s.stopChopperDelay);
         s.stopRotDelay     = prefs.getUInt("stopRotDelay",  s.stopRotDelay);
         s.longPressMs          = prefs.getUInt("longPressMs",          s.longPressMs);
         s.buttonDebounceMs     = prefs.getUInt("btnDebounceMs",        s.buttonDebounceMs);
-        s.attackChopperDelay   = prefs.getUInt("atkChopDelay",        s.attackChopperDelay);
         s.growlBlowerTime  = prefs.getUInt("growlBlwTime", s.growlBlowerTime);
         s.growlRotatorTime = prefs.getUInt("growlRotTime", s.growlRotatorTime);
         s.growlChopperTime = prefs.getUInt("growlChpTime", s.growlChopperTime);
@@ -80,13 +76,11 @@ public:
         prefs.putUInt("fwDuration",  s.fastWailDuration);
         prefs.putUInt("fwOnTime",    s.fastWailOnTime);
         prefs.putUInt("fwOffTime",   s.fastWailOffTime);
-        prefs.putUInt("fwChopDelay", s.fastWailChopperDelay);
         prefs.putUInt("stopBlwDelay",  s.stopBlowerDelay);
         prefs.putUInt("stopChpDelay",  s.stopChopperDelay);
         prefs.putUInt("stopRotDelay",  s.stopRotDelay);
         prefs.putUInt("longPressMs",    s.longPressMs);
         prefs.putUInt("btnDebounceMs",  s.buttonDebounceMs);
-        prefs.putUInt("atkChopDelay",   s.attackChopperDelay);
         prefs.putUInt("growlBlwTime", s.growlBlowerTime);
         prefs.putUInt("growlRotTime", s.growlRotatorTime);
         prefs.putUInt("growlChpTime", s.growlChopperTime);
@@ -94,6 +88,10 @@ public:
         prefs.putString("meshWL",       s.meshWhitelist);
         prefs.putString("meshPW",       s.meshPassword);
         prefs.putBool("wxAutoTrig",     s.weatherAutoTriggerEnabled);
+        // Retired in v1.9.0 (the old "Chopper re-on delay" settings) — clear
+        // any stale copies; a no-op once they're gone.
+        prefs.remove("atkChopDelay");
+        prefs.remove("fwChopDelay");
         prefs.end();
     }
 };

@@ -105,24 +105,46 @@ public:
             reply(wasWeatherEnabled_ ? "WEATHER TRIGGER ENABLED" : "WEATHER TRIGGER DISABLED");
         }
 
-        // Periodic status line.
         uint32_t now = millis();
+
+        // Deferred boot announcement — see announceStartup(). Only the
+        // STARTUP COMPLETE/STATUS pair waits; every activation/stop/lockout
+        // broadcast above still goes out immediately during this window.
+        if (startupPending_) {
+            bool ready = !settingsMgr.s.weatherAutoTriggerEnabled ||   // WW: OFF
+                         weatherLink.finalReported() ||                // WW: OK / ERROR
+                         now - bootTs_ >= STARTUP_ANNOUNCE_MAX_WAIT_MS; // give up waiting
+            if (ready) {
+                startupPending_ = false;
+                reply("STARTUP COMPLETE");
+                lastStatusTs_ = now;
+                reply(buildStatusMessage());
+            }
+            return;
+        }
+
+        // Periodic status line.
         if (now - lastStatusTs_ >= STATUS_INTERVAL_MS) {
             lastStatusTs_ = now;
             reply(buildStatusMessage());
         }
     }
 
-    // Called once from main.cpp, at the very end of setup() (after WiFi and
-    // the web UI are also up), so this reflects a fully-ready device.
+    // Called once from main.cpp, at the very end of setup(). The actual
+    // STARTUP COMPLETE + STATUS broadcast is held back (in update()) until
+    // the Weather Watcher has reported a real OK/ERROR from its first NWS
+    // poll — it boots, joins Wi-Fi and polls on its own schedule, so at the
+    // end of this board's setup() it has never reported yet and the STATUS
+    // line would always say "WW: N/A". Capped at STARTUP_ANNOUNCE_MAX_WAIT_MS
+    // so a missing/stuck Weather Watcher never suppresses the announcement.
     void announceStartup() {
-        reply("STARTUP COMPLETE");
-        lastStatusTs_ = millis();
-        reply(buildStatusMessage());
+        startupPending_ = true;
+        bootTs_         = millis();
     }
 
 private:
     static constexpr uint32_t STATUS_INTERVAL_MS = 12UL * 60 * 60 * 1000;  // 12 hours
+    static constexpr uint32_t STARTUP_ANNOUNCE_MAX_WAIT_MS = 120000;       // 2 minutes
 
     char     line_[64];
     uint8_t  lineLen_          = 0;
@@ -133,6 +155,8 @@ private:
     uint32_t lastStatusTs_     = 0;
     uint32_t lastSeenLockedPressSeq_ = 0;
     bool     wasWeatherEnabled_ = false;
+    bool     startupPending_   = false;
+    uint32_t bootTs_           = 0;
 
     void reply(const char* msg) { Serial2.println(msg); }
     void reply(const String& msg) { Serial2.println(msg); }
@@ -183,12 +207,14 @@ private:
 
     // OFF = the owner's kill-switch is off; N/A = enabled but nothing has
     // ever been heard from the Weather Watcher board (link never wired, or
-    // it's not powered); OK/ERROR = its own self-reported WiFi/NWS API
-    // health, pushed unprompted over the dedicated UART link (see
-    // weather_link.h's "WX STATUS" handling).
+    // it's not powered); STARTING = it's alive but hasn't finished its first
+    // NWS poll yet; OK/ERROR = its own self-reported WiFi/NWS API health,
+    // pushed unprompted over the dedicated UART link (see weather_link.h's
+    // "WX STATUS" handling).
     static const char* weatherWatcherWord() {
         if (!settingsMgr.s.weatherAutoTriggerEnabled) return "OFF";
         if (!weatherLink.everReported()) return "N/A";
+        if (weatherLink.pending()) return "STARTING";
         return weatherLink.reportedOk() ? "OK" : "ERROR";
     }
 

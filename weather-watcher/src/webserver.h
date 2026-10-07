@@ -2,16 +2,18 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <set>
+#include <Update.h>
 #include <cctype>
 #include <time.h>
 #include "config.h"
+#include "sync.h"
 #include "settings.h"
 #include "wifi_manager.h"
 #include "nws_client.h"
 #include "assets.h"
 
 extern void applyTimeConfig(); // src/main.cpp
+extern const char* resetReasonName(); // src/main.cpp
 
 // Same policy as the main Hurricane Controls board: 8+ chars, at least one
 // uppercase, lowercase, digit, and special character.
@@ -375,6 +377,10 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <p class="hint">Letters, numbers, and hyphens only. Sets both the name your router shows for this device and its <code>http://&lt;hostname&gt;.local</code> address. Takes effect after a restart.</p>
   <button class="btn save" onclick="saveHostname()">Save Hostname</button>
   <div class="msg" id="hm"></div>
+  <div class="row" style="margin-top:14px"><label>Access Point Password</label><input type="password" id="apPw" placeholder="New AP password (8-63 characters)" autocomplete="new-password"></div>
+  <p class="hint" id="apHint">Needed to join the &quot;WeatherWatcher&quot; network this board broadcasts when it isn't on your home Wi-Fi. Takes effect after a restart.</p>
+  <button class="btn save" onclick="saveApPw()">Save AP Password</button>
+  <div class="msg" id="apm"></div>
   <div class="row" style="margin-top:14px"><label>Network SSID</label><input type="text" id="wSSID" placeholder="Your WiFi name"></div>
   <div class="row"><label>Password</label><input type="password" id="wPass" placeholder="WiFi password"></div>
   <button class="btn save" onclick="saveWifi()">Connect to Network</button>
@@ -472,8 +478,20 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
 </div>
 
+<!-- Firmware Update -->
+<div class="card">
+  <div class="card-head" onclick="toggleCard(this)"><h2>Firmware Update</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
+  <p class="hint">Upload a new <code>firmware.bin</code> (from <code>weather-watcher/.pio/build/esp32dev/</code> after a build). The board restarts when it finishes.</p>
+  <input type="file" id="fwFile" accept=".bin">
+  <button class="btn save" onclick="uploadFw()">Upload Firmware</button>
+  <div class="msg" id="fwm"></div>
+  </div>
+</div>
+
 <div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a></div>
 <div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
+<div class="ver mono">Last restart: <span id="rstReason">&mdash;</span></div>
 
 </div>
 
@@ -538,6 +556,7 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('timeZone').value=d.timeZone||'EASTERN';
   document.getElementById('autoDst').checked=d.autoDst!==false;
   document.getElementById('verNum').textContent=d.fwVersion||'-';
+  document.getElementById('rstReason').textContent=d.resetReason||'-';
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -547,6 +566,7 @@ fetch('/wifi-data').then(r=>r.json()).then(d=>{
   else{el.textContent='AP mode — '+d.ip;el.className='ws';}
   if(d.ssid)document.getElementById('wSSID').value=d.ssid;
   document.getElementById('wHost').value=d.hostname||'weather-watcher';
+  if(!d.apSecured)document.getElementById('apHint').textContent+=' The access point is currently OPEN (no password).';
 });
 
 function saveWifi(){
@@ -608,6 +628,26 @@ function saveTime(){
   post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
 }
 
+function saveApPw(){
+  const pw=document.getElementById('apPw').value;
+  if(pw.length<8||pw.length>63){msg('apm','Must be 8-63 characters',false);return;}
+  if(!confirm('Change the access point password? The board will restart, and anything joined to its network will need the new password.'))return;
+  post('/ap-password',{password:pw}).then(d=>msg('apm',d.ok?'Saved — restarting…':'Failed',d.ok));
+}
+function uploadFw(){
+  const f=document.getElementById('fwFile').files[0];
+  const el=document.getElementById('fwm');
+  if(!f){msg('fwm','Choose a .bin file first',false);return;}
+  if(!confirm('Upload '+f.name+' and restart the Weather Watcher?'))return;
+  const fd=new FormData();fd.append('firmware',f,f.name);
+  const x=new XMLHttpRequest();x.open('POST','/update');
+  x.upload.onprogress=e=>{if(e.lengthComputable){el.className='msg';el.textContent='Uploading… '+Math.round(e.loaded*100/e.total)+'%';}};
+  x.onload=()=>{let d={};try{d=JSON.parse(x.responseText);}catch(err){}
+    if(d.ok){el.className='msg ok';el.textContent='Update installed — restarting…';setTimeout(()=>location.reload(),15000);}
+    else{el.className='msg er';el.textContent='Update failed: '+(d.error||('HTTP '+x.status));}};
+  x.onerror=()=>{el.className='msg er';el.textContent='Upload failed — connection lost';};
+  x.send(fd);
+}
 function showRestart(){document.getElementById('rmModal').style.display='flex';}
 function closeModal(){document.getElementById('rmModal').style.display='none';}
 function doRestart(){closeModal();fetch('/restart',{method:'POST'});}
@@ -622,39 +662,126 @@ public:
         server_.begin();
     }
 
-    void update() {}
+    void update() { checkOtaStall(millis()); }
 
 private:
+    static constexpr size_t   MAX_BODY     = 1024;   // largest JSON POST body accepted
+    static constexpr uint8_t  MAX_SESSIONS = 4;      // oldest login is evicted beyond this
+    static constexpr uint32_t OTA_STALL_TIMEOUT_MS = 30000;
+
     AsyncWebServer   server_{80};
-    std::set<String> sessions_;
+
+    // Fixed-size session table (mirrors the main board) — replaces an
+    // ever-growing std::set that gained a String on every login.
+    char     sessions_[MAX_SESSIONS][33] = {};
+    uint8_t  nextSession_ = 0;
 
     // ── Login rate-limiting (mirrors the main board's single-user approach) ──
     uint8_t  failedLoginAttempts_ = 0;
-    uint32_t loginLockoutUntil_   = 0;
+    uint32_t loginLockoutUntil_   = 0;   // 0 = not locked out
     static constexpr uint8_t  MAX_LOGIN_ATTEMPTS = 5;
     static constexpr uint32_t LOGIN_LOCKOUT_MS   = 30000;
 
+    // ── OTA (per-upload result in req->_tempObject; the request frees it) ────
+    struct OtaJob {
+        bool owner;
+        bool ok;
+        char err[64];
+    };
+    volatile bool     otaRunning_    = false;
+    volatile uint32_t otaLastDataMs_ = 0;
+
     // ── Auth helpers ─────────────────────────────────────────────────────────
 
-    String generateToken() {
-        char buf[33];
-        for (int i = 0; i < 4; i++) snprintf(buf + i * 8, 9, "%08x", (unsigned)esp_random());
-        buf[32] = '\0';
-        return String(buf);
+    static void generateToken(char* out) {
+        for (int i = 0; i < 4; i++) snprintf(out + i * 8, 9, "%08x", (unsigned)esp_random());
+        out[32] = '\0';
     }
 
-    String getSessionToken(AsyncWebServerRequest* req) {
+    // Copies the "sid" cookie value (if any) into out[33]. Only matches a
+    // cookie actually named "sid" — not e.g. "xsid".
+    static void sessionToken(AsyncWebServerRequest* req, char* out) {
+        out[0] = '\0';
         const AsyncWebHeader* h = req->getHeader("Cookie");
-        if (!h) return "";
-        String c = h->value();
-        int idx = c.indexOf("sid=");
-        if (idx < 0) return "";
-        int end = c.indexOf(';', idx);
-        return (end < 0) ? c.substring(idx + 4) : c.substring(idx + 4, end);
+        if (!h) return;
+        const String& v = h->value();
+        const char* c = v.c_str();
+        const char* p = c;
+        while ((p = strstr(p, "sid=")) != nullptr) {
+            if (p == c || p[-1] == ' ' || p[-1] == ';') {
+                p += 4;
+                size_t n = strcspn(p, ";");
+                if (n > 32) n = 32;
+                memcpy(out, p, n);
+                out[n] = '\0';
+                return;
+            }
+            p += 4;
+        }
     }
 
     bool isAuthed(AsyncWebServerRequest* req) {
-        return sessions_.count(getSessionToken(req)) > 0;
+        char tok[33];
+        sessionToken(req, tok);
+        if (strlen(tok) != 32) return false;
+        for (auto& s : sessions_) if (!strcmp(s, tok)) return true;
+        return false;
+    }
+
+    void addSession(const char* tok) {
+        strlcpy(sessions_[nextSession_], tok, sizeof(sessions_[0]));
+        nextSession_ = (nextSession_ + 1) % MAX_SESSIONS;
+    }
+
+    void removeSession(const char* tok) {
+        if (!*tok) return;
+        for (auto& s : sessions_) if (!strcmp(s, tok)) s[0] = '\0';
+    }
+
+    void clearSessions() {
+        for (auto& s : sessions_) s[0] = '\0';
+    }
+
+    static void unauth(AsyncWebServerRequest* req) {
+        req->send(401, "application/json", "{\"error\":\"unauth\"}");
+    }
+
+    // Streams a page straight out of flash — the const char* overload of
+    // send() copies the whole page into a heap String on every request.
+    static void sendPage(AsyncWebServerRequest* req, const char* page, const char* type = "text/html") {
+        req->send(200, type, (const uint8_t*)page, strlen(page));
+    }
+
+    void checkOtaStall(uint32_t now) {
+        if (!otaRunning_ || now - otaLastDataMs_ < OTA_STALL_TIMEOUT_MS) return;
+        if (Update.isRunning()) Update.abort();
+        otaRunning_ = false;
+        Serial.println("OTA upload stalled - aborted");
+    }
+
+    static void otaFail(OtaJob* job, const char* err) {
+        strlcpy(job->err, err, sizeof(job->err));
+        if (Update.isRunning()) Update.abort();
+    }
+
+    static void clampFloat(JsonDocument& doc, const char* key, float& field, float lo, float hi) {
+        if (!doc[key].is<double>()) return;
+        float v = doc[key].as<float>();
+        field = v < lo ? lo : v > hi ? hi : v;
+    }
+
+    static void clampUInt(JsonDocument& doc, const char* key, uint32_t& field, uint32_t lo, uint32_t hi) {
+        if (!doc[key].is<double>()) return;
+        double v = doc[key].as<double>();
+        field = (uint32_t)(v < lo ? lo : v > hi ? hi : v);
+    }
+
+    // Trigger modes are only ever one of the four tokens the main board understands.
+    static void applyMode(JsonDocument& doc, const char* key, char* field, size_t size) {
+        if (!doc[key].is<const char*>()) return;
+        const char* m = doc[key].as<const char*>();
+        if (!strcmp(m, "OFF") || !strcmp(m, "WAIL") || !strcmp(m, "ATTACK") || !strcmp(m, "FASTWAIL"))
+            strlcpy(field, m, size);
     }
 
     void redirectLogin(AsyncWebServerRequest* req) {
@@ -663,11 +790,15 @@ private:
         req->send(r);
     }
 
+    // Bodies over MAX_BODY are dropped without allocating, so a bogus
+    // Content-Length (even on the unauthenticated login route) can't
+    // exhaust the heap.
     static void bodyAccumulator(AsyncWebServerRequest* req,
                                 uint8_t* data, size_t len,
                                 size_t index, size_t total) {
+        if (total > MAX_BODY) return;
         if (index == 0) req->_tempObject = malloc(total + 1);
-        if (req->_tempObject) {
+        if (req->_tempObject && index + len <= total) {
             memcpy((uint8_t*)req->_tempObject + index, data, len);
             if (index + len == total)
                 ((char*)req->_tempObject)[total] = '\0';
@@ -678,51 +809,52 @@ private:
 
     void setupRoutes() {
         server_.on("/login", HTTP_GET, [](AsyncWebServerRequest* req) {
-            req->send(200, "text/html", LOGIN_HTML);
+            sendPage(req, LOGIN_HTML);
         });
 
         // Image assets (no auth — the login page and favicon need to load
         // before a session exists). Long cache lifetime since these only
         // change on a firmware reflash.
         server_.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/dashboard-hero.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", DASHBOARD_HERO_PNG, DASHBOARD_HERO_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", DASHBOARD_HERO_PNG, DASHBOARD_HERO_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/icon-192.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", ICON_192_PNG, ICON_192_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", ICON_192_PNG, ICON_192_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/icon-512.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", ICON_512_PNG, ICON_512_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", ICON_512_PNG, ICON_512_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/manifest.json", HTTP_GET, [](AsyncWebServerRequest* req) {
-            req->send(200, "application/manifest+json", MANIFEST_JSON);
+            sendPage(req, MANIFEST_JSON, "application/manifest+json");
         });
 
         server_.on("/", HTTP_GET, [this](AsyncWebServerRequest* req) {
             // Public dashboard — status/alert awareness needs no login; only
             // Settings and anything that changes device state is gated.
-            req->send(200, "text/html", DASHBOARD_HTML);
+            sendPage(req, DASHBOARD_HTML);
         });
 
         server_.on("/settings", HTTP_GET, [this](AsyncWebServerRequest* req) {
             if (!isAuthed(req)) { redirectLogin(req); return; }
-            req->send(200, "text/html", SETTINGS_HTML);
+            sendPage(req, SETTINGS_HTML);
         });
 
         server_.on("/auth/login", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
                 uint32_t now = millis();
-                if (now < loginLockoutUntil_) {
+                if (loginLockoutUntil_ && deadlinePassed(loginLockoutUntil_)) loginLockoutUntil_ = 0;
+                if (loginLockoutUntil_) {
                     if (req->_tempObject) { free(req->_tempObject); req->_tempObject = nullptr; }
                     uint32_t retryAfter = (loginLockoutUntil_ - now + 999) / 1000;
                     req->send(200, "application/json",
@@ -736,19 +868,21 @@ private:
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
                     const char* pw = doc["password"] | "";
+                    CtrlLock lock;
                     ok = (strcmp(pw, settingsMgr.s.webPassword) == 0);
                 }
                 if (ok) {
                     failedLoginAttempts_ = 0;
-                    String token = generateToken();
-                    sessions_.insert(token);
+                    char token[33];
+                    generateToken(token);
+                    addSession(token);
                     AsyncWebServerResponse* resp = req->beginResponse(200, "application/json", "{\"ok\":true}");
-                    resp->addHeader("Set-Cookie", "sid=" + token + "; Path=/; HttpOnly; SameSite=Strict");
+                    resp->addHeader("Set-Cookie", String("sid=") + token + "; Path=/; HttpOnly; SameSite=Strict");
                     req->send(resp);
                 } else {
                     failedLoginAttempts_++;
                     if (failedLoginAttempts_ >= MAX_LOGIN_ATTEMPTS) {
-                        loginLockoutUntil_ = now + LOGIN_LOCKOUT_MS;
+                        loginLockoutUntil_ = (now + LOGIN_LOCKOUT_MS) | 1;  // never 0 (= not locked)
                         failedLoginAttempts_ = 0;
                     }
                     req->send(200, "application/json", "{\"ok\":false}");
@@ -757,19 +891,20 @@ private:
             nullptr, bodyAccumulator
         );
 
-        server_.on("/auth/logout", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            sessions_.erase(getSessionToken(req));
+        auto logout = [this](AsyncWebServerRequest* req) {
+            char tok[33];
+            sessionToken(req, tok);
+            removeSession(tok);
             AsyncWebServerResponse* r = req->beginResponse(200, "application/json", "{\"ok\":true}");
+            r->addHeader("Set-Cookie", "sid=; Path=/; Max-Age=0");
             req->send(r);
-        });
-        server_.on("/auth/logout", HTTP_POST, [this](AsyncWebServerRequest* req) {
-            sessions_.erase(getSessionToken(req));
-            req->send(200, "application/json", "{\"ok\":true}");
-        });
+        };
+        server_.on("/auth/logout", HTTP_GET, logout);
+        server_.on("/auth/logout", HTTP_POST, logout);
 
         server_.on("/password", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 bool ok = false;
                 if (req->_tempObject) {
                     JsonDocument doc;
@@ -778,9 +913,12 @@ private:
                     req->_tempObject = nullptr;
                     const char* pw = doc["password"] | "";
                     if (isStrongPassword(pw)) {
-                        strlcpy(settingsMgr.s.webPassword, pw, sizeof(settingsMgr.s.webPassword));
-                        settingsMgr.save();
-                        sessions_.clear();
+                        {
+                            CtrlLock lock;
+                            strlcpy(settingsMgr.s.webPassword, pw, sizeof(settingsMgr.s.webPassword));
+                            settingsMgr.save();
+                        }
+                        clearSessions();
                         ok = true;
                     }
                 }
@@ -795,44 +933,41 @@ private:
         });
 
         server_.on("/settings-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            if (!isAuthed(req)) { unauth(req); return; }
             req->send(200, "application/json", buildSettingsJson());
         });
 
         server_.on("/settings-data", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 if (req->_tempObject) {
                     JsonDocument doc;
                     deserializeJson(doc, (const char*)req->_tempObject);
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
+                    CtrlLock lock;
                     Settings& s = settingsMgr.s;
-                    if (!doc["latitude"].isNull())  s.latitude  = doc["latitude"].as<float>();
-                    if (!doc["longitude"].isNull()) s.longitude = doc["longitude"].as<float>();
-                    if (!doc["pollIntervalSec"].isNull()) s.pollIntervalSec = doc["pollIntervalSec"].as<uint32_t>();
+                    // Range-checked: a 0-second poll interval would hammer
+                    // api.weather.gov (and get this device rate-limited), and
+                    // ntpUpdateHours * 3600000 overflows above ~1193 hours.
+                    clampFloat(doc, "latitude",  s.latitude,  -90.0f,  90.0f);
+                    clampFloat(doc, "longitude", s.longitude, -180.0f, 180.0f);
+                    clampUInt(doc, "pollIntervalSec", s.pollIntervalSec, 30, 3600);
                     if (doc["userAgentContact"].is<const char*>())
                         strlcpy(s.userAgentContact, doc["userAgentContact"].as<const char*>(), sizeof(s.userAgentContact));
-                    if (doc["tornadoUnconfirmedMode"].is<const char*>())
-                        strlcpy(s.tornadoUnconfirmedMode, doc["tornadoUnconfirmedMode"].as<const char*>(), sizeof(s.tornadoUnconfirmedMode));
-                    if (doc["tornadoConfirmedMode"].is<const char*>())
-                        strlcpy(s.tornadoConfirmedMode, doc["tornadoConfirmedMode"].as<const char*>(), sizeof(s.tornadoConfirmedMode));
-                    if (doc["tornadoEmergencyMode"].is<const char*>())
-                        strlcpy(s.tornadoEmergencyMode, doc["tornadoEmergencyMode"].as<const char*>(), sizeof(s.tornadoEmergencyMode));
-                    if (doc["thunderstormBaseMode"].is<const char*>())
-                        strlcpy(s.thunderstormBaseMode, doc["thunderstormBaseMode"].as<const char*>(), sizeof(s.thunderstormBaseMode));
-                    if (doc["thunderstormConsiderableMode"].is<const char*>())
-                        strlcpy(s.thunderstormConsiderableMode, doc["thunderstormConsiderableMode"].as<const char*>(), sizeof(s.thunderstormConsiderableMode));
-                    if (doc["thunderstormDestructiveMode"].is<const char*>())
-                        strlcpy(s.thunderstormDestructiveMode, doc["thunderstormDestructiveMode"].as<const char*>(), sizeof(s.thunderstormDestructiveMode));
-                    if (doc["otherExtremeMode"].is<const char*>())
-                        strlcpy(s.otherExtremeMode, doc["otherExtremeMode"].as<const char*>(), sizeof(s.otherExtremeMode));
+                    applyMode(doc, "tornadoUnconfirmedMode", s.tornadoUnconfirmedMode, sizeof(s.tornadoUnconfirmedMode));
+                    applyMode(doc, "tornadoConfirmedMode", s.tornadoConfirmedMode, sizeof(s.tornadoConfirmedMode));
+                    applyMode(doc, "tornadoEmergencyMode", s.tornadoEmergencyMode, sizeof(s.tornadoEmergencyMode));
+                    applyMode(doc, "thunderstormBaseMode", s.thunderstormBaseMode, sizeof(s.thunderstormBaseMode));
+                    applyMode(doc, "thunderstormConsiderableMode", s.thunderstormConsiderableMode, sizeof(s.thunderstormConsiderableMode));
+                    applyMode(doc, "thunderstormDestructiveMode", s.thunderstormDestructiveMode, sizeof(s.thunderstormDestructiveMode));
+                    applyMode(doc, "otherExtremeMode", s.otherExtremeMode, sizeof(s.otherExtremeMode));
                     if (doc["otherExtremeIncluded"].is<const char*>())
                         strlcpy(s.otherExtremeIncluded, doc["otherExtremeIncluded"].as<const char*>(), sizeof(s.otherExtremeIncluded));
                     if (doc["repeatOnUpgrade"].is<bool>()) s.repeatOnUpgrade = doc["repeatOnUpgrade"].as<bool>();
                     if (doc["ntpServer"].is<const char*>())
                         strlcpy(s.ntpServer, doc["ntpServer"].as<const char*>(), sizeof(s.ntpServer));
-                    if (!doc["ntpUpdateHours"].isNull()) s.ntpUpdateHours = doc["ntpUpdateHours"].as<uint32_t>();
+                    clampUInt(doc, "ntpUpdateHours", s.ntpUpdateHours, 1, 168);
                     if (doc["timeZone"].is<const char*>())
                         strlcpy(s.timeZone, doc["timeZone"].as<const char*>(), sizeof(s.timeZone));
                     if (doc["autoDst"].is<bool>()) s.autoDst = doc["autoDst"].as<bool>();
@@ -845,13 +980,14 @@ private:
         );
 
         server_.on("/wifi-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            if (!isAuthed(req)) { unauth(req); return; }
             JsonDocument doc;
             doc["mode"]      = (wifiMgr.getMode() == WiFiManager::Mode::STA) ? "sta" : "ap";
             doc["connected"] = wifiMgr.isConnected();
             doc["ssid"]      = wifiMgr.getSSID();
             doc["ip"]        = wifiMgr.getIP();
             doc["hostname"]  = wifiMgr.getHostname();
+            doc["apSecured"] = wifiMgr.apSecured();
             String out;
             serializeJson(doc, out);
             req->send(200, "application/json", out);
@@ -859,7 +995,7 @@ private:
 
         server_.on("/wifi-data", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 if (req->_tempObject) {
                     JsonDocument doc;
                     deserializeJson(doc, (const char*)req->_tempObject);
@@ -894,8 +1030,77 @@ private:
             nullptr, bodyAccumulator
         );
 
+        server_.on("/ap-password", HTTP_POST,
+            [this](AsyncWebServerRequest* req) {
+                if (!isAuthed(req)) { unauth(req); return; }
+                bool ok = false;
+                if (req->_tempObject) {
+                    JsonDocument doc;
+                    deserializeJson(doc, (const char*)req->_tempObject);
+                    free(req->_tempObject);
+                    req->_tempObject = nullptr;
+                    const char* pw = doc["password"] | "";
+                    if (WiFiManager::isValidApPassword(pw)) {
+                        wifiMgr.saveApPassword(pw);
+                        wifiMgr.scheduleRestart(1500);
+                        ok = true;
+                    }
+                }
+                req->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+            },
+            nullptr, bodyAccumulator
+        );
+
+        // OTA firmware upload (auth required)
+        server_.on("/update", HTTP_POST,
+            [this](AsyncWebServerRequest* req) {
+                if (!isAuthed(req)) { unauth(req); return; }
+                OtaJob* job = (OtaJob*)req->_tempObject;
+                bool ok = job && job->ok;
+                if (job && job->owner && !ok) {
+                    if (Update.isRunning()) Update.abort();
+                    otaRunning_ = false;
+                }
+                JsonDocument doc;
+                doc["ok"] = ok;
+                if (!ok) doc["error"] = (job && job->err[0]) ? job->err : "No firmware file received";
+                String out;
+                serializeJson(doc, out);
+                req->send(200, "application/json", out);
+            },
+            [this](AsyncWebServerRequest* req, const String& filename, size_t index,
+                   uint8_t* data, size_t len, bool final) {
+                (void)filename;
+                OtaJob* job = (OtaJob*)req->_tempObject;
+                if (index == 0) {
+                    job = (OtaJob*)calloc(1, sizeof(OtaJob));
+                    req->_tempObject = job;
+                    if (!job) return;
+                    if (!isAuthed(req)) { otaFail(job, "Not logged in"); return; }
+                    if (otaRunning_) { otaFail(job, "Another update is already in progress"); return; }
+                    otaRunning_    = true;
+                    job->owner     = true;
+                    otaLastDataMs_ = millis();
+                    Serial.println("OTA upload started");
+                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { otaFail(job, Update.errorString()); return; }
+                }
+                if (!job || !job->owner || job->err[0]) return;
+                otaLastDataMs_ = millis();
+                if (len && Update.write(data, len) != len) { otaFail(job, Update.errorString()); return; }
+                if (final) {
+                    if (Update.end(true)) {
+                        job->ok = true;
+                        Serial.printf("OTA upload complete (%u bytes) - restarting\n", (unsigned)(index + len));
+                        wifiMgr.scheduleRestart(1500);
+                    } else {
+                        otaFail(job, Update.errorString());
+                    }
+                }
+            }
+        );
+
         server_.on("/restart", HTTP_POST, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            if (!isAuthed(req)) { unauth(req); return; }
             req->send(200, "application/json", "{\"ok\":true}");
             wifiMgr.scheduleRestart(500);
         });
@@ -911,6 +1116,7 @@ private:
     // ── JSON builders ────────────────────────────────────────────────────────
 
     static String buildSettingsJson() {
+        CtrlLock lock;
         const Settings& s = settingsMgr.s;
         JsonDocument doc;
         doc["latitude"]         = s.latitude;
@@ -930,6 +1136,7 @@ private:
         doc["ntpUpdateHours"]   = s.ntpUpdateHours;
         doc["timeZone"]         = s.timeZone;
         doc["autoDst"]          = s.autoDst;
+        doc["resetReason"]      = resetReasonName();
         doc["fwVersion"]        = FW_VERSION;
         String out;
         serializeJson(doc, out);
@@ -943,7 +1150,10 @@ private:
         return String(buf);
     }
 
+    // Public, polled every second — reads the alert lists poll() rewrites on
+    // the loop task, so it holds the same lock.
     static String buildStatusJson() {
+        CtrlLock lock;
         JsonDocument doc;
         doc["fwVersion"] = FW_VERSION;
 

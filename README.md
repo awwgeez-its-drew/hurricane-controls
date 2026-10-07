@@ -106,27 +106,37 @@ without needing the web UI open:
 
 ## Network security note
 
-This device serves plain HTTP (no TLS) and, out of the box, starts an open
-WiFi access point with no WiFi password. This is a deliberate, accepted
+This device serves plain HTTP (no TLS). That's a deliberate, accepted
 tradeoff for a hobbyist IoT device on a local/trusted network — not a bug.
-If you need transport encryption or a closed AP, you'll need to add it
-yourself; this project doesn't include it.
+If you need transport encryption, you'll need to add it yourself; this
+project doesn't include it.
+
+Its fallback WiFi access point is WPA2-protected (default password below,
+changeable from Settings → Wi-Fi). If the stored AP password is ever shorter
+than 8 characters, the AP falls back to open rather than locking you out.
 
 The web UI login has its own protections: a password-complexity requirement
 and a rate limit (5 failed attempts triggers a 30-second lockout) on the
-login endpoint, independent of your WiFi security.
+login endpoint, independent of your WiFi security. Everything except the
+login page and the one-word status pill on it requires a login session —
+including the live-status WebSocket.
 
 ## Default credentials
 
 | | Default |
 |---|---|
-| WiFi AP SSID | `HurricaneControls` (open network, no password) |
+| WiFi AP SSID | `HurricaneControls` |
+| WiFi AP password | `Siren123!` (WPA2) |
 | Login password | `Siren123!` |
 
 The device boots into AP mode with the SSID above — connect to it directly
 to reach the web UI before it's joined any home network. **Change the
-default login password immediately** from the Settings page; see Setup
-below.
+default login and AP passwords immediately** from the Settings page; see
+Setup below.
+
+If a saved home network can't be joined at boot (for example, the router is
+still starting up after a power outage), the device keeps its AP up and
+retries the home network every 60 seconds, so it rejoins on its own.
 
 Once configured, the device can join your home WiFi network instead of
 staying in AP mode (Settings → Wi-Fi). Note: the ESP32 only supports
@@ -151,6 +161,42 @@ join the 2.4 GHz one.
    a lowercase letter, a number, and a special character.
 6. From Settings, join the device to your home 2.4 GHz WiFi network instead
    of staying in AP mode.
+
+### Firmware updates over WiFi
+
+After the first USB flash, later updates can be installed from the browser:
+build with `pio run`, then on **Settings → Firmware Update** upload
+`.pio/build/esp32dev/firmware.bin`. The upload is refused while the siren is
+running or TEST MODE is on, no run can start while it's in progress, and the
+controller restarts into the new firmware when it finishes.
+
+Version 1.9.0 changed the partition table to make room for this, so
+**updating to 1.9.0 itself must be done over USB**. Saved settings and WiFi
+credentials are kept.
+
+### Usage log and diagnostics
+
+**Settings → Usage** shows lifetime run count and motor hours (kept across
+restarts) plus the last 20 runs since boot: mode, what triggered it, how long
+it ran, and how it ended (completed, stopped by whom, or failsafe). Entries
+show real dates and times when the controller knows the time — from NTP on
+your home network, or from the Weather Watcher's clock if one is connected —
+otherwise "x min ago".
+
+The Settings footer shows the reason for the last restart (power-on,
+brownout, watchdog, …). A brownout there usually points to a power-supply
+dip when a relay or motor switches. A hardware watchdog restarts the
+controller if the firmware ever stops responding for 8 seconds; it always
+boots with every relay off.
+
+### Web Manual safety cutoff
+
+Holding **MANUAL** in the web UI keeps the siren running only while your
+browser keeps checking in (every half second). If the phone loses WiFi,
+locks its screen, or the tab closes mid-hold, the siren stops within about
+2 seconds and the usage log records a failsafe stop. The Component Test
+page's hold buttons work the same way. Manual from the physical button is
+unaffected.
 
 ## Meshtastic remote control (optional)
 
@@ -217,8 +263,8 @@ another unit sharing the channel:
 | Physical-button lockout changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
 | A physical button is pressed while locked out | `\x07<BUTTON> PRESSED - LOCKED OUT` (`BUTTON` = `STOP`/`WAIL`/`ATTACK`) |
 | Automatic weather-triggered activation toggled (mesh command or Settings page, either source) | `WEATHER TRIGGER ENABLED` / `DISABLED` |
-| Boot, once, after the device is fully up | `STARTUP COMPLETE`, followed immediately by one STATUS line |
-| Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|OK\|ERROR>` |
+| Boot, once the Weather Watcher has reported its first real result (or after 2 minutes) | `STARTUP COMPLETE`, followed immediately by one STATUS line |
+| Every 12 hours | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|STARTING\|OK\|ERROR>` |
 
 `WW` reflects the Weather Watcher sub-board's own self-reported health (see
 `docs/weather-watcher.md`): `OFF` if the weather-trigger toggle itself is

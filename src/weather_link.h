@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "statemachine.h"
 #include "buttons.h"
+#include "clock.h"
 
 // Bridges a second, dedicated ESP32 ("Weather Watcher", see weather-watcher/
 // in this repo) that polls National Weather Service alerts for a specific
@@ -49,8 +50,12 @@ public:
     // indicator and folded into the mesh STATUS/PING messages. everReported()
     // is false until the first one arrives (e.g. link never wired, or the
     // Weather Watcher board isn't powered), distinct from an actual error.
+    // pending() means it's alive but hasn't finished its first NWS poll yet
+    // ("WX STATUS PENDING ..."), so neither OK nor an error is known.
     bool        everReported() const { return everReported_; }
     bool        reportedOk()   const { return ok_; }
+    bool        pending()      const { return pending_; }
+    bool        finalReported() const { return everReported_ && !pending_; }
     const char* detail()       const { return detail_; }
 
 private:
@@ -59,15 +64,17 @@ private:
 
     bool everReported_ = false;
     bool ok_            = false;
+    bool pending_       = false;
     char detail_[64]    = "Not yet reported";
 
     void reply(const char* msg) { Serial1.println(msg); }
 
-    // Three commands are understood: "WX PING" (a pure link-health check, no
+    // Four commands are understood: "WX PING" (a pure link-health check, no
     // gating at all — used both at the Weather Watcher's own startup and
-    // on-demand from its dashboard), "WX STATUS <OK|ERROR> <detail>" (an
-    // unprompted periodic push of the Weather Watcher's own WiFi/NWS API
-    // health — no reply expected, it's fire-and-forget), and "WX <MODE>",
+    // on-demand from its dashboard), "WX STATUS <OK|ERROR|PENDING> <detail>"
+    // (an unprompted periodic push of the Weather Watcher's own WiFi/NWS API
+    // health — no reply expected, it's fire-and-forget), "WX TIME <epoch>"
+    // (its NTP-synced clock, fire-and-forget — see clock.h), and "WX <MODE>",
     // MODE one of WAIL/ATTACK/FASTWAIL. MANUAL is excluded (it needs
     // momentary-hold semantics that don't fit an autonomous trigger) and so
     // is GROWL (a diagnostic test mode, not a warning tone).
@@ -87,11 +94,17 @@ private:
         if (!strncmp(cmd, "STATUS", 6)) {
             char* arg = cmd + 6;
             while (*arg == ' ') arg++;
-            ok_ = !strncmp(arg, "OK", 2);
+            pending_ = !strncmp(arg, "PENDING", 7);
+            ok_      = !pending_ && !strncmp(arg, "OK", 2);
             char* detail = strchr(arg, ' ');
             if (detail) { while (*detail == ' ') detail++; } else detail = arg + strlen(arg);
             strlcpy(detail_, detail, sizeof(detail_));
             everReported_ = true;
+            return;
+        }
+
+        if (!strncmp(cmd, "TIME", 4)) {
+            setClockFromLink((uint32_t)strtoul(cmd + 4, nullptr, 10));
             return;
         }
 

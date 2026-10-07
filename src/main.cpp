@@ -1,8 +1,12 @@
 #include <Arduino.h>
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 #include "config.h"
+#include "sync.h"
+#include "clock.h"
 #include "settings.h"
 #include "motors.h"
+#include "runlog.h"
 #include "statemachine.h"
 #include "buttons.h"
 #include "wifi_manager.h"
@@ -12,6 +16,7 @@
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 SettingsManager settingsMgr;
+RunLog          runLog;
 StateMachine    sm;
 ButtonHandler   buttons;
 WiFiManager     wifiMgr;
@@ -19,16 +24,22 @@ WebUI           webUI;
 MeshBridge      meshBridge;
 WeatherLink     weatherLink;
 
-static void logResetReason() {
-    Serial.print("Reset reason: ");
+// Loop stalls longer than this reboot the board. setup() drives every relay
+// OFF before anything else, so a watchdog reset always fails safe.
+static constexpr uint32_t WATCHDOG_TIMEOUT_S = 8;
+
+// Also shown on the Settings page (webserver.h) — handy for spotting
+// brownouts caused by relay/motor switching.
+const char* resetReasonName() {
     switch (esp_reset_reason()) {
-        case ESP_RST_POWERON:  Serial.println("power-on");               break;
-        case ESP_RST_BROWNOUT: Serial.println("BROWNOUT");               break;
-        case ESP_RST_TASK_WDT: Serial.println("task watchdog");          break;
-        case ESP_RST_INT_WDT:  Serial.println("interrupt watchdog");     break;
-        case ESP_RST_PANIC:    Serial.println("panic/crash");            break;
-        case ESP_RST_SW:       Serial.println("software (ESP.restart)"); break;
-        default:                Serial.printf("other (%d)\n", (int)esp_reset_reason()); break;
+        case ESP_RST_POWERON:  return "power-on";
+        case ESP_RST_BROWNOUT: return "BROWNOUT";
+        case ESP_RST_TASK_WDT: return "task watchdog";
+        case ESP_RST_INT_WDT:  return "interrupt watchdog";
+        case ESP_RST_PANIC:    return "panic/crash";
+        case ESP_RST_SW:       return "software (ESP.restart)";
+        case ESP_RST_EXT:      return "external reset";
+        default:               return "other";
     }
 }
 
@@ -43,9 +54,11 @@ void setup() {
     pinMode(STATUS_LED, OUTPUT); digitalWrite(STATUS_LED, LOW);
 
     Serial.begin(115200);
-    logResetReason();
+    Serial.print("Reset reason: ");
+    Serial.println(resetReasonName());
 
     settingsMgr.load();
+    runLog.begin();
     sm.begin();
     buttons.begin();
     meshBridge.begin();
@@ -55,15 +68,24 @@ void setup() {
     wifiMgr.begin();
     webUI.begin();
 
+    // Armed only after the (blocking) Wi-Fi attempt above.
+    esp_task_wdt_init(WATCHDOG_TIMEOUT_S, true);
+    esp_task_wdt_add(NULL);
+
     Serial.println("Hurricane Controls ready.");
     meshBridge.announceStartup();
 }
 
 void loop() {
-    buttons.update();
-    sm.update();
+    esp_task_wdt_reset();
+    {
+        CtrlLock lock;
+        buttons.update();
+        sm.update();
+        meshBridge.update();
+        weatherLink.update();
+    }
     webUI.update();
-    wifiMgr.update();  // handles deferred ESP.restart() after WiFi credential changes
-    meshBridge.update();
-    weatherLink.update();
+    wifiMgr.update();  // deferred ESP.restart() + home Wi-Fi retry from AP fallback
+    if (wifiMgr.takeJustConnected()) startNtp();
 }

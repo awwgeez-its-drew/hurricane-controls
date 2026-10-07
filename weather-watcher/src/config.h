@@ -15,7 +15,7 @@ constexpr uint8_t STATUS_LED = 2;
 
 // WiFi AP (fallback when no saved credentials, or STA join fails)
 constexpr char WIFI_SSID[] = "WeatherWatcher";
-constexpr char WIFI_PASS[] = "";
+constexpr char AP_PASS_DEFAULT[] = "Weather123!"; // WPA2 AP password until changed in Settings (8-63 chars)
 constexpr char MDNS_NAME[] = "weather-watcher";
 
-constexpr char FW_VERSION[] = "1.4.6";
+constexpr char FW_VERSION[] = "1.5.0";

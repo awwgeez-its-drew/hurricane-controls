@@ -196,6 +196,18 @@ the Security card before relying on this device, same as you would on the
 main board. Logging in lands on `/settings`, since that's the only page the
 password actually protects.
 
+The fallback `WeatherWatcher` access point is WPA2-protected — default AP
+password `Weather123!`, changeable from the Wi-Fi card. Like the main board,
+it keeps retrying a saved home network every 60 seconds after falling back
+to AP mode, so it rejoins on its own once the router is back.
+
+Later firmware updates can be uploaded from **Settings → Firmware Update**
+(`weather-watcher/.pio/build/esp32dev/firmware.bin`). Version 1.5.0 changed
+the partition table to allow this, so updating to 1.5.0 itself must be done
+over USB; saved settings are kept. The Settings footer shows the reason for
+the last restart, and a 30-second hardware watchdog restarts the board if it
+ever stops responding.
+
 ## Wiring
 
 A dedicated, directly-wired UART link — not shared with the Meshtastic bridge
@@ -233,18 +245,37 @@ not TEST MODE). It's what powers the dashboard's **Controller Link** status
 light: sent once automatically at Weather Watcher startup, and again
 whenever that light is tapped.
 
-A third message, `WX STATUS <OK|ERROR> <detail>`, is unprompted and
+A third message, `WX STATUS <OK|ERROR|PENDING> <detail>`, is unprompted and
 fire-and-forget (no reply expected) — the Weather Watcher pushes its own
 WiFi/NWS API health to the main board every 30 seconds (independent of the
 NWS poll interval, so a WiFi drop shows up promptly even with a slow poll
-cadence), plus once immediately at startup. `detail` mirrors the exact
-classification the dashboard's own status lights use (WiFi down → `ERROR
-WiFi not connected`; WiFi up but no poll yet → `OK Waiting for first poll`;
-last poll failed → `ERROR <the poll error, truncated>`; otherwise `OK All
-systems normal`), truncated to fit the main board's line buffer. The main
-board surfaces this on its own Settings page (Weather Watcher card) and
-folds it into its mesh `STATUS`/`PING` messages as `WW: OK`/`ERROR` — see
-`README.md` and `docs/meshtastic-integration.md`.
+cadence), once immediately at startup, and again right after every NWS poll.
+`detail` mirrors the classification the dashboard's own status lights use:
+
+| State | Sent as |
+|---|---|
+| Just booted, WiFi not up yet (first 2 minutes) | `PENDING Connecting to Wi-Fi` |
+| WiFi down | `ERROR WiFi not connected` |
+| WiFi up, no poll has reached the network yet | `PENDING Waiting for first poll` |
+| Last poll failed | `ERROR <the poll error, truncated>` |
+| Otherwise | `OK All systems normal` |
+
+`detail` is truncated to fit the main board's line buffer. The main board
+surfaces this on its own Settings page (Weather Watcher card) and folds it
+into its mesh `STATUS`/`PING` messages as `WW: OK`/`ERROR`/`STARTING` — see
+`README.md` and `docs/meshtastic-integration.md`. The main board also holds
+its mesh `STARTUP COMPLETE` announcement until it hears the first `OK` or
+`ERROR` (up to 2 minutes). An older (pre-1.9.0) main board shows `PENDING`
+as an error for those few seconds, which is harmless.
+
+A fourth message, `WX TIME <epoch>`, follows each status push once the
+Weather Watcher's own clock is NTP-synced. It's UTC seconds, fire-and-forget,
+and the main board (1.9.0+) uses it to timestamp its run log only while it
+has no NTP sync of its own (e.g. when it's in AP mode). An older main board
+replies `ERR: unknown command`, which the Weather Watcher just logs.
+
+The Weather Watcher polls once immediately at boot (and right after a late
+WiFi join), rather than waiting a full poll interval first.
 
 The main board replies on the same link:
 
@@ -282,8 +313,8 @@ the same model used for the main board's own physical buttons.
 1. Flash `weather-watcher/` (its own PlatformIO project — `pio run -t
    upload` from inside that directory) onto a second ESP32.
 2. Wire it to the main board per the table above.
-3. On first boot it starts its own open WiFi AP, `WeatherWatcher` — connect
-   to it and browse to `http://weather-watcher.local` (or whatever hostname
+3. On first boot it starts its own WiFi AP, `WeatherWatcher` (password
+   `Weather123!`) — connect to it and browse to `http://weather-watcher.local` (or whatever hostname
    you later set, see below) or its AP IP.
 4. Log in with the default password (`Weather123!`) and **change it
    immediately** from the Security card.

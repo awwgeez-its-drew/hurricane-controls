@@ -7,6 +7,7 @@
 #include <time.h>
 #include <cstring>
 #include "config.h"
+#include "sync.h"
 #include "settings.h"
 #include "other_extreme_types.h"
 
@@ -108,19 +109,32 @@ public:
 
         // Pushed to the main board independently of the NWS poll cadence
         // (which can be as slow as minutes) so a WiFi drop shows up there
-        // reasonably quickly. Fires immediately on the very first update()
-        // call too, since lastStatusPushTs_ starts at 0.
+        // reasonably quickly. The first push goes out on the very first
+        // update() call.
         uint32_t now = millis();
-        if (now - lastStatusPushTs_ >= STATUS_PUSH_INTERVAL_MS) {
+        if (!statusPushedOnce_ || now - lastStatusPushTs_ >= STATUS_PUSH_INTERVAL_MS) {
+            statusPushedOnce_ = true;
             lastStatusPushTs_ = now;
             sendStatusToController();
         }
 
+        // First poll right away at boot (and right after a late Wi-Fi join —
+        // see requestPollSoon()) rather than a full poll interval later.
         uint32_t intervalMs = settingsMgr.s.pollIntervalSec * 1000UL;
-        if (now - lastPollTs_ < intervalMs) return;
+        if (!pollSoon_ && everPolled_ && now - lastPollTs_ < intervalMs) return;
+        pollSoon_   = false;
         lastPollTs_ = now;
         poll();
+
+        // Report the fresh result to the main board immediately, so it hears
+        // the first real OK/ERROR within seconds of the first poll (its boot
+        // announcement waits for exactly that).
+        lastStatusPushTs_ = millis();
+        sendStatusToController();
     }
+
+    // Called from main.cpp when Wi-Fi (re)joins the home network.
+    void requestPollSoon() { pollSoon_ = true; }
 
     // Sends "WX PING" over the dedicated UART link and waits (non-blocking,
     // checked in update()) for the main board's "OK: pong" reply. Called
@@ -129,6 +143,7 @@ public:
     // rather than queued — the in-flight one will resolve within
     // LINK_TEST_TIMEOUT_MS either way.
     void requestLinkTest() {
+        CtrlLock lock;  // also called from the web server's task
         if (linkTestInProgress_) return;
         linkTestInProgress_ = true;
         linkTestSentMs_     = millis();
@@ -156,9 +171,20 @@ public:
 private:
     uint32_t lastPollTs_ = 0;
 
-    // ── Periodic "WX STATUS <OK|ERROR> <detail>" push to the main board ─────
+    bool     pollSoon_         = false;
+    bool     polledOnline_     = false;  // a poll has actually reached the network
+
+    // ── Periodic "WX STATUS <OK|ERROR|PENDING> <detail>" push to the main board
     uint32_t lastStatusPushTs_ = 0;
+    bool     statusPushedOnce_ = false;
     static constexpr uint32_t STATUS_PUSH_INTERVAL_MS = 30000; // 30s
+    // While Wi-Fi hasn't come up yet after boot (e.g. router still booting
+    // after a power cut), report PENDING rather than ERROR for this long.
+    static constexpr uint32_t STARTUP_GRACE_MS = 120000;
+
+    // ── Non-blocking line reader for main-board replies ─────────────────────
+    char    rxLine_[96];
+    uint8_t rxLen_ = 0;
 
     bool     everPolled_       = false;
     bool     lastPollSuccess_  = false;
@@ -175,6 +201,7 @@ private:
 
     // ── Current Alerts (rebuilt every poll) ─────────────────────────────────
     static constexpr uint8_t MAX_CURRENT = 8;
+    static constexpr unsigned MAX_TEXT_LEN = 160;   // headline/areaDesc cap per alert
     CurrentAlert currentAlerts_[MAX_CURRENT];
     uint8_t      currentAlertCount_ = 0;
 
@@ -284,56 +311,85 @@ private:
         }
     }
 
+    void setPollResult(bool ok, const String& err) {
+        CtrlLock lock;
+        lastPollEpoch_   = nowEpoch();
+        everPolled_      = true;
+        lastPollSuccess_ = ok;
+        lastPollError_   = err;
+    }
+
+    static String capped(const char* str) {
+        String out(str);
+        if (out.length() > MAX_TEXT_LEN) out = out.substring(0, MAX_TEXT_LEN - 3) + "...";
+        return out;
+    }
+
     void poll() {
-        lastPollEpoch_ = nowEpoch();
-        everPolled_    = true;
+        if (WiFi.status() != WL_CONNECTED) { setPollResult(false, "Wi-Fi not connected"); return; }
 
-        if (WiFi.status() != WL_CONNECTED) {
-            lastPollSuccess_ = false;
-            lastPollError_   = "Wi-Fi not connected";
-            return;
-        }
-        if (!locationConfigured()) {
-            lastPollSuccess_ = false;
-            lastPollError_   = "Location not configured — set latitude/longitude in Alert Location";
-            return;
-        }
-
+        // Snapshot what this poll needs — the web server can rewrite
+        // settings from its own task at any moment.
         char url[128];
-        snprintf(url, sizeof(url), "https://api.weather.gov/alerts/active?point=%.4f,%.4f",
-                 settingsMgr.s.latitude, settingsMgr.s.longitude);
+        String ua;
+        bool located;
+        {
+            CtrlLock lock;
+            located = locationConfigured();
+            snprintf(url, sizeof(url), "https://api.weather.gov/alerts/active?point=%.4f,%.4f",
+                     settingsMgr.s.latitude, settingsMgr.s.longitude);
+            ua = String("(HurricaneControlsWeatherWatcher, ") + settingsMgr.s.userAgentContact + ")";
+        }
+        if (!located) {
+            setPollResult(false, "Location not configured — set latitude/longitude in Alert Location");
+            return;
+        }
+        polledOnline_ = true;
 
         WiFiClientSecure client;
         client.setInsecure(); // no cert pinning — see docs/weather-watcher.md
         HTTPClient http;
-        if (!http.begin(client, url)) {
-            lastPollSuccess_ = false;
-            lastPollError_   = "Could not start HTTPS request";
-            return;
-        }
-        String ua = String("(HurricaneControlsWeatherWatcher, ") + settingsMgr.s.userAgentContact + ")";
+        if (!http.begin(client, url)) { setPollResult(false, "Could not start HTTPS request"); return; }
+        http.useHTTP10(true);          // no chunked encoding — getStream() is then the raw JSON body
+        http.setConnectTimeout(10000);
+        http.setTimeout(10000);
         http.addHeader("User-Agent", ua);
         http.addHeader("Accept", "application/geo+json");
 
         int code = http.GET();
         if (code != 200) {
-            lastPollSuccess_ = false;
-            lastPollError_   = (code > 0)
+            setPollResult(false, (code > 0)
                 ? ("HTTP " + String(code) + " from api.weather.gov")
-                : ("Connection failed (error " + String(code) + ") — check Wi-Fi/internet");
+                : ("Connection failed (error " + String(code) + ") — check Wi-Fi/internet"));
             http.end();
             return;
         }
 
+        // Keep only the fields classify()/the dashboard use. Each alert's
+        // description/instruction text alone can run to kilobytes, and an
+        // outbreak can list dozens of alerts — unfiltered, the document could
+        // exhaust the heap on top of the ~40KB the TLS session already holds.
+        JsonDocument filter;
+        static const char* const PROPS[] = {"id", "event", "status", "messageType", "severity",
+                                            "urgency", "certainty", "headline", "areaDesc"};
+        static const char* const PARAMS[] = {"VTEC", "tornadoDetection", "tornadoDamageThreat",
+                                             "thunderstormDamageThreat"};
+        for (const char* k : PROPS)  filter["features"][0]["properties"][k] = true;
+        for (const char* k : PARAMS) filter["features"][0]["properties"]["parameters"][k] = true;
+
         JsonDocument doc;
-        DeserializationError err = deserializeJson(doc, http.getStream());
+        DeserializationError err = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
         http.end();
         if (err) {
-            lastPollSuccess_ = false;
-            lastPollError_   = String("Failed to parse response: ") + err.c_str();
+            setPollResult(false, String("Failed to parse response: ") + err.c_str());
             return;
         }
 
+        // Everything below is quick (no network) — hold the lock so the
+        // dashboard never reads the alert lists mid-rewrite.
+        CtrlLock lock;
+        lastPollEpoch_   = nowEpoch();
+        everPolled_      = true;
         lastPollSuccess_ = true;
         lastPollError_   = "";
 
@@ -387,8 +443,8 @@ private:
                 CurrentAlert& ca = fresh[freshCount++];
                 ca.id       = id;
                 ca.event    = event;
-                ca.headline = props["headline"].is<const char*>() ? (const char*)props["headline"] : event;
-                ca.areaDesc = props["areaDesc"].is<const char*>() ? (const char*)props["areaDesc"] : "";
+                ca.headline = capped(props["headline"].is<const char*>() ? (const char*)props["headline"] : event);
+                ca.areaDesc = capped(props["areaDesc"].is<const char*>() ? (const char*)props["areaDesc"] : "");
                 ca.category = category;
                 ca.triggeredSiren = (te->lastActedCategory > 0);
             }
@@ -431,39 +487,75 @@ private:
     // already used for the dashboard's own status lights (see buildStatusJson()
     // in webserver.h), condensed into one line. Truncated well under the main
     // board's line buffer, since wifiDetail/lastPollError_ can run long.
+    //
+    // PENDING ("still starting up, nothing to report yet") is sent until a
+    // poll has actually reached the network — the main board holds its
+    // mesh boot announcement until it hears a real OK/ERROR (or gives up
+    // after 2 minutes). An older main board just shows PENDING as an error
+    // for those few seconds.
+    //
+    // Also pushes this board's NTP-synced clock as "WX TIME <epoch>", which
+    // the main board uses for its run log when it has no NTP of its own.
     void sendStatusToController() {
         bool wifiOk = WiFi.status() == WL_CONNECTED;
-        bool ok;
+        const char* state;
         String detail;
-        if (!wifiOk)            { ok = false; detail = "WiFi not connected"; }
-        else if (!everPolled_)  { ok = true;  detail = "Waiting for first poll"; }
-        else if (!lastPollSuccess_) { ok = false; detail = lastPollError_; }
-        else                    { ok = true;  detail = "All systems normal"; }
+        if (!wifiOk && !polledOnline_ && millis() < STARTUP_GRACE_MS) { state = "PENDING"; detail = "Connecting to Wi-Fi"; }
+        else if (!wifiOk)            { state = "ERROR";   detail = "WiFi not connected"; }
+        else if (!polledOnline_)     { state = "PENDING"; detail = "Waiting for first poll"; }
+        else if (!lastPollSuccess_)  { state = "ERROR";   detail = lastPollError_; }
+        else                         { state = "OK";      detail = "All systems normal"; }
         if (detail.length() > 48) detail = detail.substring(0, 48);
         Serial1.print("WX STATUS ");
-        Serial1.print(ok ? "OK " : "ERROR ");
+        Serial1.print(state);
+        Serial1.print(' ');
         Serial1.println(detail);
+
+        uint32_t t = nowEpoch();
+        if (t) {
+            Serial1.print("WX TIME ");
+            Serial1.println(t);
+        }
     }
 
+    // Non-blocking: readStringUntil() would stall the loop for up to a
+    // second whenever a partial line was sitting in the buffer.
     void readReplies() {
         while (Serial1.available()) {
-            String line = Serial1.readStringUntil('\n');
-            line.trim();
-            if (line.length()) {
-                Serial.print("Main board reply: ");
-                Serial.println(line);
-                digitalWrite(STATUS_LED, LOW);
-                if (linkTestInProgress_ && line.equalsIgnoreCase("OK: pong")) {
-                    linkTestInProgress_ = false;
-                    everTestedLink_     = true;
-                    linkOk_             = true;
-                    linkDetail_         = "Status OK";
+            char c = Serial1.read();
+            if (c == '\n' || c == '\r') {
+                if (rxLen_ > 0) {
+                    rxLine_[rxLen_] = '\0';
+                    rxLen_ = 0;
+                    handleReply(rxLine_);
                 }
+            } else if (rxLen_ < sizeof(rxLine_) - 1) {
+                rxLine_[rxLen_++] = c;
+            }
+        }
+    }
+
+    void handleReply(char* line) {
+        while (*line == ' ') line++;
+        size_t len = strlen(line);
+        while (len > 0 && line[len - 1] == ' ') line[--len] = '\0';
+        if (!len) return;
+        Serial.print("Main board reply: ");
+        Serial.println(line);
+        digitalWrite(STATUS_LED, LOW);
+        if (!strcasecmp(line, "OK: pong")) {
+            CtrlLock lock;
+            if (linkTestInProgress_) {
+                linkTestInProgress_ = false;
+                everTestedLink_     = true;
+                linkOk_             = true;
+                linkDetail_         = "Status OK";
             }
         }
     }
 
     void checkLinkTestTimeout() {
+        CtrlLock lock;
         if (!linkTestInProgress_) return;
         if (millis() - linkTestSentMs_ < LINK_TEST_TIMEOUT_MS) return;
         linkTestInProgress_ = false;

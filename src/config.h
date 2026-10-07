@@ -26,7 +26,7 @@ constexpr uint32_t WEATHER_BAUD   = 38400;
 
 // WiFi AP
 constexpr char WIFI_SSID[] = "HurricaneControls";
-constexpr char WIFI_PASS[] = "";         // open AP
+constexpr char AP_PASS_DEFAULT[] = "Siren123!"; // WPA2 AP password until changed in Settings (8-63 chars)
 constexpr char MDNS_NAME[] = "hurricane";
 
-constexpr char FW_VERSION[] = "1.8.0";
+constexpr char FW_VERSION[] = "1.9.0";

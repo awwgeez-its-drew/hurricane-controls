@@ -3,10 +3,12 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <set>
+#include <Update.h>
 #include <cctype>
 #include "config.h"
+#include "sync.h"
 #include "settings.h"
+#include "runlog.h"
 #include "statemachine.h"
 #include "motors.h"
 #include "wifi_manager.h"
@@ -91,11 +93,22 @@ button{width:100%;padding:14px;background:var(--green);color:#04220f;border:none
        font-family:inherit}
 button:active{opacity:.8}
 .err{color:#f87171;font-size:.85rem;margin-top:10px;min-height:1.1em}
+.pill{display:none;width:max-content;margin:0 auto 22px;padding:5px 18px;border-radius:var(--radius);
+      font-size:.78rem;font-weight:700;letter-spacing:2px}
+.pill.idle,.pill.seq,.pill.stop,.pill.wail,.pill.attack,.pill.fastwail,.pill.manual,.pill.growl,.pill.test{display:block}
+.pill.idle{color:#9aa3af;border:1px solid var(--cyan)}
+.pill.wail{background:var(--wail);color:#bcd2ff}
+.pill.attack,.pill.test{background:var(--attack);color:#ffc9c9}
+.pill.fastwail{background:var(--fastwail);color:#ffd9a0}
+.pill.manual{background:var(--manual);color:#e3caff}
+.pill.growl{background:#0f4c3d;color:#a7f3d0}
+.pill.seq,.pill.stop{background:var(--green);color:#04220f}
 </style></head><body>
 <div class="card">
   <img class="login-siren" src="/login-siren.png" alt="">
   <h1>Hurricane Controls</h1>
   <p class="sub">Siren Controller</p>
+  <div id="pill" class="pill"></div>
   <form onsubmit="login(event)">
     <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus>
     <button type="submit">UNLOCK</button>
@@ -114,6 +127,16 @@ function login(e){
          document.getElementById('pw').value='';}
   }).catch(()=>{document.getElementById('err').textContent='Connection error';});
 }
+// Public one-word status (no login needed) — hidden if the device is unreachable.
+const PL={idle:'IDLE',seq:'STARTING',wail:'WAIL',attack:'ATTACK',fastwail:'FAST WAIL',
+          growl:'GROWL TEST',manual:'MANUAL',stop:'STOPPING',test:'TEST MODE'};
+function pill(){
+  const p=document.getElementById('pill');
+  fetch('/pub-status').then(r=>r.json()).then(d=>{
+    p.textContent=PL[d.s]||String(d.s).toUpperCase();p.className='pill '+d.s;
+  }).catch(()=>{p.className='pill';});
+}
+pill();setInterval(pill,2000);
 </script></body></html>
 )rawliteral";
 
@@ -251,11 +274,20 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 </div>
 
 <script>
-let manOn=false, sirenActive=false, webManualHeld=false;
+let manOn=false, sirenActive=false, webManualHeld=false, manKa=null;
 
-const ws=new WebSocket('ws://'+location.hostname+'/ws');
-ws.onmessage=e=>draw(JSON.parse(e.data));
-ws.onerror=ws.onclose=()=>setInterval(()=>fetch('/status').then(r=>r.json()).then(draw),1200);
+function connect(){
+  const ws=new WebSocket('ws://'+location.hostname+'/ws');
+  ws.onmessage=e=>draw(JSON.parse(e.data));
+  // One poll + one reconnect attempt per drop (also fires when a
+  // restart drops the socket); 401 means the session is gone.
+  ws.onclose=()=>{
+    fetch('/status').then(r=>{if(r.status===401){location.href='/login';return null;}return r.json();})
+      .then(d=>{if(d)draw(d);}).catch(()=>{});
+    setTimeout(connect,2000);
+  };
+}
+connect();
 
 function fmt(sec){
   if(sec==null||sec<0)return'--:--';
@@ -327,12 +359,16 @@ function manualDown(e){
   e.preventDefault(); // suppress synthetic mouse events on touch
   if(sirenActive)return;
   webManualHeld=true;claxon();cmd('manual');
+  // Keep-alive while held — the controller stops a web Manual run ~2 s
+  // after these stop arriving (phone off Wi-Fi, screen locked, tab closed).
+  manKa=setInterval(()=>cmd('manual-ka'),500);
 }
 function manualUp(e){
   if(e)e.preventDefault();
   if(!webManualHeld)return;
-  webManualHeld=false;cmd('stop');
+  webManualHeld=false;clearInterval(manKa);manKa=null;cmd('stop');
 }
+document.addEventListener('visibilitychange',()=>{if(document.hidden)manualUp();});
 function toggleLock(){cmd('btn-lock');}
 function fmtUp(s){
   const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),
@@ -409,6 +445,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
 .ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
      background:var(--surface);border-radius:var(--radius)}
 .ver a{color:inherit;text-decoration:none}
+.lrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #1a2a3a;
+      font-size:.75rem;color:#c9cdd3}
+.lrow span:last-child{color:#9aa3af;text-align:right}
 .ver a:hover{text-decoration:underline}
 .stopbar{position:fixed;bottom:0;left:0;right:0;background:var(--stop-bg);color:var(--stop-text);
          display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;letter-spacing:1px;
@@ -439,6 +478,11 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <p class="hint">Letters, numbers, and hyphens only. Sets both the name your router shows for this device and its <code>http://&lt;hostname&gt;.local</code> address. Takes effect after a restart.</p>
   <button class="btn save" onclick="saveHostname()">Save Hostname</button>
   <div class="msg" id="hm"></div>
+  <div class="row" style="margin-top:14px"><label>Access Point Password</label>
+    <input type="password" id="apPw" placeholder="New AP password (8-63 characters)" autocomplete="new-password"></div>
+  <p class="hint" id="apHint">Needed to join the &quot;HurricaneControls&quot; network this device broadcasts when it isn't on your home Wi-Fi. Takes effect after a restart.</p>
+  <button class="btn save" onclick="saveApPw()">Save AP Password</button>
+  <div class="msg" id="apm"></div>
   <div class="row" style="margin-top:14px"><label>Network SSID</label>
     <input type="text" id="wSSID" placeholder="Your WiFi name" autocomplete="off"></div>
   <div class="row"><label>Password</label>
@@ -538,9 +582,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-body">
   <div class="grid2">
     <div><label>Attack duration (sec)</label><input type="number" id="s_attackDuration" min="1" step="1"></div>
-    <div><label>Attack ON time (sec)</label><input type="number" id="s_attackOnTime" min="0.1" step="0.1"></div>
-    <div><label>Attack OFF time (sec)</label><input type="number" id="s_attackOffTime" min="0.1" step="0.1"></div>
-    <div><label>Chopper re-on delay (sec)</label><input type="number" id="s_attackChopperDelay" min="0" step="0.1"></div>
+    <div><label>Attack ON time (sec)</label><input type="number" id="s_attackOnTime" min="0.5" step="0.1"></div>
+    <div><label>Attack OFF time (sec)</label><input type="number" id="s_attackOffTime" min="0.5" step="0.1"></div>
   </div>
   <button class="btn save" onclick="saveTiming()">Save Attack Settings</button>
   <div class="msg" id="tm2"></div>
@@ -553,9 +596,8 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-body">
   <div class="grid2">
     <div><label>Fast Wail duration (sec)</label><input type="number" id="s_fastWailDuration" min="1" step="1"></div>
-    <div><label>Fast Wail ON time (sec)</label><input type="number" id="s_fastWailOnTime" min="0.1" step="0.1"></div>
-    <div><label>Fast Wail OFF time (sec)</label><input type="number" id="s_fastWailOffTime" min="0.1" step="0.1"></div>
-    <div><label>Chopper re-on delay (sec)</label><input type="number" id="s_fastWailChopperDelay" min="0" step="0.1"></div>
+    <div><label>Fast Wail ON time (sec)</label><input type="number" id="s_fastWailOnTime" min="0.5" step="0.1"></div>
+    <div><label>Fast Wail OFF time (sec)</label><input type="number" id="s_fastWailOffTime" min="0.5" step="0.1"></div>
   </div>
   <button class="btn save" onclick="saveTiming()">Save Fast Wail Settings</button>
   <div class="msg" id="tm3"></div>
@@ -567,16 +609,38 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-head" onclick="toggleCard(this)"><h2>Growl Test</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
   <div class="card-body">
   <div class="grid2">
-    <div><label>Blower time (sec)</label><input type="number" id="s_growlBlowerTime" min="0.1" step="0.1"></div>
-    <div><label>Rotator time (sec)</label><input type="number" id="s_growlRotatorTime" min="0.1" step="0.1"></div>
-    <div><label>Chopper time (sec)</label><input type="number" id="s_growlChopperTime" min="0.1" step="0.1"></div>
+    <div><label>Blower time (sec)</label><input type="number" id="s_growlBlowerTime" min="0.5" step="0.1"></div>
+    <div><label>Rotator time (sec)</label><input type="number" id="s_growlRotatorTime" min="0.5" step="0.1"></div>
+    <div><label>Chopper time (sec)</label><input type="number" id="s_growlChopperTime" min="0.5" step="0.1"></div>
   </div>
   <button class="btn save" onclick="saveTiming()">Save Growl Settings</button>
   <div class="msg" id="tm4"></div>
   </div>
 </div>
 
+<!-- Usage -->
+<div class="card">
+  <div class="card-head" onclick="toggleCard(this)"><h2>Usage</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
+  <div id="usageTot" class="ws">Loading&hellip;</div>
+  <div id="usageList"></div>
+  <p class="hint" style="margin-top:10px">Recent runs are kept until the next restart; the totals are permanent.</p>
+  </div>
+</div>
+
+<!-- Firmware Update -->
+<div class="card">
+  <div class="card-head" onclick="toggleCard(this)"><h2>Firmware Update</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
+  <p class="hint">Upload a new <code>firmware.bin</code> (from <code>.pio/build/esp32dev/</code> after a build). Only allowed while the siren is idle and TEST MODE is off; the controller restarts when it finishes.</p>
+  <input type="file" id="fwFile" accept=".bin">
+  <button class="btn save" onclick="uploadFw()">Upload Firmware</button>
+  <div class="msg" id="fwm"></div>
+  </div>
+</div>
+
 <div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Hurricane Controls &middot; v<span id="verNum">—</span></a></div>
+<div class="ver mono">Last restart: <span id="rstReason">—</span></div>
 <div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
 
 </div>
@@ -585,21 +649,26 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
 
 <script>
 // All timing fields stored as ms, displayed as seconds
-const TS=['wailDuration','attackDuration','attackOnTime','attackOffTime','attackChopperDelay',
+const TS=['wailDuration','attackDuration','attackOnTime','attackOffTime',
           'chopperDelay','blowerDelay','rotatorDelay',
           'stopBlowerDelay','stopChopperDelay','stopRotDelay','longPressMs','buttonDebounceMs',
-          'fastWailDuration','fastWailOnTime','fastWailOffTime','fastWailChopperDelay',
+          'fastWailDuration','fastWailOnTime','fastWailOffTime',
           'growlBlowerTime','growlRotatorTime','growlChopperTime'];
 
-fetch('/settings-data').then(r=>r.json()).then(d=>{
+function fillTiming(d){
   TS.forEach(f=>{const e=document.getElementById('s_'+f);if(e)e.value=+(d[f]/1000).toFixed(2).replace(/\.?0+$/,'');});
+}
+fetch('/settings-data').then(r=>r.json()).then(d=>{
+  fillTiming(d);
   document.getElementById('verNum').textContent=d.fwVersion||'—';
+  document.getElementById('rstReason').textContent=d.resetReason||'—';
   document.getElementById('meshWL').value=d.meshWhitelist||'';
   document.getElementById('meshPW').value=d.meshPassword||'';
   document.getElementById('wxAutoTrig').checked=!!d.weatherAutoTriggerEnabled;
   const wwEl=document.getElementById('wwStatus');
   if(!d.weatherAutoTriggerEnabled){wwEl.textContent='Disabled';wwEl.className='ws';}
   else if(!d.wwEverReported){wwEl.textContent='No status received yet from the Weather Watcher board';wwEl.className='ws';}
+  else if(d.wwPending){wwEl.textContent='Starting up — waiting for its first NWS poll';wwEl.className='ws';}
   else if(d.wwOk){wwEl.textContent='OK — '+d.wwDetail;wwEl.className='ws ok';}
   else{wwEl.textContent='Error — '+d.wwDetail;wwEl.className='ws er';}
 });
@@ -612,7 +681,9 @@ fetch('/wifi-data').then(r=>r.json()).then(d=>{
   else{el.textContent='AP mode — '+d.ip;el.className='ws';}
   if(d.ssid)document.getElementById('wSSID').value=d.ssid;
   document.getElementById('wHost').value=d.hostname||'hurricane';
+  if(!d.apSecured)document.getElementById('apHint').textContent+=' The access point is currently OPEN (no password).';
 });
+loadLog();
 
 function toggleCard(headEl){
   headEl.parentElement.classList.toggle('expanded');
@@ -686,10 +757,58 @@ function saveWeatherAutoTrigger(){
 }
 function saveTiming(){
   const b={};
-  TS.forEach(f=>{const e=document.getElementById('s_'+f);if(e)b[f]=Math.round(parseFloat(e.value||0)*1000);});
+  // Blank fields are skipped (left unchanged) rather than sent as 0.
+  TS.forEach(f=>{const e=document.getElementById('s_'+f);
+    if(e&&e.value.trim()!==''&&!isNaN(parseFloat(e.value)))b[f]=Math.round(parseFloat(e.value)*1000);});
   // report to whichever save-msg div is visible in the submitting card
   const id=document.activeElement.closest('.card')?.querySelector('.msg')?.id||'tm';
-  post('/settings-data',b).then(d=>msg(id,d.ok?'Saved!':'Error',d.ok));
+  post('/settings-data',b).then(d=>{
+    msg(id,d.ok?'Saved!':'Error',d.ok);
+    // Re-read so any value the controller clamped to its allowed range shows.
+    fetch('/settings-data').then(r=>r.json()).then(fillTiming);
+  });
+}
+function saveApPw(){
+  const pw=document.getElementById('apPw').value;
+  if(pw.length<8||pw.length>63){msg('apm','Must be 8-63 characters',false);return;}
+  if(!confirm('Change the access point password? The device will restart, and anything joined to its network will need the new password.'))return;
+  post('/ap-password',{password:pw}).then(d=>msg('apm',d.ok?'Saved — restarting…':'Failed',d.ok));
+}
+const LM=['—','Wail','Attack','Fast Wail','Manual','Growl Test'],LS=['Local','Web','Mesh','NWS Alert','Auto'];
+function fmtDur(s){return s>=60?Math.floor(s/60)+'m '+(s%60)+'s':s+'s';}
+function fmtAgo(s){if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+' min ago';
+  if(s<86400)return Math.floor(s/3600)+' h ago';return Math.floor(s/86400)+' d ago';}
+function loadLog(){
+  fetch('/log').then(r=>r.json()).then(d=>{
+    document.getElementById('usageTot').textContent=
+      d.runs+' total run'+(d.runs===1?'':'s')+' · '+(d.secs/3600).toFixed(1)+' motor hours';
+    const L=document.getElementById('usageList');L.innerHTML='';
+    if(!d.entries.length){L.className='hint';L.textContent='No runs since the last restart.';return;}
+    L.className='';
+    d.entries.forEach(e=>{
+      const when=e.e?new Date(e.e*1000).toLocaleString():fmtAgo(d.uptime-e.u);
+      const end=e.x===0?'completed':e.x===2?'failsafe stop':'stopped ('+LS[e.ss]+')';
+      const r=document.createElement('div');r.className='lrow';
+      const a=document.createElement('span'),b=document.createElement('span');
+      a.textContent=(LM[e.m]||'?')+' · '+(LS[e.s]||'?')+' · '+fmtDur(e.d);
+      b.textContent=when+' · '+end;
+      r.appendChild(a);r.appendChild(b);L.appendChild(r);
+    });
+  });
+}
+function uploadFw(){
+  const f=document.getElementById('fwFile').files[0];
+  const el=document.getElementById('fwm');
+  if(!f){msg('fwm','Choose a .bin file first',false);return;}
+  if(!confirm('Upload '+f.name+' and restart the controller?'))return;
+  const fd=new FormData();fd.append('firmware',f,f.name);
+  const x=new XMLHttpRequest();x.open('POST','/update');
+  x.upload.onprogress=e=>{if(e.lengthComputable){el.className='msg';el.textContent='Uploading… '+Math.round(e.loaded*100/e.total)+'%';}};
+  x.onload=()=>{let d={};try{d=JSON.parse(x.responseText);}catch(err){}
+    if(d.ok){el.className='msg ok';el.textContent='Update installed — restarting…';setTimeout(()=>location.reload(),15000);}
+    else{el.className='msg er';el.textContent='Update failed: '+(d.error||('HTTP '+x.status));}};
+  x.onerror=()=>{el.className='msg er';el.textContent='Upload failed — connection lost';};
+  x.send(fd);
 }
 </script></body></html>
 )rawliteral";
@@ -788,12 +907,21 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 <div class="stopbar" onclick="claxon();cmd('stop')">&#9632; STOP</div>
 
 <script>
-let held={chopper:false,blower:false,rotator:false};
+let held={chopper:false,blower:false,rotator:false}, kaT={};
 const warnIcon='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 
-const ws=new WebSocket('ws://'+location.hostname+'/ws');
-ws.onmessage=e=>drawDots(JSON.parse(e.data));
-ws.onerror=ws.onclose=()=>setInterval(()=>fetch('/status').then(r=>r.json()).then(drawDots),1200);
+function connect(){
+  const ws=new WebSocket('ws://'+location.hostname+'/ws');
+  ws.onmessage=e=>drawDots(JSON.parse(e.data));
+  // One poll + one reconnect attempt per drop (also fires when a
+  // restart drops the socket); 401 means the session is gone.
+  ws.onclose=()=>{
+    fetch('/status').then(r=>{if(r.status===401){location.href='/login';return null;}return r.json();})
+      .then(d=>{if(d)drawDots(d);}).catch(()=>{});
+    setTimeout(connect,2000);
+  };
+}
+connect();
 
 function drawDots(d){
   const r=d.relays||[0,0,0];
@@ -854,7 +982,14 @@ function testDown(e,comp){
   fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({mode:'test',component:comp,on:true})})
     .then(r=>r.json()).then(d=>{
-      if(d.ok){btnEl(comp).classList.add('on');}
+      if(d.ok){
+        if(!held[comp])return; // already released before the reply arrived (testUp sent the off)
+        btnEl(comp).classList.add('on');
+        // Keep-alive while held — the controller switches this component
+        // off ~2 s after these stop arriving.
+        kaT[comp]=setInterval(()=>fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({mode:'test-ka',component:comp})}),500);
+      }
       else{held[comp]=false;msg('Enable TEST MODE first',false);}
     });
 }
@@ -862,6 +997,7 @@ function testUp(e,comp){
   if(e)e.preventDefault();
   if(!held[comp])return;
   held[comp]=false;
+  clearInterval(kaT[comp]);
   btnEl(comp).classList.remove('on');
   fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({mode:'test',component:comp,on:false})});
@@ -871,6 +1007,8 @@ function testUp(e,comp){
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+extern const char* resetReasonName();  // src/main.cpp
+
 class WebUI {
 public:
     void begin() {
@@ -879,6 +1017,8 @@ public:
                            AwsEventType t, void* a, uint8_t* d, size_t l) {
             (void)s;(void)c;(void)t;(void)a;(void)d;(void)l;
         });
+        // The live status stream needs the same session cookie as /status.
+        ws_.setFilter([this](AsyncWebServerRequest* r) { return isAuthed(r); });
         server_.addHandler(&ws_);
         server_.begin();
     }
@@ -887,48 +1027,110 @@ public:
         uint32_t now = millis();
         if (now - lastPush_ >= 500) {
             lastPush_ = now;
-            if (ws_.count() > 0) ws_.textAll(buildStatusJson());
+            if (ws_.count() > 0) {
+                char buf[STATUS_JSON_MAX];
+                size_t n = buildStatusJson(buf, sizeof(buf));
+                ws_.textAll(buf, n);
+            }
         }
         ws_.cleanupClients();
+        checkTestKeepalives(now);
+        checkOtaStall(now);
     }
 
 private:
+    static constexpr size_t   STATUS_JSON_MAX = 384;
+    static constexpr size_t   MAX_BODY        = 1024;   // largest JSON POST body accepted
+    static constexpr uint8_t  MAX_SESSIONS    = 4;      // oldest login is evicted beyond this
+    static constexpr uint32_t TEST_KEEPALIVE_TIMEOUT_MS = 2000;
+    static constexpr uint32_t OTA_STALL_TIMEOUT_MS      = 30000;
+
     AsyncWebServer    server_{80};
     AsyncWebSocket    ws_{"/ws"};
-    std::set<String>  sessions_;
     uint32_t          lastPush_ = 0;
+
+    // Fixed-size session table — every login used to add a String to an
+    // ever-growing std::set that was only cleared by a password change.
+    char     sessions_[MAX_SESSIONS][33] = {};
+    uint8_t  nextSession_ = 0;
 
     // ── Login rate-limiting ──────────────────────────────────────────────────
     // Single-user device: a global (not per-IP) failed-attempt counter is
     // sufficient to slow down brute-forcing without added per-client state.
     uint8_t  failedLoginAttempts_ = 0;
-    uint32_t loginLockoutUntil_   = 0;
+    uint32_t loginLockoutUntil_   = 0;   // 0 = not locked out
     static constexpr uint8_t  MAX_LOGIN_ATTEMPTS = 5;
     static constexpr uint32_t LOGIN_LOCKOUT_MS   = 30000;
 
+    // ── Test page hold-to-run keep-alives ────────────────────────────────────
+    // Same failsafe idea as web Manual: while a CHOPPER/BLOWER/ROTATOR button
+    // is held the Test page refreshes its keep-alive every ~500 ms; if they
+    // stop (phone dropped off Wi-Fi mid-hold), that component switches off.
+    bool     testHeld_[3] = {false, false, false};
+    uint32_t testKaTs_[3] = {0, 0, 0};
+
+    // ── OTA ──────────────────────────────────────────────────────────────────
+    // Per-upload result, kept in req->_tempObject (malloc'd; the request
+    // frees it). Only one upload can own the flash writer at a time.
+    struct OtaJob {
+        bool owner;
+        bool ok;
+        char err[64];
+    };
+    volatile bool     otaRunning_    = false;
+    volatile uint32_t otaLastDataMs_ = 0;
+
     // ── Auth helpers ──────────────────────────────────────────────────────────
 
-    String generateToken() {
-        char buf[33];
+    static void generateToken(char* out) {
         for (int i = 0; i < 4; i++) {
-            snprintf(buf + i * 8, 9, "%08x", (unsigned)esp_random());
+            snprintf(out + i * 8, 9, "%08x", (unsigned)esp_random());
         }
-        buf[32] = '\0';
-        return String(buf);
+        out[32] = '\0';
     }
 
-    String getSessionToken(AsyncWebServerRequest* req) {
+    // Copies the "sid" cookie value (if any) into out[33]. Only matches a
+    // cookie actually named "sid" — not e.g. "xsid".
+    static void sessionToken(AsyncWebServerRequest* req, char* out) {
+        out[0] = '\0';
         const AsyncWebHeader* h = req->getHeader("Cookie");
-        if (!h) return "";
-        String c = h->value();
-        int idx = c.indexOf("sid=");
-        if (idx < 0) return "";
-        int end = c.indexOf(';', idx);
-        return (end < 0) ? c.substring(idx + 4) : c.substring(idx + 4, end);
+        if (!h) return;
+        const String& v = h->value();
+        const char* c = v.c_str();
+        const char* p = c;
+        while ((p = strstr(p, "sid=")) != nullptr) {
+            if (p == c || p[-1] == ' ' || p[-1] == ';') {
+                p += 4;
+                size_t n = strcspn(p, ";");
+                if (n > 32) n = 32;
+                memcpy(out, p, n);
+                out[n] = '\0';
+                return;
+            }
+            p += 4;
+        }
     }
 
     bool isAuthed(AsyncWebServerRequest* req) {
-        return sessions_.count(getSessionToken(req)) > 0;
+        char tok[33];
+        sessionToken(req, tok);
+        if (strlen(tok) != 32) return false;
+        for (auto& s : sessions_) if (!strcmp(s, tok)) return true;
+        return false;
+    }
+
+    void addSession(const char* tok) {
+        strlcpy(sessions_[nextSession_], tok, sizeof(sessions_[0]));
+        nextSession_ = (nextSession_ + 1) % MAX_SESSIONS;
+    }
+
+    void removeSession(const char* tok) {
+        if (!*tok) return;
+        for (auto& s : sessions_) if (!strcmp(s, tok)) s[0] = '\0';
+    }
+
+    void clearSessions() {
+        for (auto& s : sessions_) s[0] = '\0';
     }
 
     void redirectLogin(AsyncWebServerRequest* req) {
@@ -937,96 +1139,186 @@ private:
         req->send(r);
     }
 
+    static void unauth(AsyncWebServerRequest* req) {
+        req->send(401, "application/json", "{\"error\":\"unauth\"}");
+    }
+
+    // Streams a page straight out of flash — the const char* overload of
+    // send() copies the whole page into a heap String on every request.
+    static void sendPage(AsyncWebServerRequest* req, const char* page, const char* type = "text/html") {
+        req->send(200, type, (const uint8_t*)page, strlen(page));
+    }
+
+    // ── Test component helpers ────────────────────────────────────────────────
+
+    static int componentIndex(const char* c) {
+        if (!strcmp(c, "chopper")) return 0;
+        if (!strcmp(c, "blower"))  return 1;
+        if (!strcmp(c, "rotator")) return 2;
+        return -1;
+    }
+
+    static const char* componentName(int i) {
+        return i == 0 ? "chopper" : i == 1 ? "blower" : "rotator";
+    }
+
+    static void setComponent(int i, bool on) {
+        if      (i == 0) on ? chopperOn() : chopperOff();
+        else if (i == 1) on ? blowerOn()  : blowerOff();
+        else if (i == 2) on ? rotatorOn() : rotatorOff();
+    }
+
+    void checkTestKeepalives(uint32_t now) {
+        CtrlLock lock;
+        for (int i = 0; i < 3; i++) {
+            if (!testHeld_[i]) continue;
+            // Leaving TEST MODE (manually or by auto-expiry) already ran allOff().
+            if (!buttons.testModeActive) { testHeld_[i] = false; continue; }
+            if (now - testKaTs_[i] >= TEST_KEEPALIVE_TIMEOUT_MS) {
+                testHeld_[i] = false;
+                setComponent(i, false);
+                Serial.printf("[%lu] test %s: keep-alive lost, switched off\n", now, componentName(i));
+            }
+        }
+    }
+
+    // An upload whose client vanished mid-transfer never reaches its request
+    // handler — without this, sm.otaActive would block every run until a reboot.
+    void checkOtaStall(uint32_t now) {
+        if (!otaRunning_ || now - otaLastDataMs_ < OTA_STALL_TIMEOUT_MS) return;
+        if (Update.isRunning()) Update.abort();
+        otaRunning_ = false;
+        CtrlLock lock;
+        sm.otaActive = false;
+        Serial.println("OTA upload stalled - aborted");
+    }
+
+    static void otaFail(OtaJob* job, const char* err) {
+        strlcpy(job->err, err, sizeof(job->err));
+        if (Update.isRunning()) Update.abort();
+    }
+
     // ── Route setup ───────────────────────────────────────────────────────────
 
     void setupRoutes() {
 
         // Login page (no auth)
         server_.on("/login", HTTP_GET, [](AsyncWebServerRequest* req) {
-            req->send(200, "text/html", LOGIN_HTML);
+            sendPage(req, LOGIN_HTML);
         });
 
         // Image assets (no auth — the login page and favicon need to load
         // before a session exists). Long cache lifetime since these only
         // change on a firmware reflash.
         server_.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/x-icon", FAVICON_ICO, FAVICON_ICO_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/brand-icon.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", BRAND_ICON_PNG, BRAND_ICON_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/login-siren.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", LOGIN_SIREN_PNG, LOGIN_SIREN_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", LOGIN_SIREN_PNG, LOGIN_SIREN_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/icon-192.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", ICON_192_PNG, ICON_192_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", ICON_192_PNG, ICON_192_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/icon-512.png", HTTP_GET, [](AsyncWebServerRequest* req) {
-            AsyncWebServerResponse* r = req->beginResponse_P(200, "image/png", ICON_512_PNG, ICON_512_PNG_LEN);
+            AsyncWebServerResponse* r = req->beginResponse(200, "image/png", ICON_512_PNG, ICON_512_PNG_LEN);
             r->addHeader("Cache-Control", "public, max-age=604800");
             req->send(r);
         });
         server_.on("/manifest.json", HTTP_GET, [](AsyncWebServerRequest* req) {
-            req->send(200, "application/manifest+json", MANIFEST_JSON);
+            sendPage(req, MANIFEST_JSON, "application/manifest+json");
+        });
+
+        // Public at-a-glance state for the login page's status pill (no auth).
+        // Deliberately just one word — no timers, relays, settings or source.
+        server_.on("/pub-status", HTTP_GET, [](AsyncWebServerRequest* req) {
+            const char* st;
+            {
+                CtrlLock lock;
+                if      (buttons.testModeActive)       st = "test";
+                else if (sm.state == State::STARTING)  st = "seq";
+                else if (sm.state == State::STOPPING)  st = "stop";
+                else                                   st = sm.modeName();  // "idle" when idle
+            }
+            char buf[32];
+            snprintf(buf, sizeof(buf), "{\"s\":\"%s\"}", st);
+            AsyncWebServerResponse* r = req->beginResponse(200, "application/json", buf);
+            r->addHeader("Cache-Control", "no-store");
+            req->send(r);
         });
 
         // Root → main page (auth required)
         server_.on("/", HTTP_GET, [this](AsyncWebServerRequest* req) {
             if (!isAuthed(req)) { redirectLogin(req); return; }
-            req->send(200, "text/html", MAIN_HTML);
+            sendPage(req, MAIN_HTML);
         });
 
         // Settings page (auth required)
         server_.on("/settings", HTTP_GET, [this](AsyncWebServerRequest* req) {
             if (!isAuthed(req)) { redirectLogin(req); return; }
-            req->send(200, "text/html", SETTINGS_HTML);
+            sendPage(req, SETTINGS_HTML);
         });
 
         // Component test page (auth required)
         server_.on("/test", HTTP_GET, [this](AsyncWebServerRequest* req) {
             if (!isAuthed(req)) { redirectLogin(req); return; }
-            req->send(200, "text/html", TEST_HTML);
+            sendPage(req, TEST_HTML);
         });
 
         // Status JSON (auth required)
         server_.on("/status", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
-            req->send(200, "application/json", buildStatusJson());
+            if (!isAuthed(req)) { unauth(req); return; }
+            char buf[STATUS_JSON_MAX];
+            buildStatusJson(buf, sizeof(buf));
+            req->send(200, "application/json", buf);
         });
 
         // Settings JSON GET (auth required)
         server_.on("/settings-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            if (!isAuthed(req)) { unauth(req); return; }
             req->send(200, "application/json", buildSettingsJson());
         });
 
         // WiFi status GET (auth required)
         server_.on("/wifi-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            if (!isAuthed(req)) { unauth(req); return; }
             req->send(200, "application/json", buildWifiJson());
         });
 
-        // Logout
-        server_.on("/auth/logout", HTTP_GET, [this](AsyncWebServerRequest* req) {
-            sessions_.erase(getSessionToken(req));
+        // Run log + lifetime totals (auth required)
+        server_.on("/log", HTTP_GET, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            req->send(200, "application/json", buildLogJson());
+        });
+
+        // Logout — the Settings page POSTs; GET kept for a plain link/bookmark.
+        auto logout = [this](AsyncWebServerRequest* req) {
+            char tok[33];
+            sessionToken(req, tok);
+            removeSession(tok);
             AsyncWebServerResponse* r = req->beginResponse(200, "application/json", "{\"ok\":true}");
             r->addHeader("Set-Cookie", "sid=; Path=/; Max-Age=0");
             req->send(r);
-        });
+        };
+        server_.on("/auth/logout", HTTP_GET, logout);
+        server_.on("/auth/logout", HTTP_POST, logout);
 
         // ── POST /auth/login ──────────────────────────────────────────────────
         server_.on("/auth/login", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
                 uint32_t now = millis();
-                if (now < loginLockoutUntil_) {
+                if (loginLockoutUntil_ && deadlinePassed(loginLockoutUntil_)) loginLockoutUntil_ = 0;
+                if (loginLockoutUntil_) {
                     if (req->_tempObject) { free(req->_tempObject); req->_tempObject = nullptr; }
                     uint32_t retryAfter = (loginLockoutUntil_ - now + 999) / 1000;
                     req->send(200, "application/json",
@@ -1040,21 +1332,23 @@ private:
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
                     const char* pw = doc["password"] | "";
+                    CtrlLock lock;
                     ok = (strcmp(pw, settingsMgr.s.webPassword) == 0);
                 }
                 if (ok) {
                     failedLoginAttempts_ = 0;
-                    String token = generateToken();
-                    sessions_.insert(token);
+                    char token[33];
+                    generateToken(token);
+                    addSession(token);
                     AsyncWebServerResponse* resp =
                         req->beginResponse(200, "application/json", "{\"ok\":true}");
                     resp->addHeader("Set-Cookie",
-                        "sid=" + token + "; Path=/; HttpOnly; SameSite=Strict");
+                        String("sid=") + token + "; Path=/; HttpOnly; SameSite=Strict");
                     req->send(resp);
                 } else {
                     failedLoginAttempts_++;
                     if (failedLoginAttempts_ >= MAX_LOGIN_ATTEMPTS) {
-                        loginLockoutUntil_ = now + LOGIN_LOCKOUT_MS;
+                        loginLockoutUntil_ = (now + LOGIN_LOCKOUT_MS) | 1;  // never 0 (= not locked)
                         failedLoginAttempts_ = 0;
                     }
                     req->send(200, "application/json", "{\"ok\":false}");
@@ -1066,7 +1360,7 @@ private:
         // ── POST /cmd ─────────────────────────────────────────────────────────
         server_.on("/cmd", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 bool ok = true;
                 if (req->_tempObject) {
                     JsonDocument doc;
@@ -1074,6 +1368,7 @@ private:
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
                     const char* mode = doc["mode"] | "";
+                    CtrlLock lock;
                     // While TEST MODE is active, only the Test page's own component
                     // control ("test") may touch outputs — everything that would
                     // start or stop a siren program is blocked, including stop:
@@ -1083,28 +1378,33 @@ private:
                         strcmp(mode, "wail")     == 0 || strcmp(mode, "attack") == 0 ||
                         strcmp(mode, "fastwail") == 0 || strcmp(mode, "manual") == 0 ||
                         strcmp(mode, "growl")    == 0 || strcmp(mode, "stop")  == 0);
-                    if      (blockedByTestMode)             ok = false;
-                    else if (strcmp(mode, "wail")     == 0) sm.trigger(RunMode::WAIL, TriggerSource::WEB);
-                    else if (strcmp(mode, "attack")   == 0) sm.trigger(RunMode::ATTACK, TriggerSource::WEB);
-                    else if (strcmp(mode, "fastwail") == 0) sm.trigger(RunMode::FAST_WAIL, TriggerSource::WEB);
-                    else if (strcmp(mode, "manual")   == 0) sm.trigger(RunMode::MANUAL, TriggerSource::WEB);
-                    else if (strcmp(mode, "growl")    == 0) sm.trigger(RunMode::GROWL, TriggerSource::WEB);
-                    else if (strcmp(mode, "stop")     == 0) sm.stop(TriggerSource::WEB);
-                    else if (strcmp(mode, "btn-lock") == 0) buttons.setLocked(!buttons.locked, false);
+                    if      (blockedByTestMode)              ok = false;
+                    else if (strcmp(mode, "wail")      == 0) sm.trigger(RunMode::WAIL, TriggerSource::WEB);
+                    else if (strcmp(mode, "attack")    == 0) sm.trigger(RunMode::ATTACK, TriggerSource::WEB);
+                    else if (strcmp(mode, "fastwail")  == 0) sm.trigger(RunMode::FAST_WAIL, TriggerSource::WEB);
+                    else if (strcmp(mode, "manual")    == 0) sm.trigger(RunMode::MANUAL, TriggerSource::WEB);
+                    else if (strcmp(mode, "manual-ka") == 0) sm.webKeepalive();
+                    else if (strcmp(mode, "growl")     == 0) sm.trigger(RunMode::GROWL, TriggerSource::WEB);
+                    else if (strcmp(mode, "stop")      == 0) sm.stop(TriggerSource::WEB);
+                    else if (strcmp(mode, "btn-lock")  == 0) buttons.setLocked(!buttons.locked, false);
                     else if (strcmp(mode, "test-lock") == 0) {
                         bool on = doc["on"] | false;
                         buttons.setTestMode(on);
                     }
-                    else if (strcmp(mode, "test")     == 0) {
+                    else if (strcmp(mode, "test")      == 0) {
                         ok = buttons.testModeActive && sm.isIdle();
-                        if (ok) {
-                            const char* comp = doc["component"] | "";
+                        int i = componentIndex(doc["component"] | "");
+                        if (ok && i >= 0) {
                             bool on = doc["on"] | false;
-                            Serial.printf("[%lu] /cmd test: component=%s on=%d\n", millis(), comp, on);
-                            if      (strcmp(comp, "chopper") == 0) on ? chopperOn() : chopperOff();
-                            else if (strcmp(comp, "blower")  == 0) on ? blowerOn()  : blowerOff();
-                            else if (strcmp(comp, "rotator") == 0) on ? rotatorOn() : rotatorOff();
+                            Serial.printf("[%lu] /cmd test: component=%s on=%d\n", millis(), componentName(i), on);
+                            setComponent(i, on);
+                            testHeld_[i] = on;
+                            testKaTs_[i] = millis();
                         }
+                    }
+                    else if (strcmp(mode, "test-ka")   == 0) {
+                        int i = componentIndex(doc["component"] | "");
+                        if (i >= 0 && testHeld_[i]) testKaTs_[i] = millis();
                     }
                 }
                 req->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
@@ -1115,33 +1415,35 @@ private:
         // ── POST /settings-data ───────────────────────────────────────────────
         server_.on("/settings-data", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 if (req->_tempObject) {
                     JsonDocument doc;
                     deserializeJson(doc, (const char*)req->_tempObject);
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
+                    CtrlLock lock;
                     Settings& s = settingsMgr.s;
-                    applyUInt(doc, "chopperDelay",   s.chopperDelay);
-                    applyUInt(doc, "blowerDelay",    s.blowerDelay);
-                    applyUInt(doc, "rotatorDelay",   s.rotatorDelay);
-                    applyUInt(doc, "wailDuration",   s.wailDuration);
-                    applyUInt(doc, "attackDuration", s.attackDuration);
-                    applyUInt(doc, "attackOnTime",   s.attackOnTime);
-                    applyUInt(doc, "attackOffTime",  s.attackOffTime);
-                    applyUInt(doc, "fastWailDuration",     s.fastWailDuration);
-                    applyUInt(doc, "fastWailOnTime",       s.fastWailOnTime);
-                    applyUInt(doc, "fastWailOffTime",      s.fastWailOffTime);
-                    applyUInt(doc, "fastWailChopperDelay", s.fastWailChopperDelay);
-                    applyUInt(doc, "stopBlowerDelay",  s.stopBlowerDelay);
-                    applyUInt(doc, "stopChopperDelay", s.stopChopperDelay);
-                    applyUInt(doc, "stopRotDelay",     s.stopRotDelay);
-                    applyUInt(doc, "attackChopperDelay",  s.attackChopperDelay);
-                    applyUInt(doc, "growlBlowerTime",  s.growlBlowerTime);
-                    applyUInt(doc, "growlRotatorTime", s.growlRotatorTime);
-                    applyUInt(doc, "growlChopperTime", s.growlChopperTime);
-                    applyUInt(doc, "longPressMs",         s.longPressMs);
-                    applyUInt(doc, "buttonDebounceMs",    s.buttonDebounceMs);
+                    // Every timing value is clamped to a sane range — an ON or
+                    // OFF time of 0 would toggle the chopper relay on every loop
+                    // pass, thousands of times a second.
+                    applyUInt(doc, "chopperDelay",     s.chopperDelay,     0, 60000);
+                    applyUInt(doc, "blowerDelay",      s.blowerDelay,      0, 60000);
+                    applyUInt(doc, "rotatorDelay",     s.rotatorDelay,     0, 60000);
+                    applyUInt(doc, "wailDuration",     s.wailDuration,     1000, 3600000);
+                    applyUInt(doc, "attackDuration",   s.attackDuration,   1000, 3600000);
+                    applyUInt(doc, "attackOnTime",     s.attackOnTime,     500, 600000);
+                    applyUInt(doc, "attackOffTime",    s.attackOffTime,    500, 600000);
+                    applyUInt(doc, "fastWailDuration", s.fastWailDuration, 1000, 3600000);
+                    applyUInt(doc, "fastWailOnTime",   s.fastWailOnTime,   500, 600000);
+                    applyUInt(doc, "fastWailOffTime",  s.fastWailOffTime,  500, 600000);
+                    applyUInt(doc, "stopBlowerDelay",  s.stopBlowerDelay,  0, 60000);
+                    applyUInt(doc, "stopChopperDelay", s.stopChopperDelay, 0, 60000);
+                    applyUInt(doc, "stopRotDelay",     s.stopRotDelay,     0, 60000);
+                    applyUInt(doc, "growlBlowerTime",  s.growlBlowerTime,  500, 60000);
+                    applyUInt(doc, "growlRotatorTime", s.growlRotatorTime, 500, 60000);
+                    applyUInt(doc, "growlChopperTime", s.growlChopperTime, 500, 60000);
+                    applyUInt(doc, "longPressMs",      s.longPressMs,      200, 5000);
+                    applyUInt(doc, "buttonDebounceMs", s.buttonDebounceMs, 0, 1000);
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
                     applyString(doc, "meshPassword", s.meshPassword, sizeof(s.meshPassword));
                     applyBool(doc, "weatherAutoTriggerEnabled", s.weatherAutoTriggerEnabled);
@@ -1155,7 +1457,7 @@ private:
         // ── POST /wifi-data ───────────────────────────────────────────────────
         server_.on("/wifi-data", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 if (req->_tempObject) {
                     JsonDocument doc;
                     deserializeJson(doc, (const char*)req->_tempObject);
@@ -1190,10 +1492,10 @@ private:
             nullptr, bodyAccumulator
         );
 
-        // ── POST /password ────────────────────────────────────────────────────
-        server_.on("/password", HTTP_POST,
+        // ── POST /ap-password ─────────────────────────────────────────────────
+        server_.on("/ap-password", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
-                if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+                if (!isAuthed(req)) { unauth(req); return; }
                 bool ok = false;
                 if (req->_tempObject) {
                     JsonDocument doc;
@@ -1201,10 +1503,9 @@ private:
                     free(req->_tempObject);
                     req->_tempObject = nullptr;
                     const char* pw = doc["password"] | "";
-                    if (isStrongPassword(pw)) {
-                        strlcpy(settingsMgr.s.webPassword, pw, sizeof(settingsMgr.s.webPassword));
-                        settingsMgr.save();
-                        sessions_.clear(); // force re-login with new password
+                    if (WiFiManager::isValidApPassword(pw)) {
+                        wifiMgr.saveApPassword(pw);
+                        wifiMgr.scheduleRestart(1500);
                         ok = true;
                     }
                 }
@@ -1213,9 +1514,90 @@ private:
             nullptr, bodyAccumulator
         );
 
+        // ── POST /password ────────────────────────────────────────────────────
+        server_.on("/password", HTTP_POST,
+            [this](AsyncWebServerRequest* req) {
+                if (!isAuthed(req)) { unauth(req); return; }
+                bool ok = false;
+                if (req->_tempObject) {
+                    JsonDocument doc;
+                    deserializeJson(doc, (const char*)req->_tempObject);
+                    free(req->_tempObject);
+                    req->_tempObject = nullptr;
+                    const char* pw = doc["password"] | "";
+                    if (isStrongPassword(pw)) {
+                        {
+                            CtrlLock lock;
+                            strlcpy(settingsMgr.s.webPassword, pw, sizeof(settingsMgr.s.webPassword));
+                            settingsMgr.save();
+                        }
+                        clearSessions(); // force re-login with new password
+                        ok = true;
+                    }
+                }
+                req->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+            },
+            nullptr, bodyAccumulator
+        );
+
+        // ── POST /update (OTA firmware upload) ────────────────────────────────
+        server_.on("/update", HTTP_POST,
+            [this](AsyncWebServerRequest* req) {
+                if (!isAuthed(req)) { unauth(req); return; }
+                OtaJob* job = (OtaJob*)req->_tempObject;
+                bool ok = job && job->ok;
+                if (job && job->owner && !ok) {
+                    if (Update.isRunning()) Update.abort();
+                    otaRunning_ = false;
+                    CtrlLock lock;
+                    sm.otaActive = false;
+                }
+                JsonDocument doc;
+                doc["ok"] = ok;
+                if (!ok) doc["error"] = (job && job->err[0]) ? job->err : "No firmware file received";
+                String out;
+                serializeJson(doc, out);
+                req->send(200, "application/json", out);
+            },
+            [this](AsyncWebServerRequest* req, const String& filename, size_t index,
+                   uint8_t* data, size_t len, bool final) {
+                (void)filename;
+                OtaJob* job = (OtaJob*)req->_tempObject;
+                if (index == 0) {
+                    job = (OtaJob*)calloc(1, sizeof(OtaJob));
+                    req->_tempObject = job;
+                    if (!job) return;
+                    if (!isAuthed(req)) { otaFail(job, "Not logged in"); return; }
+                    {
+                        CtrlLock lock;
+                        if      (otaRunning_)            strlcpy(job->err, "Another update is already in progress", sizeof(job->err));
+                        else if (!sm.isIdle())           strlcpy(job->err, "Siren is running - stop it first", sizeof(job->err));
+                        else if (buttons.testModeActive) strlcpy(job->err, "Turn TEST MODE off first", sizeof(job->err));
+                        else { sm.otaActive = true; otaRunning_ = true; job->owner = true; }
+                    }
+                    if (!job->owner) return;
+                    otaLastDataMs_ = millis();
+                    Serial.println("OTA upload started");
+                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { otaFail(job, Update.errorString()); return; }
+                }
+                if (!job || !job->owner || job->err[0]) return;
+                otaLastDataMs_ = millis();
+                if (len && Update.write(data, len) != len) { otaFail(job, Update.errorString()); return; }
+                if (final) {
+                    if (Update.end(true)) {
+                        job->ok = true;
+                        Serial.printf("OTA upload complete (%u bytes) - restarting\n", (unsigned)(index + len));
+                        wifiMgr.scheduleRestart(1500);  // even if the client never reads the reply
+                    } else {
+                        otaFail(job, Update.errorString());
+                    }
+                }
+            }
+        );
+
         // ── POST /restart ─────────────────────────────────────────────────────
         server_.on("/restart", HTTP_POST, [this](AsyncWebServerRequest* req) {
-            if (!isAuthed(req)) { req->send(401, "application/json", "{\"error\":\"unauth\"}"); return; }
+            if (!isAuthed(req)) { unauth(req); return; }
             req->send(200, "application/json", "{\"ok\":true}");
             wifiMgr.scheduleRestart(500);
         });
@@ -1229,12 +1611,16 @@ private:
     }
 
     // ── Shared body accumulator ───────────────────────────────────────────────
-    // Collects chunked POST body into req->_tempObject (null-terminated heap buffer)
+    // Collects chunked POST body into req->_tempObject (null-terminated heap
+    // buffer). Bodies over MAX_BODY are dropped without allocating — handlers
+    // then see no body and do nothing — so a bogus Content-Length (even on
+    // the unauthenticated login route) can't exhaust the heap.
     static void bodyAccumulator(AsyncWebServerRequest* req,
                                 uint8_t* data, size_t len,
                                 size_t index, size_t total) {
+        if (total > MAX_BODY) return;
         if (index == 0) req->_tempObject = malloc(total + 1);
-        if (req->_tempObject) {
+        if (req->_tempObject && index + len <= total) {
             memcpy((uint8_t*)req->_tempObject + index, data, len);
             if (index + len == total)
                 ((char*)req->_tempObject)[total] = '\0';
@@ -1243,8 +1629,12 @@ private:
 
     // ── JSON builders ─────────────────────────────────────────────────────────
 
-    static void applyUInt(JsonDocument& doc, const char* key, uint32_t& field) {
-        if (!doc[key].isNull()) field = doc[key].as<uint32_t>();
+    static void applyUInt(JsonDocument& doc, const char* key, uint32_t& field, uint32_t lo, uint32_t hi) {
+        if (!doc[key].is<double>()) return;
+        double v = doc[key].as<double>();
+        if (v < lo) v = lo;
+        if (v > hi) v = hi;
+        field = (uint32_t)v;
     }
 
     static void applyString(JsonDocument& doc, const char* key, char* field, size_t fieldSize) {
@@ -1255,32 +1645,31 @@ private:
         if (doc[key].is<bool>()) field = doc[key].as<bool>();
     }
 
-    static String buildStatusJson() {
+    static const char* tf(bool b) { return b ? "true" : "false"; }
+
+    // Pushed to every WebSocket client twice a second — formatted on the
+    // stack rather than via JsonDocument/String to avoid that heap churn.
+    // Every value is a fixed token or a number, so nothing needs escaping.
+    static size_t buildStatusJson(char* buf, size_t size) {
+        CtrlLock lock;
         uint8_t rs = relayState();
         TimerInfo ti = sm.getTimerInfo();
-        JsonDocument doc;
-        doc["mode"]             = sm.stateName();
-        doc["runMode"]          = sm.modeName();
-        doc["uptime"]           = (uint32_t)(millis() / 1000);
-        JsonArray rel           = doc["relays"].to<JsonArray>();
-        rel.add((rs >> 0) & 1);
-        rel.add((rs >> 1) & 1);
-        rel.add((rs >> 2) & 1);
-        doc["elapsed"]      = ti.totalElapsedMs   / 1000;
-        doc["remaining"]    = ti.totalRemainingMs / 1000;
-        doc["hasRemaining"] = ti.hasRemaining;
-        doc["btnLocked"]      = buttons.locked;
-        doc["testMode"]       = buttons.testModeActive;
-        doc["lockAutoExpire"] = buttons.lockAutoExpiring();
-        doc["lockRemaining"]  = buttons.lockRemainingSec();
-        float tempF = temperatureRead() * 9.0f / 5.0f + 32.0f;
-        doc["tempF"] = (int)roundf(tempF);
-        String out;
-        serializeJson(doc, out);
-        return out;
+        int n = snprintf(buf, size,
+            "{\"mode\":\"%s\",\"runMode\":\"%s\",\"uptime\":%lu,\"relays\":[%u,%u,%u],"
+            "\"elapsed\":%lu,\"remaining\":%lu,\"hasRemaining\":%s,\"btnLocked\":%s,"
+            "\"testMode\":%s,\"lockAutoExpire\":%s,\"lockRemaining\":%lu,\"tempF\":%d}",
+            sm.stateName(), sm.modeName(), (unsigned long)(millis() / 1000),
+            (unsigned)(rs & 1), (unsigned)((rs >> 1) & 1), (unsigned)((rs >> 2) & 1),
+            (unsigned long)(ti.totalElapsedMs / 1000), (unsigned long)(ti.totalRemainingMs / 1000),
+            tf(ti.hasRemaining), tf(buttons.locked), tf(buttons.testModeActive),
+            tf(buttons.lockAutoExpiring()), (unsigned long)buttons.lockRemainingSec(),
+            (int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f));
+        if (n < 0) { buf[0] = '\0'; return 0; }
+        return ((size_t)n >= size) ? size - 1 : (size_t)n;
     }
 
     static String buildSettingsJson() {
+        CtrlLock lock;
         const Settings& s = settingsMgr.s;
         JsonDocument doc;
         doc["chopperDelay"]   = s.chopperDelay;
@@ -1293,11 +1682,9 @@ private:
         doc["fastWailDuration"]     = s.fastWailDuration;
         doc["fastWailOnTime"]       = s.fastWailOnTime;
         doc["fastWailOffTime"]      = s.fastWailOffTime;
-        doc["fastWailChopperDelay"] = s.fastWailChopperDelay;
         doc["stopBlowerDelay"]  = s.stopBlowerDelay;
         doc["stopChopperDelay"] = s.stopChopperDelay;
         doc["stopRotDelay"]     = s.stopRotDelay;
-        doc["attackChopperDelay"]  = s.attackChopperDelay;
         doc["growlBlowerTime"]  = s.growlBlowerTime;
         doc["growlRotatorTime"] = s.growlRotatorTime;
         doc["growlChopperTime"] = s.growlChopperTime;
@@ -1308,7 +1695,9 @@ private:
         doc["weatherAutoTriggerEnabled"] = s.weatherAutoTriggerEnabled;
         doc["wwEverReported"] = weatherLink.everReported();
         doc["wwOk"]           = weatherLink.reportedOk();
+        doc["wwPending"]      = weatherLink.pending();
         doc["wwDetail"]       = weatherLink.detail();
+        doc["resetReason"]    = resetReasonName();
         doc["fwVersion"]           = FW_VERSION;
         String out;
         serializeJson(doc, out);
@@ -1322,6 +1711,32 @@ private:
         doc["ssid"]      = wifiMgr.getSSID();
         doc["ip"]        = wifiMgr.getIP();
         doc["hostname"]  = wifiMgr.getHostname();
+        doc["apSecured"] = wifiMgr.apSecured();
+        String out;
+        serializeJson(doc, out);
+        return out;
+    }
+
+    // Short keys: e=epoch (0 = clock not set), u=start uptime s, d=duration s,
+    // m=RunMode, s=TriggerSource, x=RunEnd, ss=stop TriggerSource.
+    static String buildLogJson() {
+        CtrlLock lock;
+        JsonDocument doc;
+        doc["runs"]   = runLog.totalRuns();
+        doc["secs"]   = runLog.totalSecs();
+        doc["uptime"] = (uint32_t)(millis() / 1000);
+        JsonArray arr = doc["entries"].to<JsonArray>();
+        for (uint8_t i = 0; i < runLog.count(); i++) {
+            const RunEntry& e = runLog.recent(i);
+            JsonObject o = arr.add<JsonObject>();
+            o["e"]  = e.epoch;
+            o["u"]  = e.startUptimeSec;
+            o["d"]  = e.durationSec;
+            o["m"]  = e.mode;
+            o["s"]  = e.source;
+            o["x"]  = e.end;
+            o["ss"] = e.stopSource;
+        }
         String out;
         serializeJson(doc, out);
         return out;

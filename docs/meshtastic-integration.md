@@ -156,7 +156,7 @@ factor on top of sender-ID filtering.
 | `SIREN WEATHERON [pw]` | Sender whitelisted, password correct (if set) | Enables automatic weather-triggered activation (same as the Settings page toggle) | `WEATHER TRIGGER ENABLED` |
 | `SIREN WEATHEROFF [pw]` | Sender whitelisted, password correct (if set) | Disables automatic weather-triggered activation | `WEATHER TRIGGER DISABLED` |
 | `SIREN REBOOT [pw]` | Sender whitelisted, password correct (if set) | Restarts the controller | `OK: rebooting` (sent before reset) |
-| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity/status check | `MODE: <STANDBY\|mode> // LOCAL CONTROLS <LOCKED\|UNLOCKED> // UPTIME: ... // CPU TEMP: ... // WW: <OFF\|N/A\|OK\|ERROR>` |
+| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity/status check | `MODE: <STANDBY\|mode> // LOCAL CONTROLS <LOCKED\|UNLOCKED> // UPTIME: ... // CPU TEMP: ... // WW: <OFF\|N/A\|STARTING\|OK\|ERROR>` |
 | `SIREN <anything else> [pw]` | Sender whitelisted, password correct (if set) | No effect | `ERR: unknown command` |
 | *(no `SIREN` prefix, sender not whitelisted, or wrong/missing password)* | — | No effect | **no reply at all** |
 
@@ -187,8 +187,8 @@ unit; only *incoming* lines need the `SIREN` prefix to be recognized.
 | Lockout changed | `LOCAL BUTTON LOCKOUT ACTIVE` / `LOCAL BUTTON LOCKOUT INACTIVE` | `buttons.locked` changes state, from any cause (Main page icon, TEST MODE entry/exit, or a mesh `LOCK`/`UNLOCK`). |
 | Locked button pressed | `\x07<BUTTON> PRESSED - LOCKED OUT` | A physical STOP/WAIL/ATTACK button is pressed while `buttons.locked` is true. `BUTTON` ∈ STOP/WAIL/ATTACK. Fires once per press (debounced, re-arms on release) — not repeatedly while held. **Carries the alert-bell prefix**, same rationale as activation/stop: someone is physically at the unit right now. |
 | Weather trigger toggled | `WEATHER TRIGGER ENABLED` / `WEATHER TRIGGER DISABLED` | `settingsMgr.s.weatherAutoTriggerEnabled` changes state, from any cause (Settings page checkbox or a mesh `WEATHERON`/`WEATHEROFF`). |
-| Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once, at the very end of `setup()` — after WiFi and the web UI are also up. |
-| Periodic status | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|OK\|ERROR>` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. `WW` is the Weather Watcher sub-board's last self-reported health over the dedicated UART link (see `docs/weather-watcher.md`) — `OFF` if the weather-trigger toggle is off, `N/A` if it's on but nothing has ever been heard from that board, else its own last `OK`/`ERROR` push. |
+| Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once after boot, as soon as the Weather Watcher has reported a real `OK`/`ERROR` from its first NWS poll — or immediately if the weather trigger is off, or after 2 minutes (`MeshBridge::STARTUP_ANNOUNCE_MAX_WAIT_MS`) if the Weather Watcher never reports. Only this pair waits; activation/stop/lockout broadcasts during that window go out immediately. |
+| Periodic status | `STATUS: <STANDBY\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|STARTING\|OK\|ERROR>` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. `WW` is the Weather Watcher sub-board's last self-reported health over the dedicated UART link (see `docs/weather-watcher.md`) — `OFF` if the weather-trigger toggle is off, `N/A` if it's on but nothing has ever been heard from that board, `STARTING` if it's alive but hasn't finished its first NWS poll, else its own last `OK`/`ERROR` push. |
 
 Implementation notes (`src/mesh.h`, `src/statemachine.h`):
 - **Source attribution** (`LOCAL`/`WEB`/`MESH`) is threaded through a new
