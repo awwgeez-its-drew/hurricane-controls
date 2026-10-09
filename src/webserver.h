@@ -1151,8 +1151,10 @@ private:
         bool ok;
         char err[64];
     };
-    volatile bool     otaRunning_    = false;
-    volatile uint32_t otaLastDataMs_ = 0;
+    volatile bool     otaRunning_      = false;
+    volatile uint32_t otaLastDataMs_   = 0;
+    volatile uint32_t otaStartMs_      = 0;
+    volatile uint32_t otaBytesWritten_ = 0;
 
     // ── Auth helpers ──────────────────────────────────────────────────────────
 
@@ -1264,11 +1266,12 @@ private:
         otaRunning_ = false;
         CtrlLock lock;
         sm.otaActive = false;
-        Serial.println("OTA upload stalled - aborted");
+        Serial.printf("OTA upload stalled - aborted (%u bytes written, %lums since last data, %lums total)\n",
+            (unsigned)otaBytesWritten_, (unsigned long)(now - otaLastDataMs_), (unsigned long)(now - otaStartMs_));
     }
 
-    static void otaFail(OtaJob* job, const char* stage, const char* err) {
-        Serial.printf("OTA %s failed: %s\n", stage, err);
+    void otaFail(OtaJob* job, const char* stage, const char* err) {
+        Serial.printf("OTA %s failed: %s (%u bytes written)\n", stage, err, (unsigned)otaBytesWritten_);
         strlcpy(job->err, err, sizeof(job->err));
         if (Update.isRunning()) Update.abort();
     }
@@ -1661,19 +1664,26 @@ private:
                         else { sm.otaActive = true; otaRunning_ = true; job->owner = true; }
                     }
                     if (!job->owner) return;
-                    otaLastDataMs_ = millis();
-                    Serial.printf("OTA upload started (free heap: %u bytes)\n", (unsigned)ESP.getFreeHeap());
+                    otaStartMs_      = millis();
+                    otaLastDataMs_   = otaStartMs_;
+                    otaBytesWritten_ = 0;
+                    Serial.printf("OTA upload started (free heap: %u bytes, content-length: %u bytes)\n",
+                        (unsigned)ESP.getFreeHeap(), (unsigned)req->contentLength());
                     // A known size (even just the multipart request's
                     // Content-Length, a bit larger than the true firmware
                     // size) lets IDF erase only what's needed instead of the
                     // whole OTA partition up front — with UPDATE_SIZE_UNKNOWN
                     // that full-partition erase can block long enough to trip
                     // the stall watchdog below on a perfectly healthy upload.
-                    if (!Update.begin(req->contentLength(), U_FLASH)) { otaFail(job, "begin", Update.errorString()); return; }
+                    uint32_t beginStartMs = millis();
+                    bool began = Update.begin(req->contentLength(), U_FLASH);
+                    Serial.printf("OTA Update.begin() took %lums\n", (unsigned long)(millis() - beginStartMs));
+                    if (!began) { otaFail(job, "begin", Update.errorString()); return; }
                 }
                 if (!job || !job->owner || job->err[0]) return;
                 otaLastDataMs_ = millis();
                 if (len && Update.write(data, len) != len) { otaFail(job, "write", Update.errorString()); return; }
+                otaBytesWritten_ += len;
                 if (final) {
                     if (Update.end(true)) {
                         job->ok = true;
