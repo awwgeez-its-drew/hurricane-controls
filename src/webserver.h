@@ -1260,14 +1260,22 @@ private:
 
     // An upload whose client vanished mid-transfer never reaches its request
     // handler — without this, sm.otaActive would block every run until a reboot.
+    // otaLastDataMs_ is written from the async_tcp task while this runs on
+    // loopTask — a plain `now - otaLastDataMs_` races: if the upload task
+    // updates otaLastDataMs_ to a value a few ms "ahead" of this task's
+    // `now` (an entirely benign scheduling race, not an actual stall), the
+    // unsigned subtraction underflows to a huge number and instantly
+    // (mis)fires. deadlinePassed() reads millis() fresh and compares via a
+    // signed cast, so a benign skew reads as a small negative number
+    // instead of wrapping — same fix as every other deadline check here.
     void checkOtaStall(uint32_t now) {
-        if (!otaRunning_ || now - otaLastDataMs_ < OTA_STALL_TIMEOUT_MS) return;
+        if (!otaRunning_ || !deadlinePassed(otaLastDataMs_ + OTA_STALL_TIMEOUT_MS)) return;
         if (Update.isRunning()) Update.abort();
         otaRunning_ = false;
         CtrlLock lock;
         sm.otaActive = false;
-        Serial.printf("OTA upload stalled - aborted (%u bytes written, %lums since last data, %lums total)\n",
-            (unsigned)otaBytesWritten_, (unsigned long)(now - otaLastDataMs_), (unsigned long)(now - otaStartMs_));
+        Serial.printf("OTA upload stalled - aborted (%u bytes written, %ldms since last data, %ldms total)\n",
+            (unsigned)otaBytesWritten_, (long)(int32_t)(now - otaLastDataMs_), (long)(int32_t)(now - otaStartMs_));
     }
 
     void otaFail(OtaJob* job, const char* stage, const char* err) {
