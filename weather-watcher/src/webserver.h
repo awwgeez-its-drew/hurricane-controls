@@ -688,8 +688,10 @@ private:
         bool ok;
         char err[64];
     };
-    volatile bool     otaRunning_    = false;
-    volatile uint32_t otaLastDataMs_ = 0;
+    volatile bool     otaRunning_      = false;
+    volatile uint32_t otaLastDataMs_   = 0;
+    volatile uint32_t otaStartMs_      = 0;
+    volatile uint32_t otaBytesWritten_ = 0;
 
     // ── Auth helpers ─────────────────────────────────────────────────────────
 
@@ -752,14 +754,24 @@ private:
         req->send(200, type, (const uint8_t*)page, strlen(page));
     }
 
+    // otaLastDataMs_ is written from the async_tcp task while this runs on
+    // loopTask — a plain `now - otaLastDataMs_` races: if the upload task
+    // updates otaLastDataMs_ to a value a few ms "ahead" of this task's
+    // `now` (an entirely benign scheduling race, not an actual stall), the
+    // unsigned subtraction underflows to a huge number and instantly
+    // (mis)fires. deadlinePassed() reads millis() fresh and compares via a
+    // signed cast, so a benign skew reads as a small negative number
+    // instead of wrapping — same fix as every other deadline check here.
     void checkOtaStall(uint32_t now) {
-        if (!otaRunning_ || now - otaLastDataMs_ < OTA_STALL_TIMEOUT_MS) return;
+        if (!otaRunning_ || !deadlinePassed(otaLastDataMs_ + OTA_STALL_TIMEOUT_MS)) return;
         if (Update.isRunning()) Update.abort();
         otaRunning_ = false;
-        Serial.println("OTA upload stalled - aborted");
+        Serial.printf("OTA upload stalled - aborted (%u bytes written, %ldms since last data, %ldms total)\n",
+            (unsigned)otaBytesWritten_, (long)(int32_t)(now - otaLastDataMs_), (long)(int32_t)(now - otaStartMs_));
     }
 
-    static void otaFail(OtaJob* job, const char* err) {
+    void otaFail(OtaJob* job, const char* stage, const char* err) {
+        Serial.printf("OTA %s failed: %s (%u bytes written)\n", stage, err, (unsigned)otaBytesWritten_);
         strlcpy(job->err, err, sizeof(job->err));
         if (Update.isRunning()) Update.abort();
     }
@@ -1076,24 +1088,32 @@ private:
                     job = (OtaJob*)calloc(1, sizeof(OtaJob));
                     req->_tempObject = job;
                     if (!job) return;
-                    if (!isAuthed(req)) { otaFail(job, "Not logged in"); return; }
-                    if (otaRunning_) { otaFail(job, "Another update is already in progress"); return; }
-                    otaRunning_    = true;
-                    job->owner     = true;
-                    otaLastDataMs_ = millis();
-                    Serial.println("OTA upload started");
-                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { otaFail(job, Update.errorString()); return; }
+                    if (!isAuthed(req)) { otaFail(job, "auth", "Not logged in"); return; }
+                    if (otaRunning_) { otaFail(job, "auth", "Another update is already in progress"); return; }
+                    otaRunning_      = true;
+                    job->owner       = true;
+                    otaStartMs_      = millis();
+                    otaLastDataMs_   = otaStartMs_;
+                    otaBytesWritten_ = 0;
+                    Serial.printf("OTA upload started (free heap: %u bytes, content-length: %u bytes)\n",
+                        (unsigned)ESP.getFreeHeap(), (unsigned)req->contentLength());
+                    // A known size (even just the multipart request's
+                    // Content-Length, a bit larger than the true firmware
+                    // size) lets IDF erase only what's needed instead of the
+                    // whole OTA partition up front.
+                    if (!Update.begin(req->contentLength(), U_FLASH)) { otaFail(job, "begin", Update.errorString()); return; }
                 }
                 if (!job || !job->owner || job->err[0]) return;
                 otaLastDataMs_ = millis();
-                if (len && Update.write(data, len) != len) { otaFail(job, Update.errorString()); return; }
+                if (len && Update.write(data, len) != len) { otaFail(job, "write", Update.errorString()); return; }
+                otaBytesWritten_ += len;
                 if (final) {
                     if (Update.end(true)) {
                         job->ok = true;
                         Serial.printf("OTA upload complete (%u bytes) - restarting\n", (unsigned)(index + len));
                         wifiMgr.scheduleRestart(1500);
                     } else {
-                        otaFail(job, Update.errorString());
+                        otaFail(job, "end", Update.errorString());
                     }
                 }
             }
