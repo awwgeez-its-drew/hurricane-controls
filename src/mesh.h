@@ -203,7 +203,7 @@ private:
         return out;
     }
 
-    static String modeOrStandby() { return sm.isIdle() ? "STANDBY" : String(modeWord(sm.runMode)); }
+    static String modeOrIdle() { return sm.isIdle() ? "IDLE" : String(modeWord(sm.runMode)); }
 
     // OFF = the owner's kill-switch is off; N/A = enabled but nothing has
     // ever been heard from the Weather Watcher board (link never wired, or
@@ -225,13 +225,13 @@ private:
     }
 
     static String buildStatusMessage() {
-        return "STATUS: " + modeOrStandby() + " - LOCAL CONTROL " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
+        return "STATUS: " + modeOrIdle() + " - LOCAL CONTROL " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
                " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F" +
                " // WW: " + weatherWatcherWord();
     }
 
     static String buildPingReply() {
-        return "MODE: " + modeOrStandby() + " // LOCAL CONTROLS " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
+        return "MODE: " + modeOrIdle() + " // LOCAL CONTROLS " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
                " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F" +
                " // WW: " + weatherWatcherWord();
     }

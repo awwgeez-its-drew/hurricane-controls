@@ -227,6 +227,9 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
     </div>
   </div>
   <div class="navicons">
+    <button class="ibtn" onclick="goHome()" title="Log out">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </button>
     <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path id="lockShackle" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
     </button>
@@ -372,6 +375,7 @@ function manualUp(e){
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden)manualUp();});
 function toggleLock(){cmd('btn-lock');}
+function goHome(){fetch('/auth/logout',{method:'POST'}).then(()=>location.href='/login');}
 function fmtUp(s){
   const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),
         m=Math.floor((s%3600)/60),sc=s%60;
@@ -410,6 +414,7 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .brand-icon{width:26px;height:26px;flex-shrink:0}
 .navicons{display:flex;gap:14px;align-items:center}
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
+.ibtn.locked{color:#f87171}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
       box-shadow:0 1px 3px rgba(0,0,0,.35)}
@@ -462,6 +467,15 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </a>
   <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Settings</h1></div>
   <div class="navicons">
+    <button class="ibtn" onclick="logout()" title="Log out">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </button>
+    <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path id="lockShackle" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
+    </button>
+    <button class="ibtn" onclick="doRestart()" title="Restart">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+    </button>
     <a href="/test" class="ibtn" title="Component Test">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
     </a>
@@ -704,6 +718,25 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   else if(d.wwOk){wwEl.textContent='OK — '+d.wwDetail;wwEl.className='ws ok';}
   else{wwEl.textContent='Error — '+d.wwDetail;wwEl.className='ws er';}
 });
+
+function refreshLockIcon(){
+  fetch('/status').then(r=>r.json()).then(d=>{
+    const bl=document.getElementById('btnLock');
+    const lk=!!d.btnLocked;
+    document.getElementById('lockShackle').setAttribute('d', lk ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2');
+    bl.classList.toggle('locked',lk);
+    bl.title=lk?'Physical buttons LOCKED — click to unlock':'Lock physical buttons';
+  });
+}
+refreshLockIcon();
+function toggleLock(){
+  fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'btn-lock'})})
+    .then(refreshLockIcon);
+}
+function doRestart(){
+  if(!confirm('Restart the controller?'))return;
+  fetch('/restart',{method:'POST'});
+}
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
   const el=document.getElementById('ws');
@@ -1234,7 +1267,8 @@ private:
         Serial.println("OTA upload stalled - aborted");
     }
 
-    static void otaFail(OtaJob* job, const char* err) {
+    static void otaFail(OtaJob* job, const char* stage, const char* err) {
+        Serial.printf("OTA %s failed: %s\n", stage, err);
         strlcpy(job->err, err, sizeof(job->err));
         if (Update.isRunning()) Update.abort();
     }
@@ -1618,7 +1652,7 @@ private:
                     job = (OtaJob*)calloc(1, sizeof(OtaJob));
                     req->_tempObject = job;
                     if (!job) return;
-                    if (!isAuthed(req)) { otaFail(job, "Not logged in"); return; }
+                    if (!isAuthed(req)) { otaFail(job, "auth", "Not logged in"); return; }
                     {
                         CtrlLock lock;
                         if      (otaRunning_)            strlcpy(job->err, "Another update is already in progress", sizeof(job->err));
@@ -1628,19 +1662,19 @@ private:
                     }
                     if (!job->owner) return;
                     otaLastDataMs_ = millis();
-                    Serial.println("OTA upload started");
-                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { otaFail(job, Update.errorString()); return; }
+                    Serial.printf("OTA upload started (free heap: %u bytes)\n", (unsigned)ESP.getFreeHeap());
+                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { otaFail(job, "begin", Update.errorString()); return; }
                 }
                 if (!job || !job->owner || job->err[0]) return;
                 otaLastDataMs_ = millis();
-                if (len && Update.write(data, len) != len) { otaFail(job, Update.errorString()); return; }
+                if (len && Update.write(data, len) != len) { otaFail(job, "write", Update.errorString()); return; }
                 if (final) {
                     if (Update.end(true)) {
                         job->ok = true;
                         Serial.printf("OTA upload complete (%u bytes) - restarting\n", (unsigned)(index + len));
                         wifiMgr.scheduleRestart(1500);  // even if the client never reads the reply
                     } else {
-                        otaFail(job, Update.errorString());
+                        otaFail(job, "end", Update.errorString());
                     }
                 }
             }
