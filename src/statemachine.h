@@ -55,6 +55,7 @@ public:
         runStartTs_ = 0;
         heartbeatTs_ = 0;
         heartbeatOn_ = false;
+        meshFlashActive_ = false;
     }
 
     bool trigger(RunMode mode, TriggerSource source = TriggerSource::LOCAL) {
@@ -62,8 +63,10 @@ public:
         lastTriggerSource = source;
         runMode     = mode;
         stateTs     = millis();
-        ledBlinkTs_ = millis();
-        ledOn_      = true;
+        ledStrobePhaseTs_ = stateTs;
+        ledStrobePulseTs_ = stateTs;
+        ledStrobeInBurst_ = true;
+        ledOn_            = true;
         digitalWrite(STATUS_LED, HIGH);
 
         // Run-log bookkeeping — captured now, since runMode is cleared the
@@ -113,33 +116,23 @@ public:
     // the release never arrives — update() stops the run once these stop.
     void webKeepalive() { webKeepaliveTs_ = millis(); }
 
+    // Quick double-flash confirming a validly-addressed mesh command was
+    // received, regardless of what happens with it next. Overlays whatever
+    // the LED is currently doing (idle, mid-run, stopping) for ~240ms and
+    // then lets normal behavior resume.
+    void flashMeshAck() {
+        meshFlashActive_ = true;
+        meshFlashStep_   = 0;
+        meshFlashTs_     = millis();
+        digitalWrite(STATUS_LED, HIGH);
+    }
+
     void update() {
         uint32_t now     = millis();
         uint32_t elapsed = now - stateTs;
         const Settings& s = settingsMgr.s;
 
-        // Flash STATUS_LED while running; steady on while STOPPING; off in IDLE
-        if (state != State::IDLE && state != State::STOPPING &&
-            now - ledBlinkTs_ >= LED_BLINK_MS) {
-            ledBlinkTs_ = now;
-            ledOn_      = !ledOn_;
-            digitalWrite(STATUS_LED, ledOn_ ? HIGH : LOW);
-        }
-
-        // Idle "heartbeat": a brief flash every HEARTBEAT_INTERVAL_MS so an
-        // idle (LED-off) controller doesn't look indistinguishable from one
-        // that's powered off.
-        if (state == State::IDLE) {
-            if (!heartbeatOn_ && now - heartbeatTs_ >= HEARTBEAT_INTERVAL_MS) {
-                heartbeatTs_ = now;
-                heartbeatOn_ = true;
-                digitalWrite(STATUS_LED, HIGH);
-            } else if (heartbeatOn_ && now - heartbeatTs_ >= HEARTBEAT_FLASH_MS) {
-                heartbeatTs_ = now;
-                heartbeatOn_ = false;
-                digitalWrite(STATUS_LED, LOW);
-            }
-        }
+        updateStatusLed_(now);
 
         // Web Manual failsafe — see webKeepalive(). Uses an AUTO stop, so the
         // mesh reports "MANUAL CYCLE COMPLETED" rather than a user STOP.
@@ -314,10 +307,76 @@ public:
     }
 
 private:
-    static constexpr uint32_t LED_BLINK_MS = 250;
     static constexpr uint32_t HEARTBEAT_INTERVAL_MS = 30000;  // idle "still alive" flash every 30s
     static constexpr uint32_t HEARTBEAT_FLASH_MS    = 150;    // flash duration
     static constexpr uint32_t WEB_KEEPALIVE_TIMEOUT_MS = 2000;
+    static constexpr uint32_t MESH_FLASH_PULSE_MS = 60;  // per-step duration of the mesh-ack double-flash
+
+    // Police-light strobe while a run is active: a burst of rapid pulses,
+    // then a dark gap, repeating.
+    static constexpr uint32_t LED_STROBE_ON_MS    = 40;
+    static constexpr uint32_t LED_STROBE_OFF_MS   = 40;
+    static constexpr uint32_t LED_STROBE_BURST_MS = 750;
+    static constexpr uint32_t LED_STROBE_GAP_MS   = 500;
+
+    // Drives STATUS_LED for the current state: a mesh-ack flash takes
+    // priority and overlays everything else; otherwise steady-on while
+    // STOPPING, a strobe burst/gap pattern while a run is active, and an
+    // idle heartbeat blip otherwise.
+    void updateStatusLed_(uint32_t now) {
+        if (meshFlashActive_) {
+            if (now - meshFlashTs_ >= MESH_FLASH_PULSE_MS) {
+                meshFlashTs_ = now;
+                meshFlashStep_++;
+                switch (meshFlashStep_) {
+                case 1: digitalWrite(STATUS_LED, LOW);  break;
+                case 2: digitalWrite(STATUS_LED, HIGH); break;
+                case 3: digitalWrite(STATUS_LED, LOW); meshFlashActive_ = false; break;
+                }
+            }
+            return;
+        }
+
+        if (state == State::STOPPING) {
+            digitalWrite(STATUS_LED, HIGH);  // steady on while stopping
+            return;
+        }
+
+        if (state == State::IDLE) {
+            // Idle "heartbeat": a brief flash every HEARTBEAT_INTERVAL_MS so
+            // an idle (LED-off) controller doesn't look indistinguishable
+            // from one that's powered off.
+            if (!heartbeatOn_ && now - heartbeatTs_ >= HEARTBEAT_INTERVAL_MS) {
+                heartbeatTs_ = now;
+                heartbeatOn_ = true;
+                digitalWrite(STATUS_LED, HIGH);
+            } else if (heartbeatOn_ && now - heartbeatTs_ >= HEARTBEAT_FLASH_MS) {
+                heartbeatTs_ = now;
+                heartbeatOn_ = false;
+                digitalWrite(STATUS_LED, LOW);
+            }
+            return;
+        }
+
+        // Active run (STARTING or any RUN_* state): strobe.
+        if (ledStrobeInBurst_) {
+            if (now - ledStrobePhaseTs_ >= LED_STROBE_BURST_MS) {
+                ledStrobeInBurst_ = false;
+                ledStrobePhaseTs_ = now;
+                digitalWrite(STATUS_LED, LOW);
+            } else if (now - ledStrobePulseTs_ >= (ledOn_ ? LED_STROBE_ON_MS : LED_STROBE_OFF_MS)) {
+                ledStrobePulseTs_ = now;
+                ledOn_ = !ledOn_;
+                digitalWrite(STATUS_LED, ledOn_ ? HIGH : LOW);
+            }
+        } else if (now - ledStrobePhaseTs_ >= LED_STROBE_GAP_MS) {
+            ledStrobeInBurst_ = true;
+            ledStrobePhaseTs_ = now;
+            ledStrobePulseTs_ = now;
+            ledOn_            = true;
+            digitalWrite(STATUS_LED, HIGH);
+        }
+    }
 
     // Total run length for the current mode, 0 = untimed (Manual).
     uint32_t modeDuration() const {
@@ -359,12 +418,17 @@ private:
     bool     blowerStopped_  = false;
     bool     rotStopped_     = false;
     uint32_t doneTs_         = 0;
-    uint32_t ledBlinkTs_     = 0;
+    uint32_t ledStrobePhaseTs_ = 0;
+    uint32_t ledStrobePulseTs_ = 0;
+    bool     ledStrobeInBurst_ = true;
     bool     ledOn_          = false;
     uint32_t heartbeatTs_    = 0;
     bool     heartbeatOn_    = false;
     uint32_t webKeepaliveTs_ = 0;
     bool     failsafeStop_   = false;
+    bool     meshFlashActive_ = false;
+    uint8_t  meshFlashStep_   = 0;
+    uint32_t meshFlashTs_     = 0;
 
     RunMode       logMode_       = RunMode::NONE;
     uint32_t      logStartMs_    = 0;

@@ -26,6 +26,16 @@ struct Settings {
     char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic sender IDs (hex, case-insensitive) allowed to issue mesh commands; empty = block all
     char     meshPassword[64] = "";        // plaintext, optional trailing token on mesh commands ("SIREN WAIL <password>"); empty = not required. PING is exempt.
     bool     weatherAutoTriggerEnabled = true;  // dedicated kill-switch for the Weather Watcher link, independent of buttons.locked
+
+    // NTP fallback — this board normally gets its clock from the Weather
+    // Watcher's "WX TIME" push over the UART link; these settings only
+    // matter if that link is offline/unpaired and the board has to sync
+    // its own clock. Same fields/format as the Weather Watcher's own NTP
+    // settings.
+    char     ntpServer[64] = "pool.ntp.org";
+    char     timeZone[16]  = "EASTERN";   // EASTERN/CENTRAL/MOUNTAIN/ARIZONA/PACIFIC/ALASKA/HAWAII
+    bool     autoDst        = true;
+    uint32_t ntpUpdateHours = 12;
 };
 
 class SettingsManager {
@@ -60,6 +70,12 @@ public:
         String mpw = prefs.getString("meshPW", s.meshPassword);
         strlcpy(s.meshPassword, mpw.c_str(), sizeof(s.meshPassword));
         s.weatherAutoTriggerEnabled = prefs.getBool("wxAutoTrig", s.weatherAutoTriggerEnabled);
+        String ntpSrv = prefs.getString("ntpServer", s.ntpServer);
+        strlcpy(s.ntpServer, ntpSrv.c_str(), sizeof(s.ntpServer));
+        String tz = prefs.getString("timeZone", s.timeZone);
+        strlcpy(s.timeZone, tz.c_str(), sizeof(s.timeZone));
+        s.autoDst        = prefs.getBool("autoDst",  s.autoDst);
+        s.ntpUpdateHours = prefs.getUInt("ntpUpdHrs", s.ntpUpdateHours);
         prefs.end();
     }
 
@@ -88,6 +104,10 @@ public:
         prefs.putString("meshWL",       s.meshWhitelist);
         prefs.putString("meshPW",       s.meshPassword);
         prefs.putBool("wxAutoTrig",     s.weatherAutoTriggerEnabled);
+        prefs.putString("ntpServer",    s.ntpServer);
+        prefs.putString("timeZone",     s.timeZone);
+        prefs.putBool("autoDst",        s.autoDst);
+        prefs.putUInt("ntpUpdHrs",      s.ntpUpdateHours);
         // Retired in v1.9.0 (the old "Chopper re-on delay" settings) — clear
         // any stale copies; a no-op once they're gone.
         prefs.remove("atkChopDelay");

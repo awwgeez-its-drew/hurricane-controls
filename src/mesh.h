@@ -339,6 +339,11 @@ private:
         // checks above: a wrong or missing password gets no reply at all.
         if (strcmp(cmd, "PING") != 0 && !isPasswordCorrect(pw)) return;
 
+        // Addressed to us, whitelisted, and password-correct — confirm
+        // receipt with a quick LED double-flash regardless of what happens
+        // next (busy/test-mode rejection, etc.).
+        sm.flashMeshAck();
+
         bool testBlocked = buttons.testModeActive;
 
         if (!strcmp(cmd, "WAIL") || !strcmp(cmd, "ATTACK") || !strcmp(cmd, "FASTWAIL") || !strcmp(cmd, "GROWL")) {

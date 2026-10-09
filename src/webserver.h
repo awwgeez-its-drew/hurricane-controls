@@ -7,6 +7,7 @@
 #include <cctype>
 #include "config.h"
 #include "sync.h"
+#include "clock.h"
 #include "settings.h"
 #include "runlog.h"
 #include "statemachine.h"
@@ -248,7 +249,7 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
     <div class="dw"><div id="d1" class="dot"></div><span class="dl">BLOWER</span></div>
     <div class="dw"><div id="d2" class="dot"></div><span class="dl">ROTATOR</span></div>
   </div>
-  <div class="mono" style="font-size:.72rem;color:#8892a0;margin-top:10px">Controller <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span></div>
+  <div class="mono" style="font-size:.72rem;color:#8892a0;margin-top:10px">Controller <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span> &nbsp;&bull;&nbsp; <span id="clockTime">--:--:--</span></div>
 </div>
 
 <div class="grid">
@@ -322,6 +323,7 @@ function draw(d){
 
   if(d.tempF!=null)document.getElementById('tempF').textContent=d.tempF;
   if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);
+  if(d.currentTime)document.getElementById('clockTime').textContent=d.currentTime;
   const bl=document.getElementById('btnLock');
   const lk=!!d.btnLocked;
   document.getElementById('lockShackle').setAttribute('d', lk ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2');
@@ -534,6 +536,32 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
 </div>
 
+<!-- Time / NTP fallback -->
+<div class="card">
+  <div class="card-head" onclick="toggleCard(this)"><h2>Time (NTP Fallback)</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
+  <p class="hint">Used only as a fallback — this board normally gets its clock from the Weather Watcher over the UART link. These settings take effect if the Weather Watcher is offline or not yet paired.</p>
+  <div class="row"><label>NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
+  <div class="row"><label>Update frequency (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
+  <div class="row"><label>Time zone</label>
+    <select id="timeZone">
+      <option value="EASTERN">Eastern</option>
+      <option value="CENTRAL">Central</option>
+      <option value="MOUNTAIN">Mountain</option>
+      <option value="ARIZONA">Arizona (no DST)</option>
+      <option value="PACIFIC">Pacific</option>
+      <option value="ALASKA">Alaska</option>
+      <option value="HAWAII">Hawaii (no DST)</option>
+    </select></div>
+  <div class="trow">
+    <label for="autoDst">Automatically adjust for Daylight Saving Time</label>
+    <input type="checkbox" id="autoDst">
+  </div>
+  <button class="btn save" onclick="saveTime()">Save Time Settings</button>
+  <div class="msg" id="tmz"></div>
+  </div>
+</div>
+
 <!-- Startup Sequence -->
 <div class="card">
   <div class="card-head" onclick="toggleCard(this)"><h2>Startup Sequence</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
@@ -664,6 +692,10 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('rstReason').textContent=d.resetReason||'—';
   document.getElementById('meshWL').value=d.meshWhitelist||'';
   document.getElementById('meshPW').value=d.meshPassword||'';
+  document.getElementById('ntpServer').value=d.ntpServer||'pool.ntp.org';
+  document.getElementById('ntpUpdateHours').value=d.ntpUpdateHours||12;
+  document.getElementById('timeZone').value=d.timeZone||'EASTERN';
+  document.getElementById('autoDst').checked=d.autoDst!==false;
   document.getElementById('wxAutoTrig').checked=!!d.weatherAutoTriggerEnabled;
   const wwEl=document.getElementById('wwStatus');
   if(!d.weatherAutoTriggerEnabled){wwEl.textContent='Disabled';wwEl.className='ws';}
@@ -746,6 +778,15 @@ function savePw(){
   });
 }
 function logout(){post('/auth/logout',{}).then(()=>location.href='/login');}
+function saveTime(){
+  const b={
+    ntpServer: document.getElementById('ntpServer').value.trim(),
+    ntpUpdateHours: parseInt(document.getElementById('ntpUpdateHours').value||12,10),
+    timeZone: document.getElementById('timeZone').value,
+    autoDst: document.getElementById('autoDst').checked,
+  };
+  post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
+}
 function saveMeshWL(){
   const wl=document.getElementById('meshWL').value.trim();
   const pw=document.getElementById('meshPW').value.trim();
@@ -1039,7 +1080,7 @@ public:
     }
 
 private:
-    static constexpr size_t   STATUS_JSON_MAX = 384;
+    static constexpr size_t   STATUS_JSON_MAX = 416;
     static constexpr size_t   MAX_BODY        = 1024;   // largest JSON POST body accepted
     static constexpr uint8_t  MAX_SESSIONS    = 4;      // oldest login is evicted beyond this
     static constexpr uint32_t TEST_KEEPALIVE_TIMEOUT_MS = 2000;
@@ -1447,7 +1488,17 @@ private:
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
                     applyString(doc, "meshPassword", s.meshPassword, sizeof(s.meshPassword));
                     applyBool(doc, "weatherAutoTriggerEnabled", s.weatherAutoTriggerEnabled);
+                    applyString(doc, "ntpServer", s.ntpServer, sizeof(s.ntpServer));
+                    applyUInt(doc, "ntpUpdateHours", s.ntpUpdateHours, 1, 168);
+                    applyString(doc, "timeZone", s.timeZone, sizeof(s.timeZone));
+                    applyBool(doc, "autoDst", s.autoDst);
                     settingsMgr.save();
+                    // Takes effect immediately: always re-apply the timezone, and
+                    // if the WX link hasn't provided a time, kick the fallback
+                    // NTP sync right away too rather than waiting for its next
+                    // periodic re-sync.
+                    if (wxSynced()) applyTimeZone(s);
+                    else applyTimeConfig(s);
                 }
                 req->send(200, "application/json", "{\"ok\":true}");
             },
@@ -1654,16 +1705,22 @@ private:
         CtrlLock lock;
         uint8_t rs = relayState();
         TimerInfo ti = sm.getTimerInfo();
+        char clockBuf[12] = "--:--:--";
+        if (clockValid()) {
+            time_t t = time(nullptr);
+            strftime(clockBuf, sizeof(clockBuf), "%H:%M:%S", localtime(&t));
+        }
         int n = snprintf(buf, size,
             "{\"mode\":\"%s\",\"runMode\":\"%s\",\"uptime\":%lu,\"relays\":[%u,%u,%u],"
             "\"elapsed\":%lu,\"remaining\":%lu,\"hasRemaining\":%s,\"btnLocked\":%s,"
-            "\"testMode\":%s,\"lockAutoExpire\":%s,\"lockRemaining\":%lu,\"tempF\":%d}",
+            "\"testMode\":%s,\"lockAutoExpire\":%s,\"lockRemaining\":%lu,\"tempF\":%d,"
+            "\"currentTime\":\"%s\"}",
             sm.stateName(), sm.modeName(), (unsigned long)(millis() / 1000),
             (unsigned)(rs & 1), (unsigned)((rs >> 1) & 1), (unsigned)((rs >> 2) & 1),
             (unsigned long)(ti.totalElapsedMs / 1000), (unsigned long)(ti.totalRemainingMs / 1000),
             tf(ti.hasRemaining), tf(buttons.locked), tf(buttons.testModeActive),
             tf(buttons.lockAutoExpiring()), (unsigned long)buttons.lockRemainingSec(),
-            (int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f));
+            (int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f), clockBuf);
         if (n < 0) { buf[0] = '\0'; return 0; }
         return ((size_t)n >= size) ? size - 1 : (size_t)n;
     }
@@ -1693,6 +1750,10 @@ private:
         doc["meshWhitelist"]       = s.meshWhitelist;
         doc["meshPassword"]        = s.meshPassword;
         doc["weatherAutoTriggerEnabled"] = s.weatherAutoTriggerEnabled;
+        doc["ntpServer"]        = s.ntpServer;
+        doc["ntpUpdateHours"]   = s.ntpUpdateHours;
+        doc["timeZone"]         = s.timeZone;
+        doc["autoDst"]          = s.autoDst;
         doc["wwEverReported"] = weatherLink.everReported();
         doc["wwOk"]           = weatherLink.reportedOk();
         doc["wwPending"]      = weatherLink.pending();

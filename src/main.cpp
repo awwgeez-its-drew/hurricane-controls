@@ -58,6 +58,7 @@ void setup() {
     Serial.println(resetReasonName());
 
     settingsMgr.load();
+    applyTimeZone(settingsMgr.s);
     runLog.begin();
     sm.begin();
     buttons.begin();
@@ -76,6 +77,8 @@ void setup() {
     meshBridge.announceStartup();
 }
 
+static uint32_t wifiConnectedAtMs_ = 0;
+
 void loop() {
     esp_task_wdt_reset();
     {
@@ -87,5 +90,10 @@ void loop() {
     }
     webUI.update();
     wifiMgr.update();  // deferred ESP.restart() + home Wi-Fi retry from AP fallback
-    if (wifiMgr.takeJustConnected()) startNtp();
+    if (wifiMgr.takeJustConnected()) wifiConnectedAtMs_ = millis();
+
+    // Time: the Weather Watcher's "WX TIME" push (weather_link.h) is the
+    // primary clock source. This board's own NTP only kicks in as a
+    // fallback once updateNtpFallback() decides the WX link hasn't shown up.
+    updateNtpFallback(settingsMgr.s, wifiMgr.isConnected(), millis() - wifiConnectedAtMs_);
 }
