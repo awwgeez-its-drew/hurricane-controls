@@ -1117,7 +1117,7 @@ private:
     static constexpr size_t   MAX_BODY        = 1024;   // largest JSON POST body accepted
     static constexpr uint8_t  MAX_SESSIONS    = 4;      // oldest login is evicted beyond this
     static constexpr uint32_t TEST_KEEPALIVE_TIMEOUT_MS = 2000;
-    static constexpr uint32_t OTA_STALL_TIMEOUT_MS      = 30000;
+    static constexpr uint32_t OTA_STALL_TIMEOUT_MS      = 60000;
 
     AsyncWebServer    server_{80};
     AsyncWebSocket    ws_{"/ws"};
@@ -1663,7 +1663,13 @@ private:
                     if (!job->owner) return;
                     otaLastDataMs_ = millis();
                     Serial.printf("OTA upload started (free heap: %u bytes)\n", (unsigned)ESP.getFreeHeap());
-                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { otaFail(job, "begin", Update.errorString()); return; }
+                    // A known size (even just the multipart request's
+                    // Content-Length, a bit larger than the true firmware
+                    // size) lets IDF erase only what's needed instead of the
+                    // whole OTA partition up front — with UPDATE_SIZE_UNKNOWN
+                    // that full-partition erase can block long enough to trip
+                    // the stall watchdog below on a perfectly healthy upload.
+                    if (!Update.begin(req->contentLength(), U_FLASH)) { otaFail(job, "begin", Update.errorString()); return; }
                 }
                 if (!job || !job->owner || job->err[0]) return;
                 otaLastDataMs_ = millis();
