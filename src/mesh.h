@@ -66,8 +66,16 @@ public:
         // now, not the informational CYCLE COMPLETED/STATUS lines.
         bool active = sm.isActive();
         if (!wasActive_ && active) {
-            reply(String("\x07") + modeWord(sm.runMode) + " ACTIVATED (activation point: " +
-                  sourceWord(sm.lastTriggerSource) + ")");
+            String msg = String("\x07") + modeWord(sm.runMode) + " ACTIVATED (activation point: " +
+                         sourceWord(sm.lastTriggerSource) + ")";
+            // NWS-triggered activations carry a "TYPE - THREAT LEVEL"
+            // descriptor from the Weather Watcher (e.g. "TORNADO EMERGENCY
+            // - CATASTROPHIC") — see weather_link.h's lastAlertDescriptor().
+            if (sm.lastTriggerSource == TriggerSource::NWS_ALERT && weatherLink.lastAlertDescriptor()[0]) {
+                msg += " | ";
+                msg += weatherLink.lastAlertDescriptor();
+            }
+            reply(msg);
         }
         if (wasActive_ && !active) {
             reply(String(modeWord(lastKnownRunMode_)) + " CYCLE COMPLETED - SIREN STOPPED");

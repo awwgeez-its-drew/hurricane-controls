@@ -40,6 +40,28 @@ inline const char* categoryColor(AlertCategory c) {
     }
 }
 
+// "TYPE - THREAT LEVEL" string sent to the main board alongside a trigger,
+// for its mesh activation broadcast (e.g. "TORNADO EMERGENCY - CATASTROPHIC").
+// OTHER_EXTREME has no fixed type (it covers whichever NWS event types the
+// owner opted into otherExtremeIncluded), so it uses the alert's own event
+// name instead.
+inline String categoryDescriptor(AlertCategory c, const char* event) {
+    switch (c) {
+    case AlertCategory::TORNADO_EMERGENCY:         return "TORNADO EMERGENCY - CATASTROPHIC";
+    case AlertCategory::TORNADO_CONFIRMED:         return "TORNADO WARNING - CONFIRMED";
+    case AlertCategory::TORNADO_UNCONFIRMED:       return "TORNADO WARNING - UNCONFIRMED";
+    case AlertCategory::THUNDERSTORM_DESTRUCTIVE:  return "SEVERE THUNDERSTORM - DESTRUCTIVE";
+    case AlertCategory::THUNDERSTORM_CONSIDERABLE: return "SEVERE THUNDERSTORM - CONSIDERABLE";
+    case AlertCategory::THUNDERSTORM_BASE:         return "SEVERE THUNDERSTORM - BASE";
+    case AlertCategory::OTHER_EXTREME: {
+        String ev = event;
+        ev.toUpperCase();
+        return ev + " - EXTREME";
+    }
+    default: return "";
+    }
+}
+
 // One alert currently in the active feed that's severe enough to display.
 // Rebuilt from scratch on every poll — an alert that's no longer in the
 // NWS feed simply stops appearing here on the next cycle.
@@ -59,10 +81,14 @@ struct RecentTrigger {
 };
 
 // Polls api.weather.gov for active alerts covering settingsMgr.s.latitude/
-// longitude, classifies each into an AlertCategory, and sends a "WX <MODE>"
-// command over the dedicated UART link to the Hurricane Controls main board
-// the first time a tracked warning event crosses that category's configured
-// mode (anything other than "OFF"):
+// longitude, classifies each into an AlertCategory, and sends a
+// "WX <MODE> <descriptor>" command over the dedicated UART link to the
+// Hurricane Controls main board the first time a tracked warning event
+// crosses that category's configured mode (anything other than "OFF") —
+// <descriptor> is a human-readable "TYPE - THREAT LEVEL" string (see
+// categoryDescriptor() below), which the main board relays on its own
+// mesh activation broadcast so a remote operator sees not just that a
+// weather alert fired, but what kind and how severe.
 //
 //   - Tornado Warning: CATASTROPHIC damage tag -> TORNADO_EMERGENCY;
 //     tornadoDetection "OBSERVED" or any damage tag at all -> TORNADO_CONFIRMED
@@ -434,7 +460,7 @@ private:
                                   categoryVal > te->lastActedCategory;
                 if (firstTime || escalated) {
                     te->lastActedCategory = categoryVal;
-                    sendTrigger(mode);
+                    sendTrigger(mode, categoryDescriptor(category, event));
                     recordRecentTrigger(event, mode);
                 }
             }
@@ -473,12 +499,13 @@ private:
         if (recentCount_ < MAX_RECENT) recentCount_++;
     }
 
-    void sendTrigger(const char* mode) {
-        Serial.print("Qualifying alert — sending WX ");
-        Serial.println(mode);
+    void sendTrigger(const char* mode, const String& descriptor) {
+        Serial.printf("Qualifying alert — sending WX %s %s\n", mode, descriptor.c_str());
         digitalWrite(STATUS_LED, HIGH);
         Serial1.print("WX ");
-        Serial1.println(mode);
+        Serial1.print(mode);
+        Serial1.print(' ');
+        Serial1.println(descriptor);
     }
 
     // Unprompted, fire-and-forget push of this board's own WiFi/NWS API
