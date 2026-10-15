@@ -19,6 +19,11 @@ struct RunEntry {
     uint8_t  source         = 0;
     uint8_t  end            = 0;
     uint8_t  stopSource     = 0;
+    // Only set when source is NWS_ALERT (see weather_link.h) — the alert's
+    // "TYPE - THREAT LEVEL" descriptor and its VTEC-derived tracking id,
+    // kept for later troubleshooting/cross-reference. Empty otherwise.
+    char     alertType[48]  = "";
+    char     alertId[20]    = "";
 };
 
 // Recent runs (RAM only — cleared on reboot) plus lifetime totals (NVS,

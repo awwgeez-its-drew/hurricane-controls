@@ -460,7 +460,7 @@ private:
                                   categoryVal > te->lastActedCategory;
                 if (firstTime || escalated) {
                     te->lastActedCategory = categoryVal;
-                    sendTrigger(mode, categoryDescriptor(category, event));
+                    sendTrigger(mode, key, categoryDescriptor(category, event));
                     recordRecentTrigger(event, mode);
                 }
             }
@@ -499,11 +499,17 @@ private:
         if (recentCount_ < MAX_RECENT) recentCount_++;
     }
 
-    void sendTrigger(const char* mode, const String& descriptor) {
-        Serial.printf("Qualifying alert — sending WX %s %s\n", mode, descriptor.c_str());
+    // vtecKey is the same stable "office.phen.sig.etn" id (or the alert's raw
+    // id as a fallback) already used for de-dup/escalation tracking above —
+    // reused here as the alert's cross-referenceable unique ID, since it has
+    // no spaces and is already NWS's own identifier for this warning.
+    void sendTrigger(const char* mode, const char* vtecKey, const String& descriptor) {
+        Serial.printf("Qualifying alert — sending WX %s %s %s\n", mode, vtecKey, descriptor.c_str());
         digitalWrite(STATUS_LED, HIGH);
         Serial1.print("WX ");
         Serial1.print(mode);
+        Serial1.print(' ');
+        Serial1.print(vtecKey);
         Serial1.print(' ');
         Serial1.println(descriptor);
     }

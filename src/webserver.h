@@ -867,6 +867,12 @@ function loadLog(){
       a.textContent=(LM[e.m]||'?')+' · '+(LS[e.s]||'?')+' · '+fmtDur(e.d);
       b.textContent=when+' · '+end;
       r.appendChild(a);r.appendChild(b);L.appendChild(r);
+      if(e.at){
+        const alertRow=document.createElement('div');
+        alertRow.style.cssText='font-size:.68rem;color:#8892a0;padding:0 0 7px;word-break:break-word';
+        alertRow.textContent=e.at+(e.ai?' (ID: '+e.ai+')':'');
+        L.appendChild(alertRow);
+      }
     });
   });
 }
@@ -1855,6 +1861,8 @@ private:
             o["s"]  = e.source;
             o["x"]  = e.end;
             o["ss"] = e.stopSource;
+            if (e.alertType[0]) o["at"] = e.alertType;
+            if (e.alertId[0])   o["ai"] = e.alertId;
         }
         String out;
         serializeJson(doc, out);

@@ -58,11 +58,16 @@ public:
     bool        finalReported() const { return everReported_ && !pending_; }
     const char* detail()       const { return detail_; }
 
-    // "TYPE - THREAT LEVEL" string from the most recent "WX <MODE> <descriptor>"
+    // "TYPE - THREAT LEVEL" string from the most recent "WX <MODE> <id> <descriptor>"
     // trigger (e.g. "TORNADO EMERGENCY - CATASTROPHIC") — see nws_client.h's
     // categoryDescriptor(). Empty if none has arrived yet. Read by mesh.h to
     // enrich its activation broadcast when the trigger source is NWS_ALERT.
     const char* lastAlertDescriptor() const { return lastAlertDesc_; }
+
+    // The alert's VTEC-derived tracking id (e.g. "KOUN.TO.W.0023") from that
+    // same trigger — NWS's own identifier for the specific warning, kept for
+    // later troubleshooting/cross-reference. Empty if none has arrived yet.
+    const char* lastAlertId() const { return lastAlertId_; }
 
 private:
     char    line_[96];
@@ -73,6 +78,7 @@ private:
     bool pending_       = false;
     char detail_[64]    = "Not yet reported";
     char lastAlertDesc_[64] = "";
+    char lastAlertId_[20]   = "";
 
     void reply(const char* msg) { Serial1.println(msg); }
 
@@ -82,13 +88,15 @@ private:
     // (an unprompted periodic push of the Weather Watcher's own WiFi/NWS API
     // health — no reply expected, it's fire-and-forget), "WX TIME <epoch>"
     // (its NTP-synced clock, fire-and-forget — see clock.h), and
-    // "WX <MODE> <descriptor>", MODE one of WAIL/ATTACK/FASTWAIL and
-    // <descriptor> a human-readable "TYPE - THREAT LEVEL" string (e.g.
-    // "TORNADO EMERGENCY - CATASTROPHIC", see nws_client.h's
-    // categoryDescriptor()) carried through to the mesh activation
-    // broadcast. MANUAL is excluded (it needs momentary-hold semantics that
-    // don't fit an autonomous trigger) and so is GROWL (a diagnostic test
-    // mode, not a warning tone).
+    // "WX <MODE> <id> <descriptor>", MODE one of WAIL/ATTACK/FASTWAIL, <id>
+    // the alert's VTEC-derived tracking id (e.g. "KOUN.TO.W.0023", see
+    // nws_client.h's sendTrigger()), and <descriptor> a human-readable
+    // "TYPE - THREAT LEVEL" string (e.g. "TORNADO EMERGENCY - CATASTROPHIC",
+    // see nws_client.h's categoryDescriptor()) — both carried through to the
+    // mesh activation broadcast and the run log, for later troubleshooting/
+    // cross-reference. MANUAL is excluded (it needs momentary-hold semantics
+    // that don't fit an autonomous trigger) and so is GROWL (a diagnostic
+    // test mode, not a warning tone).
     void handleCommand(char* raw) {
         char* line = raw;
         while (*line == ' ') line++;
@@ -119,13 +127,18 @@ private:
             return;
         }
 
-        // Mode word is the first token; everything after it (if any) is the
-        // "TYPE - THREAT LEVEL" descriptor, e.g. "FASTWAIL TORNADO EMERGENCY
-        // - CATASTROPHIC" -> modeWord="FASTWAIL", desc="TORNADO EMERGENCY -
-        // CATASTROPHIC". Kept as free text rather than further tokenized, so
-        // the descriptor's own spaces/hyphens pass through untouched.
+        // Mode word is the first token, alert id the second; everything after
+        // that (if any) is the "TYPE - THREAT LEVEL" descriptor, e.g.
+        // "FASTWAIL KOUN.TO.W.0023 TORNADO EMERGENCY - CATASTROPHIC" ->
+        // modeWord="FASTWAIL", alertId="KOUN.TO.W.0023", desc="TORNADO
+        // EMERGENCY - CATASTROPHIC". The descriptor is kept as free text
+        // rather than further tokenized, so its own spaces/hyphens pass
+        // through untouched.
         char* modeWord = cmd;
-        char* desc = strchr(cmd, ' ');
+        char* rest = strchr(cmd, ' ');
+        if (rest) { *rest = '\0'; rest++; while (*rest == ' ') rest++; }
+        char* alertId = rest;
+        char* desc = rest ? strchr(rest, ' ') : nullptr;
         if (desc) { *desc = '\0'; desc++; while (*desc == ' ') desc++; }
 
         RunMode mode;
@@ -138,7 +151,8 @@ private:
         if (buttons.testModeActive) { reply("ERR: test mode active"); return; }
 
         strlcpy(lastAlertDesc_, desc ? desc : "", sizeof(lastAlertDesc_));
-        if (sm.trigger(mode, TriggerSource::NWS_ALERT)) reply("OK: triggered");
+        strlcpy(lastAlertId_, alertId ? alertId : "", sizeof(lastAlertId_));
+        if (sm.trigger(mode, TriggerSource::NWS_ALERT, lastAlertDesc_, lastAlertId_)) reply("OK: triggered");
         else reply("ERR: busy");
     }
 };

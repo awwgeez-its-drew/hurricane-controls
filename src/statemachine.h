@@ -58,7 +58,13 @@ public:
         meshFlashActive_ = false;
     }
 
-    bool trigger(RunMode mode, TriggerSource source = TriggerSource::LOCAL) {
+    // alertType/alertId are only meaningful for TriggerSource::NWS_ALERT
+    // (see weather_link.h) — the "TYPE - THREAT LEVEL" descriptor and the
+    // alert's VTEC-derived tracking id, both carried into the run log for
+    // later troubleshooting/cross-reference. Left null for every other
+    // trigger source.
+    bool trigger(RunMode mode, TriggerSource source = TriggerSource::LOCAL,
+                 const char* alertType = nullptr, const char* alertId = nullptr) {
         if (state != State::IDLE || otaActive) return false;
         lastTriggerSource = source;
         runMode     = mode;
@@ -77,6 +83,8 @@ public:
         logEpoch_       = (t > 1600000000) ? (uint32_t)t : 0;  // 0 = clock not set yet
         failsafeStop_   = false;
         webKeepaliveTs_ = stateTs;
+        strlcpy(logAlertType_, alertType ? alertType : "", sizeof(logAlertType_));
+        strlcpy(logAlertId_,   alertId   ? alertId   : "", sizeof(logAlertId_));
 
         if (mode == RunMode::GROWL) {
             // Growl Test bypasses the independent-delay STARTING sequence
@@ -406,6 +414,8 @@ private:
         e.source         = (uint8_t)lastTriggerSource;
         e.end            = (uint8_t)logEnd_;
         e.stopSource     = (uint8_t)logStopSource_;
+        strlcpy(e.alertType, logAlertType_, sizeof(e.alertType));
+        strlcpy(e.alertId,   logAlertId_,   sizeof(e.alertId));
         runLog.record(e);
     }
 
@@ -435,6 +445,8 @@ private:
     uint32_t      logEpoch_      = 0;
     RunEnd        logEnd_        = RunEnd::COMPLETED;
     TriggerSource logStopSource_ = TriggerSource::AUTO;
+    char          logAlertType_[48] = "";
+    char          logAlertId_[20]   = "";
 };
 
 extern StateMachine sm;
