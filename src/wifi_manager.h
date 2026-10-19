@@ -52,7 +52,8 @@ public:
 
     void update() {
         if (restartPending_ && deadlinePassed(restartAt_)) ESP.restart();
-        retryHomeWifi();
+        if (mode_ == Mode::STA) checkStaLink();
+        else retryHomeWifi();
     }
 
     // True exactly once after joining the home network — at boot, or later
@@ -97,6 +98,17 @@ private:
     static constexpr uint32_t STA_RETRY_INTERVAL_MS = 60000;
     static constexpr uint32_t STA_RETRY_WINDOW_MS   = 15000;
 
+    // Nothing previously detected a connection dropping *after* a successful
+    // STA join (as opposed to never joining in the first place) — a lost
+    // link (router reboot, extended outage) just sat there forever with no
+    // retry, needing a manual reboot to recover. While disconnected, retry
+    // a plain reconnect periodically; if that keeps failing for too long,
+    // fall back to AP+STA (startAP() with saved creds) so the board stays
+    // locally reachable, and retryHomeWifi()'s existing retry loop takes
+    // over from there.
+    static constexpr uint32_t STA_RECONNECT_RETRY_MS    = 20000;
+    static constexpr uint32_t STA_LINK_DOWN_FALLBACK_MS = 5UL * 60 * 1000;
+
     String   ssid_;
     String   pass_;
     String   hostname_;       // empty = not set yet -> falls back to MDNS_NAME
@@ -107,6 +119,8 @@ private:
     bool     justConnected_  = false;
     bool     retrying_       = false;
     uint32_t retryTs_        = 0;
+    uint32_t staDownSinceMs_ = 0;
+    uint32_t staLastRetryMs_ = 0;
 
     String effectiveHostname() const {
         return hostname_.length() ? hostname_ : String(MDNS_NAME);
@@ -166,6 +180,32 @@ private:
             retrying_ = false;
             retryTs_  = now;
             WiFi.disconnect();     // stop the driver's own reconnect loop until the next try
+        }
+    }
+
+    // Called every update() while mode_ == STA. Detects a dropped link (the
+    // driver's own status, not any event/callback) and recovers from it —
+    // previously nothing did, so a lost connection just stayed lost.
+    void checkStaLink() {
+        if (WiFi.status() == WL_CONNECTED) { staDownSinceMs_ = 0; return; }
+        uint32_t now = millis();
+        if (staDownSinceMs_ == 0) {
+            staDownSinceMs_ = now;
+            staLastRetryMs_ = now;
+            Serial.println("WiFi: STA link dropped, will keep retrying");
+            return;
+        }
+        if (now - staDownSinceMs_ >= STA_LINK_DOWN_FALLBACK_MS) {
+            Serial.println("WiFi: STA link still down after retrying — falling back to AP+STA");
+            staDownSinceMs_ = 0;
+            startAP();
+            return;
+        }
+        if (now - staLastRetryMs_ >= STA_RECONNECT_RETRY_MS) {
+            staLastRetryMs_ = now;
+            Serial.println("WiFi: retrying STA reconnect");
+            WiFi.disconnect();
+            WiFi.begin(ssid_.c_str(), pass_.c_str());
         }
     }
 

@@ -389,6 +389,13 @@ private:
             Serial2.flush();
             delay(100);
             ESP.restart();
+        } else if (!strcmp(cmd, "WXREBOOT")) {
+            // Fire-and-forget over the dedicated UART link — see
+            // weather_link.h's requestReboot(). No confirmation comes back
+            // (the Weather Watcher has no mesh connectivity of its own), so
+            // this just confirms the request was sent, not that it landed.
+            weatherLink.requestReboot();
+            reply("OK: weather watcher reboot requested");
         } else if (!strcmp(cmd, "PING")) {
             reply(buildPingReply());
         } else {

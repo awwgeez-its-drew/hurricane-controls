@@ -568,6 +568,11 @@ private:
         }
     }
 
+    // Despite the name, one line this recognizes isn't a reply to anything
+    // this board sent: a bare "REBOOT" is an unprompted command from the
+    // main board (see src/weather_link.h's requestReboot(), sent for the
+    // mesh "SIREN WXREBOOT" command) — the only main->WW direction on this
+    // otherwise WW-initiated link.
     void handleReply(char* line) {
         while (*line == ' ') line++;
         size_t len = strlen(line);
@@ -584,6 +589,10 @@ private:
                 linkOk_             = true;
                 linkDetail_         = "Status OK";
             }
+        } else if (!strcasecmp(line, "REBOOT")) {
+            Serial.println("Main board requested a reboot — restarting");
+            delay(100);
+            ESP.restart();
         }
     }
 

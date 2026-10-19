@@ -230,14 +230,22 @@ crosses its activation threshold (or re-crosses it on escalation, if that
 setting is on):
 
 ```
-WX <MODE>
+WX <MODE> <id> <descriptor>
 ```
 
 `MODE` is one of `WAIL`, `ATTACK`, or `FASTWAIL` — configured independently
 per alert category (Trigger Modes card). `MANUAL` and `GROWL` are
 deliberately not reachable this way: `MANUAL` needs momentary-hold semantics
 that don't fit an autonomous trigger, and `GROWL` is a diagnostic test mode,
-not a warning tone.
+not a warning tone. `id` is the alert's VTEC-derived tracking id (e.g.
+`KOUN.TO.W.0023` — the same id already used for de-dup/escalation tracking
+on this board), kept as NWS's own cross-referenceable identifier for the
+specific warning. `descriptor` is a free-text "TYPE - THREAT LEVEL" string
+(e.g. `TORNADO EMERGENCY - CATASTROPHIC`) derived from the alert's
+classification. Both are carried through on the main board's own mesh
+activation broadcast and its run log (see `docs/meshtastic-integration.md`)
+— an older (pre-1.9.2 main / pre-1.5.1 Weather Watcher) pairing just won't
+have them, since both ends need to agree on the 3-token format.
 
 A second command, `WX PING`, is a pure link-health check — it never touches
 the state machine and isn't gated by anything (not the auto-trigger toggle,
@@ -287,6 +295,14 @@ The main board replies on the same link:
 | `ERR: disabled` | The Settings page "Automatic weather-triggered activation" toggle is off |
 | `ERR: test mode active` | TEST MODE is active — see "Interaction with TEST MODE and lockout" below |
 | `ERR: unknown command` | Malformed or unrecognized mode word |
+
+One message flows the other direction, main board -> Weather Watcher — the
+only command on this otherwise Weather-Watcher-initiated link: a bare
+`REBOOT`, sent when the owner issues the mesh `SIREN WXREBOOT` command (see
+`docs/meshtastic-integration.md`). It's unprompted and fire-and-forget, same
+as everything else here — the Weather Watcher just restarts on receiving
+it, with no reply (it has no mesh connectivity of its own to confirm back
+through anyway).
 
 There's no whitelist or password on this link, unlike the Meshtastic bridge
 — the dedicated physical wire between the two boards is the trust boundary,

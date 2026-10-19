@@ -69,6 +69,14 @@ public:
     // later troubleshooting/cross-reference. Empty if none has arrived yet.
     const char* lastAlertId() const { return lastAlertId_; }
 
+    // Unprompted main->WW command, the reverse direction of everything else
+    // on this link (which is otherwise always WW-initiated). The Weather
+    // Watcher's own link-reply reader (nws_client.h's handleReply()) treats
+    // a bare "REBOOT" line as a restart request rather than a reply to
+    // anything it sent. Fire-and-forget, same as every other message here —
+    // see mesh.h's "WXREBOOT" command.
+    void requestReboot() { Serial1.println("REBOOT"); }
+
 private:
     char    line_[96];
     uint8_t lineLen_ = 0;
