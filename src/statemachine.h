@@ -46,6 +46,13 @@ public:
     // to be cut off by the post-update reboot.
     volatile bool otaActive = false;
 
+    // Set by buttons.h while WAIL+ATTACK are held together to manually jog
+    // the rotator (see there) — refuses every new run the same way otaActive
+    // does, both so nothing fights the jog for control of the rotator relay
+    // and so the siren can't suddenly activate while someone's hands are on
+    // the unit repositioning the horn.
+    volatile bool rotatorJogActive = false;
+
     void begin() {
         allOff();
         digitalWrite(STATUS_LED, LOW);
@@ -65,7 +72,7 @@ public:
     // trigger source.
     bool trigger(RunMode mode, TriggerSource source = TriggerSource::LOCAL,
                  const char* alertType = nullptr, const char* alertId = nullptr) {
-        if (state != State::IDLE || otaActive) return false;
+        if (state != State::IDLE || otaActive || rotatorJogActive) return false;
         lastTriggerSource = source;
         runMode     = mode;
         stateTs     = millis();

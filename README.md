@@ -93,6 +93,14 @@ active-HIGH — this is a real hardware difference (relay vs. solid-state
 switching), not a typo, so wire and test each independently before trusting
 the polarity.
 
+Holding **WAIL + ATTACK together** jogs the rotator motor directly — a
+maintenance convenience for turning the horn to the most aerodynamic
+position by hand, not a siren mode. The rotator runs only while both are
+held and stops the instant either is released. Only available while the
+siren is fully idle (and blocks any new activation — mesh, web, button, or
+weather — for as long as it's held), so it never fights the state
+machine's own control of the rotator relay during a run.
+
 ### Status LED behavior
 
 The status LED (GPIO 2) gives an at-a-glance read of the state machine

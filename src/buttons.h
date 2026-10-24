@@ -3,6 +3,7 @@
 #include "config.h"
 #include "settings.h"
 #include "statemachine.h"
+#include "motors.h"
 
 // Reported (via mesh.h) whenever a physical button is pressed while
 // buttons.locked is true — not a dual-function distinction, just "someone is
@@ -99,15 +100,17 @@ public:
         }
         prevStop = stopPressed;
 
-        // ── ATTACK / FAST WAIL button (GPIO33) — dual-function ─────────────
-        // Short tap (release before s.longPressMs) → Attack, fired on RELEASE
-        // only, so a real long-press can be distinguished before anything
-        // triggers. Hold >= s.longPressMs → Fast Wail, fired once while still
-        // held (fire-and-forget — unlike Manual, it keeps running on release).
-        // Press-confirm debounce: raw must read LOW continuously for
-        // s.buttonDebounceMs before we trust it — a brief noise glitch (far
-        // shorter than any real press) would otherwise register as an
-        // instant press+release and fire a spurious short-tap Attack.
+        // ── ATTACK (GPIO33) / WAIL (GPIO32) press-state debounce ───────────
+        // Same two-stage debounce for both: raw must read LOW continuously
+        // for s.buttonDebounceMs before a press is trusted (filters a brief
+        // noise glitch, far shorter than any real press, that would
+        // otherwise register as an instant press+release), and released
+        // state must then be stable for RELEASE_DEBOUNCE_MS (mechanical
+        // contact bounce) before a release is trusted. Computed for both
+        // buttons up front, ahead of either button's own dual-function
+        // dispatch below, so the rotator-jog combo gesture (both held
+        // together) can be detected and take priority before either
+        // button's individual long-press/short-tap logic acts on it.
         bool attackRaw = (digitalRead(BTN_ATTACK) == LOW);
         if (attackRaw && !prevAttackRaw) attackPressCandidateTs_ = now;
         if (!attackRaw) attackPressCandidateTs_ = 0;
@@ -124,31 +127,6 @@ public:
             (attackReleaseCandidateTs_ != 0 &&
              (now - attackReleaseCandidateTs_) < RELEASE_DEBOUNCE_MS);
 
-        if (attackPressed && !prevAttack) {
-            attackPressTs   = now;
-            attackLongArmed = false;
-        }
-
-        if (attackPressed && !attackLongArmed) {
-            if ((now - attackPressTs) >= s.longPressMs) {
-                attackLongArmed = true;
-                if (sm.isIdle()) sm.trigger(RunMode::FAST_WAIL, TriggerSource::LOCAL);
-            }
-        }
-
-        if (!attackPressed && prevAttack) {
-            if (!attackLongArmed) {
-                if (sm.isIdle()) sm.trigger(RunMode::ATTACK, TriggerSource::LOCAL);
-            }
-            attackLongArmed = false;
-        }
-
-        prevAttack = attackPressed;
-
-        // ── WAIL / MANUAL button (GPIO32) — dual-function ─────────────────
-        // Same press-confirm debounce as ATTACK above, ahead of the existing
-        // release debounce (mechanical contact bounce): only accept HIGH
-        // after it has been stable for RELEASE_DEBOUNCE_MS.
         bool wailRaw = (digitalRead(BTN_WAIL) == LOW);
         if (wailRaw && !prevWailRaw) wailPressCandidateTs_ = now;
         if (!wailRaw) wailPressCandidateTs_ = 0;
@@ -165,35 +143,111 @@ public:
             (wailReleaseCandidateTs_ != 0 &&
              (now - wailReleaseCandidateTs_) < RELEASE_DEBOUNCE_MS);
 
+        // ── Rotator jog: WAIL + ATTACK held together ────────────────────────
+        // A maintenance convenience, not a siren mode — lets the owner spin
+        // the horn to the most aerodynamic position by hand. Takes priority
+        // over either button's own long-press action, but only if neither
+        // has already armed one (MANUAL/FAST_WAIL already committed to) —
+        // pressing the second button after that point doesn't retroactively
+        // downgrade an already-running siren actuation. Only available while
+        // fully idle: driving the rotator directly here while the state
+        // machine's own STARTING/STOPPING sequence is also managing it would
+        // fight over the same relay, so sm.rotatorJogActive also blocks any
+        // new trigger() for as long as this is held (see statemachine.h) —
+        // the siren can't suddenly activate while someone's hands are on the
+        // unit repositioning it, either.
+        bool bothPressed = wailPressed && attackPressed;
+        if (bothPressed && !sm.rotatorJogActive && !longPressArmed && !attackLongArmed &&
+            sm.isIdle() && !sm.otaActive) {
+            sm.rotatorJogActive    = true;
+            wailComboSuppressed_   = true;
+            attackComboSuppressed_ = true;
+            rotatorOn();
+        }
+        if (sm.rotatorJogActive && !bothPressed) {
+            rotatorOff();
+            sm.rotatorJogActive = false;
+            // Whichever button is still held gets a fresh long-press
+            // countdown from this moment, rather than inheriting the
+            // elapsed combo-hold time — otherwise releasing just one
+            // button after a long joint hold would instantly arm the
+            // other's long-press action.
+            wailPressTs   = now;
+            attackPressTs = now;
+        }
+
+        // ── ATTACK / FAST WAIL button — dual-function ───────────────────────
+        // Short tap (release before s.longPressMs) → Attack, fired on RELEASE
+        // only, so a real long-press can be distinguished before anything
+        // triggers. Hold >= s.longPressMs → Fast Wail, fired once while still
+        // held (fire-and-forget — unlike Manual, it keeps running on release).
+        if (attackPressed && !prevAttack) {
+            attackPressTs   = now;
+            attackLongArmed = false;
+            // Not if the combo block above just engaged the jog on this
+            // very tick (attack's fresh-press edge coinciding with wail
+            // already being held) — that already set this true, and this
+            // reset running right after would otherwise immediately undo it.
+            if (!sm.rotatorJogActive) attackComboSuppressed_ = false;
+        }
+
+        if (!sm.rotatorJogActive) {
+            if (attackPressed && !attackLongArmed) {
+                if ((now - attackPressTs) >= s.longPressMs) {
+                    attackLongArmed = true;
+                    if (sm.isIdle()) sm.trigger(RunMode::FAST_WAIL, TriggerSource::LOCAL);
+                }
+            }
+
+            if (!attackPressed && prevAttack) {
+                if (!attackLongArmed) {
+                    // Short tap → Attack (unless this press was part of a
+                    // rotator-jog combo, in which case it's a no-op release).
+                    if (!attackComboSuppressed_ && sm.isIdle())
+                        sm.trigger(RunMode::ATTACK, TriggerSource::LOCAL);
+                }
+                attackLongArmed = false;
+            }
+        }
+
+        prevAttack = attackPressed;
+
+        // ── WAIL / MANUAL button — dual-function ────────────────────────────
         if (wailPressed && !prevWail) {
             // Falling edge — button down
             wailPressTs            = now;
             longPressArmed         = false;
             physicalManualActive_  = false;
+            // See the matching comment in the ATTACK block above.
+            if (!sm.rotatorJogActive) wailComboSuppressed_ = false;
         }
 
-        if (wailPressed && !longPressArmed) {
-            if ((now - wailPressTs) >= s.longPressMs) {
-                longPressArmed = true;
-                if (sm.isIdle()) {
-                    if (sm.trigger(RunMode::MANUAL, TriggerSource::LOCAL))
-                        physicalManualActive_ = true;
+        if (!sm.rotatorJogActive) {
+            if (wailPressed && !longPressArmed) {
+                if ((now - wailPressTs) >= s.longPressMs) {
+                    longPressArmed = true;
+                    if (sm.isIdle()) {
+                        if (sm.trigger(RunMode::MANUAL, TriggerSource::LOCAL))
+                            physicalManualActive_ = true;
+                    }
                 }
             }
-        }
 
-        if (!wailPressed && prevWail) {
-            // Rising edge — button released
-            if (longPressArmed) {
-                // Momentary: only stop what the physical button started
-                if (physicalManualActive_) {
-                    sm.stop(TriggerSource::LOCAL);
-                    physicalManualActive_ = false;
+            if (!wailPressed && prevWail) {
+                // Rising edge — button released
+                if (longPressArmed) {
+                    // Momentary: only stop what the physical button started
+                    if (physicalManualActive_) {
+                        sm.stop(TriggerSource::LOCAL);
+                        physicalManualActive_ = false;
+                    }
+                    longPressArmed = false;
+                } else {
+                    // Short tap → Wail (unless this press was part of a
+                    // rotator-jog combo, in which case it's a no-op release).
+                    if (!wailComboSuppressed_ && sm.isIdle())
+                        sm.trigger(RunMode::WAIL, TriggerSource::LOCAL);
                 }
-                longPressArmed = false;
-            } else {
-                // Short tap → Wail
-                if (sm.isIdle()) sm.trigger(RunMode::WAIL, TriggerSource::LOCAL);
             }
         }
 
@@ -241,6 +295,7 @@ private:
     uint32_t attackPressTs             = 0;
     uint32_t attackReleaseCandidateTs_ = 0;
     bool     attackLongArmed           = false;
+    bool     attackComboSuppressed_    = false;
 
     bool     prevWail               = false;
     bool     prevWailRaw            = false;
@@ -249,6 +304,7 @@ private:
     uint32_t wailReleaseCandidateTs_ = 0;
     bool     longPressArmed         = false;
     bool     physicalManualActive_  = false;
+    bool     wailComboSuppressed_   = false;
 
     uint32_t lockArmedAt_    = 0;
     bool     lockAutoExpire_ = false;
