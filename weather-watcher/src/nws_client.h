@@ -607,10 +607,8 @@ private:
         // Everything below is quick (no network) — hold the lock so the
         // dashboard never reads the alert lists mid-rewrite.
         CtrlLock lock;
-        lastPollEpoch_   = nowEpoch();
-        everPolled_      = true;
-        lastPollSuccess_ = true;
-        lastPollError_   = "";
+        setPollResult(true, ""); // also resets consecutiveFailures_/retryAfterMs_
+                                 // and sets lastSuccessMs_ for stale()/dataAgeSec()
 
         uint32_t now = millis();
         CurrentAlert fresh[MAX_CURRENT];
