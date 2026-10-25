@@ -170,6 +170,12 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 .alert-head{font-weight:700;font-size:.9rem;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
 .alert-tag{background:rgba(0,0,0,.35);padding:2px 7px;border-radius:3px;font-size:.65rem;letter-spacing:.5px}
 .alert-sub{font-size:.78rem;opacity:.9;margin-top:4px}
+.alert-actions{display:flex;align-items:center;gap:10px;margin-top:8px}
+.alert-link{color:#fff;opacity:.85;font-size:.72rem;text-decoration:underline}
+.alert-mapbtn{background:rgba(0,0,0,.3);color:#fff;border:none;border-radius:3px;padding:4px 10px;
+              font-size:.72rem;cursor:pointer;font-family:inherit}
+.alert-map{display:none;margin-top:10px}
+.alert-map.show{display:block}
 .recent-item{padding:8px 0;border-top:1px solid #1a2a3a;font-size:.85rem}
 .recent-item:first-child{border-top:none}
 .recent-time{color:#9aa3af;font-size:.75rem}
@@ -231,18 +237,92 @@ function toggleDetail(id){document.getElementById(id).classList.toggle('show');}
 
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 
+let lastCurrentAlertsSig=null;
 function renderCurrentAlerts(list){
+  // Current Alerts refreshes every second along with everything else, but
+  // rebuilding its innerHTML on every tick would collapse any expanded
+  // polygon map (WP8) and re-trigger its fetch — skip the rebuild unless
+  // the list actually changed.
+  const sig=JSON.stringify((list||[]).map(a=>[a.id,a.triggered]));
+  if(sig===lastCurrentAlertsSig)return;
+  lastCurrentAlertsSig=sig;
   const el=document.getElementById('currentAlerts');
   if(!list||!list.length){
     el.innerHTML='<div class="no-alerts"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> No active alerts for your location</div>';
     return;
   }
-  el.innerHTML=list.map(a=>
-    '<a class="alert-item alert-'+a.color+'" href="'+esc(a.id)+'" target="_blank" rel="noopener">'+
+  el.innerHTML=list.map((a,i)=>
+    '<div class="alert-item alert-'+a.color+'">'+
       '<div class="alert-head">'+esc(a.event)+(a.triggered?' <span class="alert-tag">SIREN ACTIVATED</span>':'')+'</div>'+
       '<div class="alert-sub">'+esc(a.headline)+'</div>'+
-    '</a>'
+      '<div class="alert-actions">'+
+        '<a href="'+esc(a.id)+'" target="_blank" rel="noopener" class="alert-link">View on NWS &#8599;</a>'+
+        '<button class="alert-mapbtn" onclick="toggleAlertMap(this,'+i+')">Show map</button>'+
+      '</div>'+
+      '<div class="alert-map" id="amap'+i+'" data-url="'+esc(a.id)+'"></div>'+
+    '</div>'
   ).join('');
+}
+
+// WP8: a polygon mini-map for one alert, fetched client-side straight from
+// its own api.weather.gov feature URL (Accept: application/geo+json) —
+// no ESP32-side geometry storage needed. Simple equirectangular
+// projection (fine at this zoom level/latitude range); Polygon and
+// MultiPolygon both supported. The device's own location dot is fetched
+// separately and only rendered for logged-in sessions (Decision C).
+async function toggleAlertMap(btn,i){
+  const box=document.getElementById('amap'+i);
+  if(box.classList.contains('show')){box.classList.remove('show');btn.textContent='Show map';return;}
+  box.classList.add('show');btn.textContent='Hide map';
+  if(box.dataset.loaded)return;
+  box.dataset.loaded='1';
+  box.innerHTML='<p class="hint">Loading map&hellip;</p>';
+  try{
+    const r=await fetch(box.dataset.url,{headers:{'Accept':'application/geo+json'}});
+    const feature=await r.json();
+    const geom=feature.geometry;
+    if(!geom){box.innerHTML='<p class="hint">No polygon available for this alert (county/zone-based).</p>';return;}
+    let loc=null;
+    try{
+      const lr=await fetch('/location-data');
+      if(lr.ok)loc=await lr.json();
+    }catch(e){}
+    box.innerHTML=renderPolygonSvg(geom,loc);
+  }catch(e){
+    box.innerHTML='<p class="hint">Could not load the map (network or CORS error).</p>';
+  }
+}
+function renderPolygonSvg(geom,loc){
+  const polys = geom.type==='Polygon' ? [geom.coordinates] :
+                geom.type==='MultiPolygon' ? geom.coordinates : [];
+  if(!polys.length)return '<p class="hint">Unsupported geometry type: '+esc(geom.type)+'</p>';
+  let minLon=Infinity,maxLon=-Infinity,minLat=Infinity,maxLat=-Infinity;
+  polys.forEach(rings=>rings.forEach(ring=>ring.forEach(([lon,lat])=>{
+    if(lon<minLon)minLon=lon;if(lon>maxLon)maxLon=lon;
+    if(lat<minLat)minLat=lat;if(lat>maxLat)maxLat=lat;
+  })));
+  if(loc&&loc.lat){
+    if(loc.lon<minLon)minLon=loc.lon;if(loc.lon>maxLon)maxLon=loc.lon;
+    if(loc.lat<minLat)minLat=loc.lat;if(loc.lat>maxLat)maxLat=loc.lat;
+  }
+  const refLat=(minLat+maxLat)/2;
+  const cosLat=Math.max(0.15,Math.cos(refLat*Math.PI/180));
+  const padLon=(maxLon-minLon)*0.12||0.05, padLat=(maxLat-minLat)*0.12||0.05;
+  minLon-=padLon;maxLon+=padLon;minLat-=padLat;maxLat+=padLat;
+  const W=320,H=220;
+  const sx=lon=>((lon-minLon)*cosLat)/((maxLon-minLon)*cosLat||1)*W;
+  const sy=lat=>H-((lat-minLat)/((maxLat-minLat)||1))*H;
+  const paths=polys.map(rings=>rings.map(ring=>
+    'M'+ring.map(([lon,lat])=>sx(lon).toFixed(1)+','+sy(lat).toFixed(1)).join('L')+'Z'
+  ).join(' ')).join(' ');
+  let dot='';
+  if(loc&&loc.lat){
+    dot='<circle cx="'+sx(loc.lon).toFixed(1)+'" cy="'+sy(loc.lat).toFixed(1)+'" r="5" fill="#00d4ff" stroke="#fff" stroke-width="1.5"/>';
+  }
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="display:block;width:100%;height:auto;background:#0a0e18;border-radius:4px">'+
+    '<path d="'+paths+'" fill="rgba(239,68,68,.35)" stroke="#f87171" stroke-width="1.5"/>'+
+    dot+
+    '</svg>'+(loc&&loc.lat?'':'<p class="hint" style="margin-top:4px">Log in to see your exact location on the map.</p>');
 }
 
 function dispColor(d){
@@ -1076,6 +1156,20 @@ private:
         server_.on("/status-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
             // Public — feeds the unauthenticated dashboard.
             req->send(200, "application/json", buildStatusJson());
+        });
+
+        // WP8's polygon mini-map location dot — gated to logged-in sessions
+        // (Decision C). The polygon itself comes straight from NWS's public
+        // API fetched client-side; only this board's exact coordinates are
+        // login-gated.
+        server_.on("/location-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            JsonDocument doc;
+            doc["lat"] = settingsMgr.s.latitude;
+            doc["lon"] = settingsMgr.s.longitude;
+            String out;
+            serializeJson(doc, out);
+            req->send(200, "application/json", out);
         });
 
         server_.on("/settings-data", HTTP_GET, [this](AsyncWebServerRequest* req) {

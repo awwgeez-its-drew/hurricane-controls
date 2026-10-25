@@ -386,6 +386,15 @@ the same model used for the main board's own physical buttons.
   API call. Traffic is still encrypted in transit; this only means the
   watcher doesn't verify it's talking to the genuine `api.weather.gov` and
   not a man-in-the-middle on your own network.
+- **The polygon mini-map (Current Alerts → "Show map") depends on
+  `api.weather.gov` allowing cross-origin browser fetches (CORS).** It's a
+  public API clearly intended for this kind of client-side use, but this
+  wasn't verified against a live connection while building it — this
+  sandbox's network policy blocks reaching `api.weather.gov` directly. If
+  "Show map" ever shows "Could not load the map (network or CORS error)"
+  on real hardware, that's the thing to check first; the fallback would be
+  proxying the request through the ESP32 instead of fetching it directly
+  from the browser.
 - **The clock depends on NTP/internet access.** In AP-only mode, or if your
   network has no internet route, the dashboard shows "Not synced" and alert
   timestamps fall back to "Unknown time"/an elapsed-seconds count instead of
