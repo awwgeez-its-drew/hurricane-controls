@@ -141,9 +141,14 @@ status/awareness, not control. Polls `/status-data` once per second:
   every poll, so an alert that's no longer active simply disappears on the
   next cycle. When nothing's active, this card shows a green-outlined
   checkmark box instead of just quiet empty space.
-- **Recent Alerts** — the last 5 alerts that triggered a siren activation,
-  with a timestamp, most recent first. This is a running log, independent
-  of what's currently active.
+- **Recent Alerts** — the last 20 trigger-queue outcomes (persisted across
+  reboots in `/alertlog.jsonl` — see `weather-watcher/src/alertlog.h`),
+  color-coded by disposition: green for a successful siren activation,
+  yellow for `AUTO_OFF`/`BADCMD`, red for `NO_RESPONSE`/`GAVE_UP_*` (a real
+  miss worth investigating), grey for `NOTIFY_ONLY`/`ALREADY_ACTIVE`. Most
+  recent first, with a timestamp and the alert's VTEC id. A login-gated
+  "Export full log (CSV)" link (`GET /alertlog.csv`) downloads the complete
+  history, not just these 20.
 - **Footer** — version number and attribution, both linking to this repo,
   matching the main board's Settings page.
 

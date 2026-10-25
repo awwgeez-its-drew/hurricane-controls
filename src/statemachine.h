@@ -92,6 +92,7 @@ public:
         webKeepaliveTs_ = stateTs;
         strlcpy(logAlertType_, alertType ? alertType : "", sizeof(logAlertType_));
         strlcpy(logAlertId_,   alertId   ? alertId   : "", sizeof(logAlertId_));
+        runLog.markStarted((uint8_t)mode, (uint8_t)source, logEpoch_, logStartMs_ / 1000);
 
         if (mode == RunMode::GROWL) {
             // Growl Test bypasses the independent-delay STARTING sequence

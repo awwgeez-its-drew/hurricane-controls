@@ -212,7 +212,7 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
 
 <div class="card">
   <h2>Recent Alerts</h2>
-  <p class="hint" style="margin-bottom:10px">Last 5 alerts that triggered a siren activation.</p>
+  <p class="hint" style="margin-bottom:10px">Last 20 trigger-queue outcomes (siren activations and skipped/failed attempts alike). <a href="/alertlog.csv" style="color:var(--cyan)">Export full log (CSV)</a></p>
   <div id="recentAlerts"><p class="hint">None yet.</p></div>
 </div>
 
@@ -240,12 +240,19 @@ function renderCurrentAlerts(list){
   ).join('');
 }
 
+function dispColor(d){
+  if(d==='TRIGGERED'||d==='RETRIED_TRIGGERED') return '#4ade80';
+  if(d==='NOTIFY_ONLY'||d==='ALREADY_ACTIVE') return '#9aa3af';
+  if(d==='AUTO_OFF'||d==='BADCMD') return '#facc15';
+  return '#f87171'; // NO_RESPONSE / GAVE_UP_* / anything else — a real miss
+}
 function renderRecentAlerts(list){
   const el=document.getElementById('recentAlerts');
   if(!list||!list.length){el.innerHTML='<p class="hint">None yet.</p>';return;}
   el.innerHTML=list.map(r=>
     '<div class="recent-item"><b>'+esc(r.event)+'</b> &rarr; '+esc(r.mode)+
-    '<div class="recent-time">'+esc(r.time)+'</div></div>'
+    ' <span style="color:'+dispColor(r.disposition)+';font-weight:600">'+esc(r.disposition)+'</span>'+
+    '<div class="recent-time">'+esc(r.time)+(r.vtecKey?' &middot; '+esc(r.vtecKey):'')+'</div></div>'
   ).join('');
 }
 
@@ -949,6 +956,16 @@ private:
             req->send(200, "application/json", buildSettingsJson());
         });
 
+        // Full persisted alert-log export (auth required) — streams the
+        // whole LittleFS-backed history, not just the dashboard's last 20.
+        server_.on("/alertlog.csv", HTTP_GET, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            AsyncResponseStream* r = req->beginResponseStream("text/csv");
+            r->addHeader("Content-Disposition", "attachment; filename=alertlog.csv");
+            writeAlertLogCsv(*r);
+            req->send(r);
+        });
+
         server_.on("/settings-data", HTTP_POST,
             [this](AsyncWebServerRequest* req) {
                 if (!isAuthed(req)) { unauth(req); return; }
@@ -1170,6 +1187,54 @@ private:
         return String(buf);
     }
 
+    // UTC ISO-8601 for the exported CSV — no local-time/DST ambiguity in a
+    // file, and no coordinates/names anywhere in it (ground rule 5).
+    static String isoUtc(uint32_t epoch) {
+        if (!epoch) return "";
+        time_t t = (time_t)epoch;
+        struct tm tmv;
+        gmtime_r(&t, &tmv);
+        char buf[24];
+        snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+            tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday, tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+        return String(buf);
+    }
+    static String csvEscape(const char* s) {
+        String out(s);
+        out.replace("\"", "\"\"");
+        return out;
+    }
+
+    // Streams the full persisted alert log, line-by-line — bounded memory
+    // regardless of file size. A torn trailing line (power loss mid-write)
+    // is skipped rather than aborting the export.
+    static void writeAlertLogCsv(Print& out) {
+        out.println("seq,time_utc,vtec_key,event,category,siren_mode,disposition,attempts,escalation,notified,detail");
+        File f = alertLog.openForExport();
+        if (!f) return;
+        while (f.available()) {
+            String line = f.readStringUntil('\n');
+            if (!line.length()) continue;
+            JsonDocument doc;
+            if (deserializeJson(doc, line)) continue;
+            uint32_t seq  = doc["seq"] | 0;
+            uint32_t ep   = doc["ep"]  | 0;
+            const char* vk   = doc["vk"]   | "";
+            const char* ev   = doc["ev"]   | "";
+            uint8_t cat      = doc["cat"]  | 0;
+            const char* mode = doc["mode"] | "";
+            const char* disp = doc["disp"] | "";
+            uint8_t att      = doc["att"]  | 0;
+            bool esc         = doc["esc"]  | false;
+            bool ntf         = doc["ntf"]  | false;
+            const char* det  = doc["det"]  | "";
+            out.printf("%u,%s,%s,\"%s\",%u,%s,%s,%u,%s,%s,\"%s\"\n",
+                seq, isoUtc(ep).c_str(), vk, csvEscape(ev).c_str(), cat, mode, disp, att,
+                esc ? "true" : "false", ntf ? "true" : "false", csvEscape(det).c_str());
+        }
+        f.close();
+    }
+
     // Public, polled every second — reads the alert lists poll() rewrites on
     // the loop task, so it holds the same lock.
     static String buildStatusJson() {
@@ -1226,13 +1291,18 @@ private:
             o["triggered"] = a.triggeredSiren;
         }
 
+        // Full persisted disposition history (WP3's alertlog.h) — up to the
+        // last 20 queue outcomes, not just successful triggers, so AUTO_OFF/
+        // NO_RESPONSE/GAVE_UP_* show up here too for troubleshooting.
         JsonArray rec = doc["recentAlerts"].to<JsonArray>();
-        for (uint8_t i = 0; i < nwsClient.recentTriggerCount(); i++) {
-            const RecentTrigger& r = nwsClient.recentTrigger(i);
+        for (uint8_t i = 0; i < alertLog.count(); i++) {
+            const AlertLogEntry& r = alertLog.recent(i);
             JsonObject o = rec.add<JsonObject>();
-            o["event"] = r.event;
-            o["mode"]  = r.mode;
-            o["time"]  = (r.epoch > 0) ? formatEpoch(r.epoch, "%Y-%m-%d %H:%M:%S") : String("Unknown time");
+            o["event"]       = r.event;
+            o["mode"]        = r.sirenMode;
+            o["disposition"] = r.disposition;
+            o["vtecKey"]     = r.vtecKey;
+            o["time"]        = (r.epoch > 0) ? formatEpoch(r.epoch, "%Y-%m-%d %H:%M:%S") : String("Unknown time");
         }
 
         String out;

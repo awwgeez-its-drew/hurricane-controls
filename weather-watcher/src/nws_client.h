@@ -10,6 +10,7 @@
 #include "sync.h"
 #include "settings.h"
 #include "other_extreme_types.h"
+#include "alertlog.h"
 #include <Preferences.h>
 
 // Alert categories for display (Current Alerts card) and for deciding
@@ -600,10 +601,19 @@ private:
                     te->lastActedCategory = categoryVal;
                     trackedDirty_ = true;
                     Serial.printf("%s: category crossed with siren mode OFF -> NOTIFY_ONLY\n", key);
+                    AlertLogEntry le;
+                    le.epoch = nowEpoch();
+                    strlcpy(le.vtecKey, key, sizeof(le.vtecKey));
+                    strlcpy(le.event, event, sizeof(le.event));
+                    le.category = categoryVal;
+                    strlcpy(le.sirenMode, "OFF", sizeof(le.sirenMode));
+                    strlcpy(le.disposition, "NOTIFY_ONLY", sizeof(le.disposition));
+                    le.escalation = escalated;
+                    alertLog.record(le);
                 } else {
                     te->pending         = true;
                     te->pendingCategory = categoryVal;
-                    enqueueTrigger(mode, key, categoryDescriptor(category, event), event);
+                    enqueueTrigger(mode, key, categoryDescriptor(category, event), event, categoryVal, escalated);
                 }
             }
 
@@ -659,11 +669,14 @@ private:
         uint32_t lastSentMs  = 0;
         uint8_t  sendCount   = 0;
         char     blockCode[12] = ""; // last retryable ACK code ("" = still awaiting any first ACK)
+        uint8_t  category    = 0;
+        bool     escalation  = false;
     };
     static constexpr uint8_t MAX_QUEUED = 8;
     QueuedTrigger queue_[MAX_QUEUED];
 
-    void enqueueTrigger(const char* mode, const char* vtecKey, const String& descriptor, const char* event) {
+    void enqueueTrigger(const char* mode, const char* vtecKey, const String& descriptor, const char* event,
+                         uint8_t category, bool escalation) {
         // A higher-category escalation for an already-queued event replaces
         // rather than duplicates — restart its attempt counter too, since
         // this is effectively a fresh trigger attempt.
@@ -674,6 +687,8 @@ private:
                 q.event       = event;
                 q.sendCount   = 0;
                 q.blockCode[0] = '\0';
+                q.category    = category;
+                q.escalation  = escalation;
                 return;
             }
         }
@@ -686,6 +701,8 @@ private:
                 q.event       = event;
                 q.sendCount   = 0;
                 q.blockCode[0] = '\0';
+                q.category    = category;
+                q.escalation  = escalation;
                 return;
             }
         }
@@ -768,7 +785,16 @@ private:
             te->lastActedCategory = te->pendingCategory;
             trackedDirty_ = true;
         }
-        // TODO(WP3): persist `disposition` into the WW alert log here.
+        AlertLogEntry le;
+        le.epoch = nowEpoch();
+        strlcpy(le.vtecKey, q.vtecKey, sizeof(le.vtecKey));
+        strlcpy(le.event, q.event.c_str(), sizeof(le.event));
+        le.category = q.category;
+        strlcpy(le.sirenMode, q.mode, sizeof(le.sirenMode));
+        strlcpy(le.disposition, disposition, sizeof(le.disposition));
+        le.attempts   = q.sendCount;
+        le.escalation = q.escalation;
+        alertLog.record(le);
         // TODO(WP4): hand `disposition` to the ntfy queue here.
         for (uint8_t i = 1; i < MAX_QUEUED; i++) queue_[i - 1] = queue_[i];
         queue_[MAX_QUEUED - 1] = QueuedTrigger{};

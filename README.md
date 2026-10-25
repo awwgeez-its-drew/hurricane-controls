@@ -185,10 +185,13 @@ credentials are kept.
 ### Usage log and diagnostics
 
 **Settings → Usage** shows lifetime run count and motor hours (kept across
-restarts) plus the last 20 runs since boot: mode, what triggered it, how long
-it ran, and how it ended (completed, stopped by whom, or failsafe). Entries
-show real dates and times when the controller knows the time — from NTP on
-your home network, or from the Weather Watcher's clock if one is connected —
+restarts) plus the last 20 runs, mode, what triggered it, how long it ran,
+and how it ended (completed, stopped by whom, failsafe, or INTERRUPTED if
+the board lost power mid-run). The full history — not just the last 20 — is
+persisted to flash and survives a restart or OTA update; a login-gated
+"Export full log (CSV)" link downloads all of it. Entries show real dates
+and times when the controller knows the time — from NTP on your home
+network, or from the Weather Watcher's clock if one is connected —
 otherwise "x min ago".
 
 The Settings footer shows the reason for the last restart (power-on,

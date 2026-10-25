@@ -6,12 +6,14 @@
 #include "sync.h"
 #include "settings.h"
 #include "wifi_manager.h"
+#include "alertlog.h"
 #include "nws_client.h"
 #include "webserver.h"
 
 // ── Singletons ────────────────────────────────────────────────────────────────
 SettingsManager settingsMgr;
 WiFiManager     wifiMgr;
+AlertLog        alertLog;
 NwsClient       nwsClient;
 WeatherWebUI    webUI;
 
@@ -65,6 +67,7 @@ void setup() {
     Serial.print("Reset reason: ");
     Serial.println(resetReasonName());
     settingsMgr.load();
+    alertLog.begin();
 
     // WiFi first (may block up to 12s for STA attempt)
     wifiMgr.begin();
@@ -90,6 +93,7 @@ void loop() {
         nwsClient.requestPollSoon();
     }
     nwsClient.update();
+    alertLog.flushPending();
     webUI.update();
 
     uint32_t intervalMs = settingsMgr.s.ntpUpdateHours * 3600000UL;

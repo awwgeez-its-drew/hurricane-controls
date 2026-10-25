@@ -88,6 +88,7 @@ void loop() {
         meshBridge.update();
         weatherLink.update();
     }
+    runLog.flushPending(); // deferred LittleFS write from a run just started/finished — never under CtrlLock
     webUI.update();
     wifiMgr.update();  // deferred ESP.restart() + home Wi-Fi retry from AP fallback
     if (wifiMgr.takeJustConnected()) wifiConnectedAtMs_ = millis();

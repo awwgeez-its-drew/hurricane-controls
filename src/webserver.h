@@ -666,7 +666,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="card-body">
   <div id="usageTot" class="ws">Loading&hellip;</div>
   <div id="usageList"></div>
-  <p class="hint" style="margin-top:10px">Recent runs are kept until the next restart; the totals are permanent.</p>
+  <p class="hint" style="margin-top:10px">The last 20 runs are shown here; the full persisted history (and the totals) survive a restart. <a href="/log.csv" style="color:var(--cyan)">Export full log (CSV)</a></p>
   </div>
 </div>
 
@@ -862,8 +862,9 @@ function loadLog(){
     L.className='';
     d.entries.forEach(e=>{
       const when=e.e?new Date(e.e*1000).toLocaleString():fmtAgo(d.uptime-e.u);
-      const end=e.x===0?'completed':e.x===2?'failsafe stop':'stopped ('+LS[e.ss]+')';
+      const end=e.x===0?'completed':e.x===2?'failsafe stop':e.x===3?'INTERRUPTED (power loss)':'stopped ('+LS[e.ss]+')';
       const r=document.createElement('div');r.className='lrow';
+      if(e.x===3) r.style.color='#f87171';
       const a=document.createElement('span'),b=document.createElement('span');
       a.textContent=(LM[e.m]||'?')+' · '+(LS[e.s]||'?')+' · '+fmtDur(e.d);
       b.textContent=when+' · '+end;
@@ -1394,6 +1395,16 @@ private:
             req->send(200, "application/json", buildLogJson());
         });
 
+        // Full persisted run-log export (auth required) — streams the whole
+        // LittleFS-backed history, not just the RAM cache's last 20 entries.
+        server_.on("/log.csv", HTTP_GET, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            AsyncResponseStream* r = req->beginResponseStream("text/csv");
+            r->addHeader("Content-Disposition", "attachment; filename=runlog.csv");
+            writeLogCsv(*r);
+            req->send(r);
+        });
+
         // Logout — the Settings page POSTs; GET kept for a plain link/bookmark.
         auto logout = [this](AsyncWebServerRequest* req) {
             char tok[33];
@@ -1857,6 +1868,7 @@ private:
         for (uint8_t i = 0; i < runLog.count(); i++) {
             const RunEntry& e = runLog.recent(i);
             JsonObject o = arr.add<JsonObject>();
+            o["q"]  = e.seq;
             o["e"]  = e.epoch;
             o["u"]  = e.startUptimeSec;
             o["d"]  = e.durationSec;
@@ -1870,6 +1882,68 @@ private:
         String out;
         serializeJson(doc, out);
         return out;
+    }
+
+    // UTC ISO-8601 — no local-time/DST ambiguity in an exported file, and
+    // no coordinates/names anywhere in it (ground rule 5).
+    static String isoUtc(uint32_t epoch) {
+        if (!epoch) return "";
+        time_t t = (time_t)epoch;
+        struct tm tmv;
+        gmtime_r(&t, &tmv);
+        char buf[24];
+        snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+            tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday, tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+        return String(buf);
+    }
+
+    static const char* csvMode(uint8_t m) {
+        static const char* w[] = {"NONE", "WAIL", "ATTACK", "FASTWAIL", "MANUAL", "GROWL"};
+        return m < 6 ? w[m] : "?";
+    }
+    static const char* csvSource(uint8_t s) {
+        static const char* w[] = {"LOCAL", "WEB", "MESH", "NWS_ALERT", "AUTO"};
+        return s < 5 ? w[s] : "?";
+    }
+    static const char* csvEnd(uint8_t e) {
+        static const char* w[] = {"COMPLETED", "STOPPED", "FAILSAFE", "INTERRUPTED"};
+        return e < 4 ? w[e] : "?";
+    }
+    static String csvEscape(const char* s) {
+        String out(s);
+        out.replace("\"", "\"\"");
+        return out;
+    }
+
+    // Streams the full persisted log (not just the RAM cache), one file
+    // handle open at a time, read line-by-line — bounded memory regardless
+    // of file size. A line that fails to parse (e.g. torn by a power loss
+    // mid-write) is skipped rather than aborting the whole export.
+    static void writeLogCsv(Print& out) {
+        out.println("seq,start_utc,start_uptime_sec,duration_sec,mode,source,end,stop_source,alert_type,alert_id");
+        File f = runLog.openForExport();
+        if (!f) return;
+        while (f.available()) {
+            String line = f.readStringUntil('\n');
+            if (!line.length()) continue;
+            JsonDocument doc;
+            if (deserializeJson(doc, line)) continue;
+            uint32_t seq   = doc["seq"]    | 0;
+            uint32_t epoch = doc["epoch"]  | 0;
+            uint32_t upSec = doc["upSec"]  | 0;
+            uint32_t dur   = doc["durSec"] | 0;
+            uint8_t  mode  = doc["mode"]   | 0;
+            uint8_t  src   = doc["source"] | 0;
+            uint8_t  end   = doc["end"]    | 0;
+            uint8_t  ssrc  = doc["stopSrc"] | 0;
+            const char* at = doc["at"] | "";
+            const char* ai = doc["ai"] | "";
+            out.printf("%u,%s,%u,%u,%s,%s,%s,%s,\"%s\",\"%s\"\n",
+                seq, isoUtc(epoch).c_str(), upSec, dur,
+                csvMode(mode), csvSource(src), csvEnd(end), csvSource(ssrc),
+                csvEscape(at).c_str(), csvEscape(ai).c_str());
+        }
+        f.close();
     }
 };
 
