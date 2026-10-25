@@ -182,6 +182,15 @@ Version 1.9.0 changed the partition table to make room for this, so
 **updating to 1.9.0 itself must be done over USB**. Saved settings and WiFi
 credentials are kept.
 
+### System health strip
+
+A small colored-dot bar above the main status card gives an at-a-glance
+read on Wi-Fi, the Weather Watcher link, free memory, and whether an OTA
+update is in progress — green/yellow/red for "all normal" / "worth a
+look" / "needs attention." Tap it to expand the detail. It rides the same
+live status feed as the mode badge, so it updates instantly, no separate
+polling.
+
 ### Usage log and diagnostics
 
 **Settings → Usage** shows lifetime run count and motor hours (kept across

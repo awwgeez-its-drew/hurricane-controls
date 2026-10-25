@@ -201,6 +201,10 @@ h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;mar
     <span class="dot" id="linkDot"></span><span class="status-label">Controller Link</span>
   </div>
   <div class="status-detail" id="linkDetail"></div>
+  <div class="status-row" onclick="toggleDetail('staleDetail')">
+    <span class="dot" id="staleDot"></span><span class="status-label">Alert Data Freshness</span>
+  </div>
+  <div class="status-detail" id="staleDetail"></div>
   <div class="clock mono" id="clock">--:--:--</div>
   <div class="mono" style="font-size:.72rem;color:#8892a0;text-align:center;margin-bottom:8px">Watcher <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span></div>
   <div class="statline" id="lastPoll">Last polling attempt: —</div>
@@ -275,7 +279,9 @@ function refresh(){
     document.getElementById('apiDot').className='dot '+(d.apiGreen?'green':'red');
     document.getElementById('apiDetail').textContent=d.apiDetail;
     document.getElementById('linkDot').className='dot'+(d.everTestedLink?(d.linkOk?' green':' red'):'');
-    document.getElementById('linkDetail').textContent=d.linkDetail;
+    document.getElementById('linkDetail').textContent=d.linkDetail+(d.sirenLegacyProtocol?' (older siren firmware — update it for trigger confirmations)':'');
+    document.getElementById('staleDot').className='dot '+(d.stale?'red':'green');
+    document.getElementById('staleDetail').textContent=d.stale?('Stale — last successful poll '+Math.floor(d.dataAgeSec/60)+'m ago'):'Up to date';
     document.getElementById('clock').textContent=d.currentTime;
     if(d.tempF!=null)document.getElementById('tempF').textContent=d.tempF;
     if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);

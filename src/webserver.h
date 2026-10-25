@@ -172,6 +172,14 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .ibtn.locked{color:#f87171}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
+/* System health strip */
+.hstrip{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:var(--radius);
+        padding:8px 14px;margin-bottom:10px;font-size:.78rem;color:#9aa3af;cursor:pointer;
+        box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.hdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#555}
+.hdot.ok{background:var(--green)}.hdot.warn{background:#facc15}.hdot.error{background:#f87171}
+.hdetail{display:none;flex-basis:100%;margin-top:6px;font-size:.72rem;line-height:1.5}
+.hstrip.open .hdetail{display:block}
 /* Status card */
 .scard{width:100%;background:var(--surface);border-radius:var(--radius);padding:22px 20px;
        margin-bottom:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.35)}
@@ -243,6 +251,10 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 </div>
 
 <div class="content">
+<div class="hstrip" id="hstrip" onclick="this.classList.toggle('open')">
+  <div id="hdot" class="hdot"></div><span id="hsum">Checking system health&hellip;</span>
+  <div id="hdetail" class="hdetail"></div>
+</div>
 <div class="scard">
   <div><span id="badge" class="badge idle">IDLE</span></div>
   <div class="timer mono" id="timer">--:--</div>
@@ -299,7 +311,18 @@ function fmt(sec){
   return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
 }
 
+function drawHealth(h){
+  if(!h)return;
+  const dot=document.getElementById('hdot'),sum=document.getElementById('hsum'),det=document.getElementById('hdetail');
+  dot.className='hdot '+h.overall;
+  const wwWord={'OFF':'off','N/A':'not connected','LOST':'LOST','STARTING':'starting up','OK':'ok','ERROR':'ERROR'}[h.ww]||h.ww;
+  sum.textContent=h.overall==='ok'?'All systems normal':h.overall==='warn'?'Check system status':'Attention needed';
+  det.innerHTML='Wi-Fi: '+(h.wifi?'connected':'<b>disconnected</b>')+'<br>'+
+    'Weather Watcher: '+wwWord+'<br>'+
+    'Free memory: '+h.freeHeapKB+' KB'+(h.otaActive?'<br><b>Firmware update in progress</b>':'');
+}
 function draw(d){
+  drawHealth(d.health);
   const st=d.mode||'idle', rm=d.runMode||'idle';
   const badge=document.getElementById('badge');
   if(d.testMode){
@@ -1121,7 +1144,7 @@ public:
     }
 
 private:
-    static constexpr size_t   STATUS_JSON_MAX = 416;
+    static constexpr size_t   STATUS_JSON_MAX = 512; // grown for the health{} object (WP5)
     static constexpr size_t   MAX_BODY        = 1024;   // largest JSON POST body accepted
     static constexpr uint8_t  MAX_SESSIONS    = 4;      // oldest login is evicted beyond this
     static constexpr uint32_t TEST_KEEPALIVE_TIMEOUT_MS = 2000;
@@ -1777,6 +1800,26 @@ private:
     // Pushed to every WebSocket client twice a second — formatted on the
     // stack rather than via JsonDocument/String to avoid that heap churn.
     // Every value is a fixed token or a number, so nothing needs escaping.
+    // Same precedence/words as mesh.h's weatherWatcherWord() — duplicated
+    // rather than exposed from MeshBridge, since it's a one-line read-only
+    // classification over fields webserver.h already has access to, and
+    // pulling in mesh.h here just for this would be a bigger coupling.
+    static const char* wwHealthWord() {
+        if (!settingsMgr.s.weatherAutoTriggerEnabled) return "OFF";
+        if (!weatherLink.everReported()) return "N/A";
+        if (weatherLink.lost()) return "LOST";
+        if (weatherLink.pending()) return "STARTING";
+        return weatherLink.reportedOk() ? "OK" : "ERROR";
+    }
+
+    // "ok" / "warn" / "error" — a single glance-able summary for the health
+    // strip's dot color; the individual fields underneath cover the detail.
+    static const char* overallHealth(bool wifiOk, const char* ww) {
+        if (!wifiOk || !strcmp(ww, "ERROR") || !strcmp(ww, "LOST")) return "error";
+        if (!strcmp(ww, "N/A") || !strcmp(ww, "STARTING")) return "warn";
+        return "ok";
+    }
+
     static size_t buildStatusJson(char* buf, size_t size) {
         CtrlLock lock;
         uint8_t rs = relayState();
@@ -1786,17 +1829,21 @@ private:
             time_t t = time(nullptr);
             strftime(clockBuf, sizeof(clockBuf), "%H:%M:%S", localtime(&t));
         }
+        bool wifiOk = wifiMgr.isConnected();
+        const char* ww = wwHealthWord();
         int n = snprintf(buf, size,
             "{\"mode\":\"%s\",\"runMode\":\"%s\",\"uptime\":%lu,\"relays\":[%u,%u,%u],"
             "\"elapsed\":%lu,\"remaining\":%lu,\"hasRemaining\":%s,\"btnLocked\":%s,"
             "\"testMode\":%s,\"lockAutoExpire\":%s,\"lockRemaining\":%lu,\"tempF\":%d,"
-            "\"currentTime\":\"%s\"}",
+            "\"currentTime\":\"%s\","
+            "\"health\":{\"overall\":\"%s\",\"wifi\":%s,\"ww\":\"%s\",\"freeHeapKB\":%u,\"otaActive\":%s}}",
             sm.stateName(), sm.modeName(), (unsigned long)(millis() / 1000),
             (unsigned)(rs & 1), (unsigned)((rs >> 1) & 1), (unsigned)((rs >> 2) & 1),
             (unsigned long)(ti.totalElapsedMs / 1000), (unsigned long)(ti.totalRemainingMs / 1000),
             tf(ti.hasRemaining), tf(buttons.locked), tf(buttons.testModeActive),
             tf(buttons.lockAutoExpiring()), (unsigned long)buttons.lockRemainingSec(),
-            (int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f), clockBuf);
+            (int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f), clockBuf,
+            overallHealth(wifiOk, ww), tf(wifiOk), ww, (unsigned)(ESP.getFreeHeap() / 1024), tf(sm.otaActive));
         if (n < 0) { buf[0] = '\0'; return 0; }
         return ((size_t)n >= size) ? size - 1 : (size_t)n;
     }
