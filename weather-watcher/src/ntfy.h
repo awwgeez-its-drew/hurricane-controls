@@ -69,7 +69,9 @@ public:
             queue_[i] = queue_[i - 1];
             i--;
         }
-        queue_[i] = { priority, title, message };
+        queue_[i].priority = priority;
+        queue_[i].title    = title;
+        queue_[i].message  = message;
         count_++;
     }
 

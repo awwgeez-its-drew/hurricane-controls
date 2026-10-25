@@ -390,6 +390,19 @@ private:
     // like "/O.NEW.KOUN.TO.W.0123.2601010000Z-2601010100Z/". This stays
     // constant across a warning's entire lifecycle (NEW/CON/EXT/UPG/CAN),
     // unlike properties.id which changes on every single update.
+    // Proleptic Gregorian days-since-epoch, pure integer arithmetic — the
+    // standard Howard Hinnant civil-calendar algorithm. Used instead of
+    // timegm() below, which isn't declared by every ESP32 toolchain's
+    // libc (a GNU extension, not guaranteed present).
+    static int32_t daysFromCivil(int y, int m, int d) {
+        y -= m <= 2;
+        int era = (y >= 0 ? y : y - 399) / 400;
+        unsigned yoe = (unsigned)(y - era * 400);
+        unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+        unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        return era * 146097 + (int)doe - 719468;
+    }
+
     // NWS's "expires" field is ISO8601 with an explicit numeric offset
     // (e.g. "2026-10-25T18:30:00-05:00"), occasionally "Z" for UTC. Returns
     // 0 on anything unparseable rather than guessing.
@@ -397,10 +410,7 @@ private:
         if (!s || strlen(s) < 19) return 0;
         int y, mo, d, h, mi, se;
         if (sscanf(s, "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &se) != 6) return 0;
-        struct tm tmv = {};
-        tmv.tm_year = y - 1900; tmv.tm_mon = mo - 1; tmv.tm_mday = d;
-        tmv.tm_hour = h; tmv.tm_min = mi; tmv.tm_sec = se;
-        time_t utc = timegm(&tmv);
+        time_t utc = (time_t)daysFromCivil(y, mo, d) * 86400 + h * 3600 + mi * 60 + se;
         const char* off = s + 19;
         int offSec = 0;
         if (*off == '+' || *off == '-') {
