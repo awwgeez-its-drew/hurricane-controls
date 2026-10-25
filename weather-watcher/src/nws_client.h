@@ -127,6 +127,15 @@ struct RecentTrigger {
 // once by default, and — if settingsMgr.s.repeatOnUpgrade is enabled — can
 // trigger again later if it escalates to a strictly higher category (e.g. a
 // confirmed Tornado Warning that's later upgraded to a Tornado Emergency).
+
+// Poll failure backoff schedule: 15s, 15s, 30s, 60s, then the configured
+// interval — never slower than the interval itself (see
+// NwsClient::nextPollDelayMs()). File-scope rather than a class static
+// member: a static constexpr *member* that's runtime-indexed needs a
+// separate out-of-class definition to link before C++17, which this
+// toolchain (C++11) doesn't provide automatically.
+static constexpr uint32_t WX_BACKOFF_SCHEDULE_MS[4] = {15000, 15000, 30000, 60000};
+
 class NwsClient {
 public:
     void begin() {
@@ -237,7 +246,6 @@ private:
     // interval — never slower than the interval itself. A Retry-After
     // header on a 429/503 overrides the schedule for that one wait (capped).
     // Any success resets back to the start of the schedule.
-    static constexpr uint32_t BACKOFF_SCHEDULE_MS[4] = {15000, 15000, 30000, 60000};
     uint8_t  consecutiveFailures_ = 0;
     uint32_t retryAfterMs_        = 0;  // 0 = none in effect
 
@@ -245,7 +253,7 @@ private:
         uint32_t intervalMs = settingsMgr.s.pollIntervalSec * 1000UL;
         if (retryAfterMs_) return retryAfterMs_ < intervalMs ? retryAfterMs_ : intervalMs;
         if (consecutiveFailures_ == 0) return intervalMs;
-        uint32_t backoff = BACKOFF_SCHEDULE_MS[
+        uint32_t backoff = WX_BACKOFF_SCHEDULE_MS[
             consecutiveFailures_ - 1 < 4 ? consecutiveFailures_ - 1 : 3];
         return backoff < intervalMs ? backoff : intervalMs;
     }
