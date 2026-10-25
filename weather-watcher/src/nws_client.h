@@ -75,6 +75,8 @@ struct CurrentAlert {
     String areaDesc;
     AlertCategory category = AlertCategory::NONE;
     bool   triggeredSiren = false;
+    char   vtecKey[20] = ""; // same id used for dedupe/the trigger queue/the log
+    uint32_t expEpoch  = 0;  // 0 if unparseable or this board's clock isn't synced
 };
 
 struct RecentTrigger {
@@ -388,6 +390,27 @@ private:
     // like "/O.NEW.KOUN.TO.W.0123.2601010000Z-2601010100Z/". This stays
     // constant across a warning's entire lifecycle (NEW/CON/EXT/UPG/CAN),
     // unlike properties.id which changes on every single update.
+    // NWS's "expires" field is ISO8601 with an explicit numeric offset
+    // (e.g. "2026-10-25T18:30:00-05:00"), occasionally "Z" for UTC. Returns
+    // 0 on anything unparseable rather than guessing.
+    static uint32_t parseIso8601(const char* s) {
+        if (!s || strlen(s) < 19) return 0;
+        int y, mo, d, h, mi, se;
+        if (sscanf(s, "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &se) != 6) return 0;
+        struct tm tmv = {};
+        tmv.tm_year = y - 1900; tmv.tm_mon = mo - 1; tmv.tm_mday = d;
+        tmv.tm_hour = h; tmv.tm_min = mi; tmv.tm_sec = se;
+        time_t utc = timegm(&tmv);
+        const char* off = s + 19;
+        int offSec = 0;
+        if (*off == '+' || *off == '-') {
+            int oh = 0, om = 0;
+            sscanf(off + 1, "%d:%d", &oh, &om);
+            offSec = ((*off == '-') ? -1 : 1) * (oh * 3600 + om * 60);
+        }
+        return (uint32_t)(utc - offSec);
+    }
+
     static bool parseVtecKey(const char* vtec, char* out, size_t outSize) {
         if (!vtec || !*vtec) return false;
         char buf[96];
@@ -549,7 +572,7 @@ private:
         // exhaust the heap on top of the ~40KB the TLS session already holds.
         JsonDocument filter;
         static const char* const PROPS[] = {"id", "event", "status", "messageType", "severity",
-                                            "urgency", "certainty", "headline", "areaDesc"};
+                                            "urgency", "certainty", "headline", "areaDesc", "expires"};
         static const char* const PARAMS[] = {"VTEC", "tornadoDetection", "tornadoDamageThreat",
                                              "thunderstormDamageThreat"};
         for (const char* k : PROPS)  filter["features"][0]["properties"][k] = true;
@@ -652,8 +675,11 @@ private:
                 ca.areaDesc = capped(props["areaDesc"].is<const char*>() ? (const char*)props["areaDesc"] : "");
                 ca.category = category;
                 ca.triggeredSiren = (te->lastActedCategory > 0);
+                strlcpy(ca.vtecKey, key, sizeof(ca.vtecKey));
+                ca.expEpoch = parseIso8601(props["expires"] | "");
             }
         }
+        sendAlertsSnapshot(fresh, freshCount);
         pruneTracked();
         saveTrackedIfDirty();
 
@@ -853,6 +879,31 @@ private:
     //
     // Also pushes this board's NTP-synced clock as "WX TIME <epoch>", which
     // the main board uses for its run log when it has no NTP of its own.
+    // Pushes the current alert list to the main board (docs/uart-protocol.md
+    // section 2.1: "WX ALERTS <n>" / "WX ALERT ..." / "WX ALERTS END"),
+    // feeding its active-warning banner (WP7). Called once per *successful*
+    // poll, even when the list is empty or unchanged — re-sending an empty
+    // list clears a stale banner, and the main board's own received-at
+    // timestamp (weather_link.h's alertsReceivedMs()) only advances on an
+    // actual send, which is what it uses to grey out/expire the banner if
+    // this link stalls while a poll failure keeps happening instead.
+    void sendAlertsSnapshot(const CurrentAlert* list, uint8_t count) {
+        Serial1.print("WX ALERTS ");
+        Serial1.println(count);
+        for (uint8_t i = 0; i < count; i++) {
+            const CurrentAlert& a = list[i];
+            Serial1.print("WX ALERT ");
+            Serial1.print(a.vtecKey[0] ? a.vtecKey : "-");
+            Serial1.print(' ');
+            Serial1.print((unsigned)a.category);
+            Serial1.print(' ');
+            Serial1.print(a.expEpoch);
+            Serial1.print(' ');
+            Serial1.println(a.event);
+        }
+        Serial1.println("WX ALERTS END");
+    }
+
     void sendStatusToController() {
         bool wifiOk = WiFi.status() == WL_CONNECTED;
         const char* state;

@@ -182,6 +182,19 @@ Version 1.9.0 changed the partition table to make room for this, so
 **updating to 1.9.0 itself must be done over USB**. Saved settings and WiFi
 credentials are kept.
 
+### Active-warning banner
+
+Above the health strip, a banner lists NWS alerts the Weather Watcher is
+currently tracking for your point — sorted most-severe first, color-coded
+to match its category, with an "ACTIVATED THIS SIREN" tag on whichever one
+most recently triggered this siren. Polled every 5 seconds (alerts don't
+change as often as relay state, so this is separate from the live
+WebSocket feed). An entry greys out and shows "last heard Nm ago" if the
+Weather Watcher link goes quiet for 3+ minutes, and drops out entirely
+once NWS's own expiration time passes (only once this board's clock is
+synced). Nothing is shown when there's nothing active — no false
+"all clear" box to second-guess.
+
 ### Hold-to-confirm activation buttons
 
 WAIL, ATTACK, FAST WAIL, and the STOP bar require a deliberate hold rather

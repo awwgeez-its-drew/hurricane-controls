@@ -172,6 +172,16 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
 .ibtn.locked{color:#f87171}
 .content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
+/* Active-warning banner (WP7) */
+.warnItem{display:flex;align-items:baseline;gap:8px;background:var(--surface);border-radius:var(--radius);
+          padding:10px 14px;margin-bottom:8px;border-left:4px solid #555;font-size:.82rem}
+.warnItem.purple{border-left-color:#a855f7}
+.warnItem.red{border-left-color:#f87171}
+.warnItem.orange{border-left-color:#fb923c}
+.warnItem .wtag{font-weight:700;flex:1}
+.warnItem .wage{color:#8892a0;font-size:.72rem;white-space:nowrap}
+.warnItem.stale{opacity:.55}
+.warnItem .wthis{color:var(--green);font-size:.7rem;font-weight:700;margin-left:6px}
 /* System health strip */
 .hstrip{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:var(--radius);
         padding:8px 14px;margin-bottom:10px;font-size:.78rem;color:#9aa3af;cursor:pointer;
@@ -257,6 +267,7 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 </div>
 
 <div class="content">
+<div id="warnBanner"></div>
 <div class="hstrip" id="hstrip" onclick="this.classList.toggle('open')">
   <div id="hdot" class="hdot"></div><span id="hsum">Checking system health&hellip;</span>
   <div id="hdetail" class="hdetail"></div>
@@ -327,6 +338,26 @@ function drawHealth(h){
     'Weather Watcher: '+wwWord+'<br>'+
     'Free memory: '+h.freeHeapKB+' KB'+(h.otaActive?'<br><b>Firmware update in progress</b>':'');
 }
+function refreshAlerts(){
+  fetch('/alerts').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('warnBanner');
+    let list=d.alerts||[];
+    if(d.nowEpoch) list=list.filter(a=>!a.exp||a.exp>d.nowEpoch);
+    if(!list.length){el.innerHTML='';return;}
+    const ageMs=d.receivedMs?(d.uptimeMs-d.receivedMs):null;
+    const stale=ageMs!=null&&ageMs>180000;
+    const ageTxt=stale?' &mdash; last heard '+Math.floor(ageMs/60000)+'m ago':'';
+    el.innerHTML=list.map(a=>
+      '<div class="warnItem '+(a.color||'')+(stale?' stale':'')+'">'+
+      '<span class="wtag">'+a.event+(a.activatedThis?'<span class="wthis">ACTIVATED THIS SIREN</span>':'')+'</span>'+
+      '<span class="wage">'+(stale?ageTxt.replace(' &mdash; ',''):'active')+'</span>'+
+      '</div>'
+    ).join('');
+  }).catch(()=>{});
+}
+refreshAlerts();
+setInterval(refreshAlerts,5000);
+
 function draw(d){
   drawHealth(d.health);
   const st=d.mode||'idle', rm=d.runMode||'idle';
@@ -1442,6 +1473,14 @@ private:
             req->send(200, "application/json", buf);
         });
 
+        // Active-warning banner data (WP7) — polled separately from /status
+        // at a much slower interval, since alerts don't change every 500ms
+        // the way relay state does.
+        server_.on("/alerts", HTTP_GET, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            req->send(200, "application/json", buildAlertsJson());
+        });
+
         // Settings JSON GET (auth required)
         server_.on("/settings-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
             if (!isAuthed(req)) { unauth(req); return; }
@@ -1888,6 +1927,41 @@ private:
             overallHealth(wifiOk, ww), tf(wifiOk), ww, (unsigned)(ESP.getFreeHeap() / 1024), tf(sm.otaActive));
         if (n < 0) { buf[0] = '\0'; return 0; }
         return ((size_t)n >= size) ? size - 1 : (size_t)n;
+    }
+
+    // Same category -> color mapping as weather-watcher's categoryColor()
+    // (nws_client.h) — duplicated rather than shared, since the two
+    // firmwares don't share headers and this is a one-line lookup.
+    static const char* alertCategoryColor(uint8_t c) {
+        switch (c) {
+        case 7: case 6: case 2: return "purple"; // TORNADO_EMERGENCY, TORNADO_CONFIRMED, OTHER_EXTREME
+        case 4: case 5: case 3: return "red";    // TORNADO_UNCONFIRMED, THUNDERSTORM_DESTRUCTIVE, THUNDERSTORM_CONSIDERABLE
+        case 1:                 return "orange"; // THUNDERSTORM_BASE
+        default:                return "";
+        }
+    }
+
+    static String buildAlertsJson() {
+        CtrlLock lock;
+        JsonDocument doc;
+        doc["receivedMs"] = weatherLink.alertsReceivedMs();
+        doc["uptimeMs"]   = millis();
+        time_t t = time(nullptr);
+        doc["nowEpoch"]   = (t > 1600000000) ? (uint32_t)t : 0;
+        JsonArray arr = doc["alerts"].to<JsonArray>();
+        for (uint8_t i = 0; i < weatherLink.alertCount(); i++) {
+            const WeatherLink::LinkedAlert& a = weatherLink.alert(i);
+            JsonObject o = arr.add<JsonObject>();
+            o["vtecKey"] = a.vtecKey;
+            o["event"]   = a.event;
+            o["color"]   = alertCategoryColor(a.category);
+            o["exp"]     = a.expEpoch;
+            o["activatedThis"] = (sm.lastTriggerSource == TriggerSource::NWS_ALERT) &&
+                                  a.vtecKey[0] && !strcmp(weatherLink.lastAlertId(), a.vtecKey);
+        }
+        String out;
+        serializeJson(doc, out);
+        return out;
     }
 
     static String buildSettingsJson() {
