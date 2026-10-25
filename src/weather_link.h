@@ -7,6 +7,7 @@
 #include "statemachine.h"
 #include "buttons.h"
 #include "clock.h"
+#include "sync.h"
 
 // Bridges a second, dedicated ESP32 ("Weather Watcher", see weather-watcher/
 // in this repo) that polls National Weather Service alerts for a specific
@@ -59,6 +60,14 @@ public:
     bool        finalReported() const { return everReported_ && !pending_; }
     const char* detail()       const { return detail_; }
 
+    // True once something has been heard at least once and then nothing for
+    // 90s — the link is wired and was working, but has gone quiet (WW
+    // crashed/rebooted/lost power without the main board noticing any other
+    // way, since there's no separate heartbeat beyond ordinary traffic).
+    // Distinct from !everReported(), which just means "never wired/powered".
+    bool lost() const { return everReported_ && deadlinePassed(lastRxMs_ + 90000); }
+    uint32_t lastRxAgeMs() const { return millis() - lastRxMs_; }
+
     // "TYPE - THREAT LEVEL" string from the most recent "WX <MODE> <id> <descriptor>"
     // trigger (e.g. "TORNADO EMERGENCY - CATASTROPHIC") — see nws_client.h's
     // categoryDescriptor(). Empty if none has arrived yet. Read by mesh.h to
@@ -98,6 +107,7 @@ private:
     char    line_[160];
     uint8_t lineLen_ = 0;
 
+    uint32_t lastRxMs_ = 0;
     bool everReported_ = false;
     bool ok_            = false;
     bool pending_       = false;
@@ -207,6 +217,7 @@ private:
         while (len > 0 && isspace((unsigned char)line[len - 1])) line[--len] = '\0';
 
         if (strncmp(line, "WX", 2) != 0) return;
+        lastRxMs_ = millis();
         char* cmd = line + 2;
         while (*cmd == ' ') cmd++;
 

@@ -714,9 +714,10 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   const wwEl=document.getElementById('wwStatus');
   if(!d.weatherAutoTriggerEnabled){wwEl.textContent='Disabled';wwEl.className='ws';}
   else if(!d.wwEverReported){wwEl.textContent='No status received yet from the Weather Watcher board';wwEl.className='ws';}
+  else if(d.wwLost){wwEl.textContent='Lost — last heard '+Math.floor(d.wwLastHeardSec/60)+'m '+(d.wwLastHeardSec%60)+'s ago';wwEl.className='ws er';}
   else if(d.wwPending){wwEl.textContent='Starting up — waiting for its first NWS poll';wwEl.className='ws';}
-  else if(d.wwOk){wwEl.textContent='OK — '+d.wwDetail;wwEl.className='ws ok';}
-  else{wwEl.textContent='Error — '+d.wwDetail;wwEl.className='ws er';}
+  else if(d.wwOk){wwEl.textContent='OK — '+d.wwDetail+' (last heard '+d.wwLastHeardSec+'s ago)';wwEl.className='ws ok';}
+  else{wwEl.textContent='Error — '+d.wwDetail+' (last heard '+d.wwLastHeardSec+'s ago)';wwEl.className='ws er';}
 });
 
 function refreshLockIcon(){
@@ -1822,6 +1823,8 @@ private:
         doc["wwOk"]           = weatherLink.reportedOk();
         doc["wwPending"]      = weatherLink.pending();
         doc["wwDetail"]       = weatherLink.detail();
+        doc["wwLost"]         = weatherLink.lost();
+        doc["wwLastHeardSec"] = weatherLink.everReported() ? weatherLink.lastRxAgeMs() / 1000 : 0;
         doc["resetReason"]    = resetReasonName();
         doc["fwVersion"]           = FW_VERSION;
         String out;

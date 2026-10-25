@@ -113,7 +113,31 @@ public:
             reply(wasWeatherEnabled_ ? "WEATHER TRIGGER ENABLED" : "WEATHER TRIGGER DISABLED");
         }
 
+        // Weather Watcher went quiet / came back — a fault condition worth
+        // an immediate alert either way, same alert-bell treatment as the
+        // activation/stop broadcasts above.
+        bool wwLost = weatherLink.lost();
+        if (wwLost != wasWwLost_) {
+            wasWwLost_ = wwLost;
+            reply(String("\x07WEATHER WATCHER ") + (wwLost ? "LOST" : "RECOVERED"));
+        }
+
         uint32_t now = millis();
+
+        // Weather Watcher self-reported an ERROR (not LOST — it's still
+        // talking, just unhappy, e.g. WiFi/NWS API trouble) — re-announce
+        // every 10 minutes so an ongoing fault isn't a single easily-missed
+        // message, and once more immediately on recovery.
+        bool wwError = weatherLink.everReported() && !weatherLink.lost() &&
+                       !weatherLink.pending() && !weatherLink.reportedOk();
+        if (wwError && (now - lastWwErrorTs_ >= WW_ERROR_REANNOUNCE_MS)) {
+            lastWwErrorTs_ = now;
+            reply(String("\x07WEATHER WATCHER ERROR: ") + weatherLink.detail());
+        }
+        if (wasWwError_ && !wwError) {
+            reply("WEATHER WATCHER RECOVERED");
+        }
+        wasWwError_ = wwError;
 
         // Deferred boot announcement — see announceStartup(). Only the
         // STARTUP COMPLETE/STATUS pair waits; every activation/stop/lockout
@@ -153,6 +177,7 @@ public:
 private:
     static constexpr uint32_t STATUS_INTERVAL_MS = 12UL * 60 * 60 * 1000;  // 12 hours
     static constexpr uint32_t STARTUP_ANNOUNCE_MAX_WAIT_MS = 120000;       // 2 minutes
+    static constexpr uint32_t WW_ERROR_REANNOUNCE_MS = 10UL * 60 * 1000;   // 10 minutes
 
     char     line_[64];
     uint8_t  lineLen_          = 0;
@@ -165,6 +190,9 @@ private:
     bool     wasWeatherEnabled_ = false;
     bool     startupPending_   = false;
     uint32_t bootTs_           = 0;
+    bool     wasWwLost_        = false;
+    bool     wasWwError_       = false;
+    uint32_t lastWwErrorTs_    = 0;
 
     void reply(const char* msg) { Serial2.println(msg); }
     void reply(const String& msg) { Serial2.println(msg); }
@@ -215,13 +243,16 @@ private:
 
     // OFF = the owner's kill-switch is off; N/A = enabled but nothing has
     // ever been heard from the Weather Watcher board (link never wired, or
-    // it's not powered); STARTING = it's alive but hasn't finished its first
-    // NWS poll yet; OK/ERROR = its own self-reported WiFi/NWS API health,
-    // pushed unprompted over the dedicated UART link (see weather_link.h's
+    // it's not powered); LOST = it was heard from before but has gone quiet
+    // for 90s+ (wired and working, then stopped — see weather_link.h's
+    // lost()); STARTING = it's alive but hasn't finished its first NWS poll
+    // yet; OK/ERROR = its own self-reported WiFi/NWS API health, pushed
+    // unprompted over the dedicated UART link (see weather_link.h's
     // "WX STATUS" handling).
     static const char* weatherWatcherWord() {
         if (!settingsMgr.s.weatherAutoTriggerEnabled) return "OFF";
         if (!weatherLink.everReported()) return "N/A";
+        if (weatherLink.lost()) return "LOST";
         if (weatherLink.pending()) return "STARTING";
         return weatherLink.reportedOk() ? "OK" : "ERROR";
     }
