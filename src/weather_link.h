@@ -43,6 +43,7 @@ public:
                 line_[lineLen_++] = c;
             }
         }
+        sendStatusEvents();
     }
 
     // ── Weather Watcher's self-reported health, pushed unprompted over this
@@ -77,8 +78,24 @@ public:
     // see mesh.h's "WXREBOOT" command.
     void requestReboot() { Serial1.println("REBOOT"); }
 
+    // One alert from the most recent "WX ALERTS .. WX ALERTS END" batch
+    // (protocol v2, docs/uart-protocol.md section 2.1) — feeds the main
+    // page's active-warning banner. event is truncated to fit; exp is 0 if
+    // the Weather Watcher's own clock wasn't synced when it sent the batch.
+    struct LinkedAlert {
+        char     vtecKey[20] = "";
+        uint8_t  category    = 0;
+        uint32_t expEpoch    = 0;
+        char     event[41]   = "";
+    };
+    static constexpr uint8_t MAX_LINKED_ALERTS = 8;
+
+    uint8_t            alertCount()        const { return alertCount_; }
+    const LinkedAlert& alert(uint8_t i)    const { return alerts_[i]; }
+    uint32_t           alertsReceivedMs()  const { return lastAlertsRxMs_; }
+
 private:
-    char    line_[96];
+    char    line_[160];
     uint8_t lineLen_ = 0;
 
     bool everReported_ = false;
@@ -88,7 +105,84 @@ private:
     char lastAlertDesc_[64] = "";
     char lastAlertId_[20]   = "";
 
+    LinkedAlert alerts_[MAX_LINKED_ALERTS];
+    uint8_t     alertCount_       = 0;
+    LinkedAlert pendingAlerts_[MAX_LINKED_ALERTS];
+    uint8_t     pendingCount_     = 0;
+    bool        receivingAlerts_  = false;
+    uint32_t    lastAlertsRxMs_   = 0;
+
     void reply(const char* msg) { Serial1.println(msg); }
+
+    static const char* sourceWord(TriggerSource s) {
+        switch (s) {
+        case TriggerSource::LOCAL:     return "LOCAL";
+        case TriggerSource::WEB:       return "WEB";
+        case TriggerSource::MESH:      return "MESH";
+        case TriggerSource::NWS_ALERT: return "NWS_ALERT";
+        default:                       return "LOCAL";
+        }
+    }
+
+    // Unprompted "SX ..." events to the Weather Watcher (docs/uart-protocol.md
+    // section 2.3), so it can log/notify (WP3/WP4) on siren activity it
+    // didn't itself cause — a WEB/MESH/button activation while an NWS
+    // warning is still active is exactly the kind of thing worth a push.
+    // Edge-detected the same way mesh.h does, off the same shared sm
+    // counters/state — an independent "last seen" here doesn't interfere
+    // with mesh.h's own edge-detection on those same fields.
+    bool     sxWasActive_         = false;
+    RunMode  sxLastKnownRunMode_  = RunMode::NONE;
+    uint32_t sxLastSeenStopSeq_   = 0;
+
+    void sendStatusEvents() {
+        if (sm.runMode != RunMode::NONE) sxLastKnownRunMode_ = sm.runMode;
+
+        bool active = sm.isActive();
+        if (!sxWasActive_ && active) {
+            Serial1.print("SX ACTIVATED ");
+            Serial1.print(runModeWord(sm.runMode));
+            Serial1.print(' ');
+            Serial1.println(sourceWord(sm.lastTriggerSource));
+        }
+        if (sxWasActive_ && !active) {
+            Serial1.print("SX STOPPED ");
+            Serial1.println(runModeWord(sxLastKnownRunMode_));
+        }
+        sxWasActive_ = active;
+
+        if (sm.stopCallSeq != sxLastSeenStopSeq_) {
+            sxLastSeenStopSeq_ = sm.stopCallSeq;
+            Serial1.print("SX STOP ");
+            Serial1.println(sourceWord(sm.lastStopSource));
+        }
+    }
+
+    static const char* runModeWord(RunMode m) {
+        switch (m) {
+        case RunMode::WAIL:      return "WAIL";
+        case RunMode::ATTACK:    return "ATTACK";
+        case RunMode::FAST_WAIL: return "FASTWAIL";
+        case RunMode::MANUAL:    return "MANUAL";
+        case RunMode::GROWL:     return "GROWL";
+        default:                 return "NONE";
+        }
+    }
+
+    // vtecKey may be empty (e.g. a malformed line) — sent as "-" so the ACK
+    // line always has exactly the expected token count.
+    void ackReply(const char* vtecKey, const char* code, const char* detail = nullptr) {
+        Serial1.print("ACK ");
+        Serial1.print((vtecKey && *vtecKey) ? vtecKey : "-");
+        Serial1.print(' ');
+        if (detail) {
+            Serial1.print(code);
+            Serial1.print(' ');
+            Serial1.println(detail);
+        } else {
+            Serial1.println(code);
+        }
+    }
 
     // Five commands are understood: "WX PING" (a pure link-health check, no
     // gating at all — used both at the Weather Watcher's own startup and
@@ -116,7 +210,7 @@ private:
         char* cmd = line + 2;
         while (*cmd == ' ') cmd++;
 
-        if (!strcmp(cmd, "PING")) { reply("OK: pong"); return; }
+        if (!strcmp(cmd, "PING")) { reply("OK: pong 2"); return; }
 
         if (!strncmp(cmd, "STATUS", 6)) {
             char* arg = cmd + 6;
@@ -132,6 +226,56 @@ private:
 
         if (!strncmp(cmd, "TIME", 4)) {
             setClockFromLink((uint32_t)strtoul(cmd + 4, nullptr, 10));
+            return;
+        }
+
+        // "WX ALERTS <n>" starts a staging batch (n is informational only —
+        // END is what actually commits it), "WX ALERT <vtecKey> <cat>
+        // <expEpoch|0> <event...>" appends one entry to it, and
+        // "WX ALERTS END" atomically swaps it into alerts_ so a reader never
+        // sees a partially-received list. Feeds the main page's
+        // active-warning banner. Checked before the generic "ALERTS" prefix
+        // since both start with it.
+        if (!strncmp(cmd, "ALERTS END", 10)) {
+            if (receivingAlerts_) {
+                memcpy(alerts_, pendingAlerts_, sizeof(alerts_));
+                alertCount_      = pendingCount_;
+                lastAlertsRxMs_  = millis();
+                receivingAlerts_ = false;
+            }
+            return;
+        }
+        if (!strncmp(cmd, "ALERTS", 6)) {
+            receivingAlerts_ = true;
+            pendingCount_    = 0;
+            return;
+        }
+        if (!strncmp(cmd, "ALERT ", 6)) {
+            if (!receivingAlerts_ || pendingCount_ >= MAX_LINKED_ALERTS) return;
+            char* arg = cmd + 6;
+            while (*arg == ' ') arg++;
+            char* vtec = arg;
+            char* p = strchr(arg, ' ');
+            if (!p) return;
+            *p = '\0'; p++;
+            while (*p == ' ') p++;
+            char* catStr = p;
+            p = strchr(p, ' ');
+            if (!p) return;
+            *p = '\0'; p++;
+            while (*p == ' ') p++;
+            char* expStr = p;
+            p = strchr(p, ' ');
+            if (!p) return;
+            *p = '\0'; p++;
+            while (*p == ' ') p++;
+            char* event = p; // rest of the line
+
+            LinkedAlert& a = pendingAlerts_[pendingCount_++];
+            strlcpy(a.vtecKey, vtec, sizeof(a.vtecKey));
+            a.category = (uint8_t)strtoul(catStr, nullptr, 10);
+            a.expEpoch = (uint32_t)strtoul(expStr, nullptr, 10);
+            strlcpy(a.event, event, sizeof(a.event));
             return;
         }
 
@@ -153,15 +297,30 @@ private:
         if      (!strcmp(modeWord, "WAIL"))     mode = RunMode::WAIL;
         else if (!strcmp(modeWord, "ATTACK"))   mode = RunMode::ATTACK;
         else if (!strcmp(modeWord, "FASTWAIL")) mode = RunMode::FAST_WAIL;
-        else { reply("ERR: unknown command"); return; }
+        else { ackReply(alertId, "BADCMD"); return; }
 
-        if (!settingsMgr.s.weatherAutoTriggerEnabled) { reply("ERR: disabled"); return; }
-        if (buttons.testModeActive) { reply("ERR: test mode active"); return; }
+        // Checked in this order (docs/uart-protocol.md section 2.2): BADCMD
+        // (above), DISABLED, TESTMODE, OTA, JOG, then ACTIVE/STOPPING via
+        // sm.state, then attempt trigger(). Each of these mirrors a read-only
+        // StateMachine/ButtonHandler/Settings accessor — nothing here
+        // reproduces trigger()'s own internal gating logic.
+        if (!settingsMgr.s.weatherAutoTriggerEnabled) { ackReply(alertId, "DISABLED"); return; }
+        if (buttons.testModeActive)                   { ackReply(alertId, "TESTMODE"); return; }
+        if (sm.otaActive)                              { ackReply(alertId, "OTA"); return; }
+        if (sm.rotatorJogActive)                       { ackReply(alertId, "JOG"); return; }
+        if (sm.state == State::STOPPING)               { ackReply(alertId, "STOPPING"); return; }
+        if (sm.state != State::IDLE) { ackReply(alertId, "ACTIVE", runModeWord(sm.runMode)); return; }
 
         strlcpy(lastAlertDesc_, desc ? desc : "", sizeof(lastAlertDesc_));
         strlcpy(lastAlertId_, alertId ? alertId : "", sizeof(lastAlertId_));
-        if (sm.trigger(mode, TriggerSource::NWS_ALERT, lastAlertDesc_, lastAlertId_)) reply("OK: triggered");
-        else reply("ERR: busy");
+        if (sm.trigger(mode, TriggerSource::NWS_ALERT, lastAlertDesc_, lastAlertId_)) {
+            ackReply(alertId, "TRIGGERED");
+        } else {
+            // Race: passed every check above but trigger() still refused
+            // (something else claimed IDLE in between) — report it the same
+            // way a pre-existing run would be.
+            ackReply(alertId, "ACTIVE", runModeWord(sm.runMode));
+        }
     }
 };
 

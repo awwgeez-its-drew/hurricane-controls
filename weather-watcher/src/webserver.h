@@ -1196,6 +1196,10 @@ private:
         doc["everTestedLink"] = nwsClient.everTestedLink();
         doc["linkOk"]         = nwsClient.linkOk();
         doc["linkDetail"]     = nwsClient.linkTestInProgress() ? String("Testing...") : nwsClient.linkDetail();
+        doc["sirenLegacyProtocol"] = nwsClient.sirenLegacyProtocol();
+
+        doc["stale"]       = nwsClient.stale();
+        doc["dataAgeSec"]  = nwsClient.dataAgeSec();
 
         time_t t = time(nullptr);
         doc["currentTime"] = (t > 1000000000) ? formatEpoch((uint32_t)t, "%H:%M:%S") : String("Not synced");

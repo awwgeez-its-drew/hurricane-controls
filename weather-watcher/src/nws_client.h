@@ -10,6 +10,7 @@
 #include "sync.h"
 #include "settings.h"
 #include "other_extreme_types.h"
+#include <Preferences.h>
 
 // Alert categories for display (Current Alerts card) and for deciding
 // whether/when to trigger the main board. Numeric order matters: higher
@@ -127,11 +128,13 @@ public:
     void begin() {
         Serial1.begin(LINK_BAUD, SERIAL_8N1, LINK_RX_PIN, LINK_TX_PIN);
         pinMode(STATUS_LED, OUTPUT);
+        loadTracked();
     }
 
     void update() {
         readReplies();
         checkLinkTestTimeout();
+        updateTriggerQueue(millis());
 
         // Pushed to the main board independently of the NWS poll cadence
         // (which can be as slow as minutes) so a WiFi drop shows up there
@@ -146,8 +149,11 @@ public:
 
         // First poll right away at boot (and right after a late Wi-Fi join —
         // see requestPollSoon()) rather than a full poll interval later.
-        uint32_t intervalMs = settingsMgr.s.pollIntervalSec * 1000UL;
-        if (!pollSoon_ && everPolled_ && now - lastPollTs_ < intervalMs) return;
+        // nextPollDelayMs() implements the failure backoff (15/15/30/60s then
+        // the configured interval) — it collapses to the plain interval once
+        // polls are succeeding, so this looks the same as before in the
+        // common case.
+        if (!pollSoon_ && everPolled_ && now - lastPollTs_ < nextPollDelayMs()) return;
         pollSoon_   = false;
         lastPollTs_ = now;
         poll();
@@ -157,6 +163,22 @@ public:
         // announcement waits for exactly that).
         lastStatusPushTs_ = millis();
         sendStatusToController();
+    }
+
+    // stale: the dashboard's Current Alerts list hasn't been refreshed by a
+    // *successful* poll recently enough to trust — shown greyed-out with an
+    // age indicator rather than silently going out of date. Deliberately not
+    // the same thing as lastPollSuccess_, which only reflects the single
+    // most recent attempt (a backoff retry due any second still counts as
+    // "not stale yet" as long as a success landed reasonably recently).
+    bool stale() const {
+        if (!everPolled_) return false; // nothing to be stale about yet — poll() hasn't run
+        uint32_t maxAgeMs = settingsMgr.s.pollIntervalSec * 2000UL;
+        if (maxAgeMs < 90000) maxAgeMs = 90000;
+        return millis() - lastSuccessMs_ >= maxAgeMs;
+    }
+    uint32_t dataAgeSec() const {
+        return lastSuccessMs_ ? (millis() - lastSuccessMs_) / 1000 : 0;
     }
 
     // Called from main.cpp when Wi-Fi (re)joins the home network.
@@ -187,6 +209,12 @@ public:
     bool   linkTestInProgress() const { return linkTestInProgress_; }
     bool   linkOk()            const { return linkOk_; }
     String linkDetail()        const { return linkDetail_; }
+    // True once we've heard a bare "OK: pong" (pre-ACK-protocol siren
+    // firmware) rather than "OK: pong 2" — lets the Settings UI warn that
+    // the paired main board predates the trigger-ACK protocol.
+    bool   sirenLegacyProtocol() const { return sirenLegacyProtocol_; }
+    const char* lastSxEvent()    const { return lastSxEvent_; }
+    uint32_t    lastSxEventMs()  const { return lastSxEventMs_; }
 
     uint8_t currentAlertCount() const { return currentAlertCount_; }
     const CurrentAlert& currentAlert(uint8_t i) const { return currentAlerts_[i]; }
@@ -196,9 +224,27 @@ public:
 
 private:
     uint32_t lastPollTs_ = 0;
+    uint32_t lastSuccessMs_ = 0;  // millis() of the last successful poll — see stale()
 
     bool     pollSoon_         = false;
     bool     polledOnline_     = false;  // a poll has actually reached the network
+
+    // ── Poll failure backoff: 15s, 15s, 30s, 60s, then the configured
+    // interval — never slower than the interval itself. A Retry-After
+    // header on a 429/503 overrides the schedule for that one wait (capped).
+    // Any success resets back to the start of the schedule.
+    static constexpr uint32_t BACKOFF_SCHEDULE_MS[4] = {15000, 15000, 30000, 60000};
+    uint8_t  consecutiveFailures_ = 0;
+    uint32_t retryAfterMs_        = 0;  // 0 = none in effect
+
+    uint32_t nextPollDelayMs() const {
+        uint32_t intervalMs = settingsMgr.s.pollIntervalSec * 1000UL;
+        if (retryAfterMs_) return retryAfterMs_ < intervalMs ? retryAfterMs_ : intervalMs;
+        if (consecutiveFailures_ == 0) return intervalMs;
+        uint32_t backoff = BACKOFF_SCHEDULE_MS[
+            consecutiveFailures_ - 1 < 4 ? consecutiveFailures_ - 1 : 3];
+        return backoff < intervalMs ? backoff : intervalMs;
+    }
 
     // ── Periodic "WX STATUS <OK|ERROR|PENDING> <detail>" push to the main board
     uint32_t lastStatusPushTs_ = 0;
@@ -223,6 +269,9 @@ private:
     uint32_t linkTestSentMs_    = 0;
     bool     linkOk_            = false;
     String   linkDetail_        = "Not tested yet";
+    bool     sirenLegacyProtocol_ = false;
+    char     lastSxEvent_[40]   = "";
+    uint32_t lastSxEventMs_     = 0;
     static constexpr uint32_t LINK_TEST_TIMEOUT_MS = 3000;
 
     // ── Current Alerts (rebuilt every poll) ─────────────────────────────────
@@ -237,19 +286,27 @@ private:
     uint8_t       recentCount_ = 0;
 
     // ── Tracked warning events, keyed by VTEC office.phenomena.sig.etn ──────
+    // Persisted to NVS (one blob, loadTracked()/saveTracked()) so a reboot
+    // mid-warning can't re-trigger or re-notify for the same event — see
+    // docs/uart-protocol.md WP1 item 4.
     struct TrackedEvent {
         char     vtecKey[20] = {0};
-        uint8_t  lastActedCategory = 0;  // AlertCategory::NONE — highest category ever acted on (triggered) for this event
-        uint32_t lastSeenMs = 0;
-        bool     used = false;
+        uint8_t  lastActedCategory   = 0;  // AlertCategory::NONE — highest category a final disposition has been reached for
+        uint8_t  lastNotifiedCategory = 0; // highest category an ntfy notification has gone out for (WP4)
+        uint32_t lastSeenMs  = 0;   // RAM-only (millis() doesn't survive reboot) — used for LRU eviction pre-NTP-sync
+        uint32_t firstSeenEpoch = 0; // 0 = unknown (clock wasn't synced when first seen) — used for the 48h prune
+        bool     used    = false;
+        bool     pending = false;  // a trigger for this event is currently queued/in flight — don't enqueue a second
+        uint8_t  pendingCategory = 0;
     };
     static constexpr uint8_t MAX_TRACKED = 16;
     TrackedEvent tracked_[MAX_TRACKED];
+    bool trackedDirty_ = false;  // set on any change; saveTracked() only writes NVS when true
 
     TrackedEvent* findOrCreateTracked(const char* key, uint32_t now) {
         TrackedEvent* oldest = nullptr;
         for (auto& e : tracked_) {
-            if (e.used && !strcmp(e.vtecKey, key)) return &e;
+            if (e.used && !strcmp(e.vtecKey, key)) { e.lastSeenMs = now; return &e; }
             if (!oldest || e.lastSeenMs < oldest->lastSeenMs) oldest = &e;
         }
         for (auto& e : tracked_) {
@@ -257,6 +314,11 @@ private:
                 strlcpy(e.vtecKey, key, sizeof(e.vtecKey));
                 e.used = true;
                 e.lastActedCategory = 0;
+                e.lastNotifiedCategory = 0;
+                e.lastSeenMs = now;
+                e.firstSeenEpoch = nowEpoch();
+                e.pending = false;
+                trackedDirty_ = true;
                 return &e;
             }
         }
@@ -264,7 +326,60 @@ private:
         // never happen in practice) — evict the least-recently-seen entry.
         strlcpy(oldest->vtecKey, key, sizeof(oldest->vtecKey));
         oldest->lastActedCategory = 0;
+        oldest->lastNotifiedCategory = 0;
+        oldest->lastSeenMs = now;
+        oldest->firstSeenEpoch = nowEpoch();
+        oldest->pending = false;
+        trackedDirty_ = true;
         return oldest;
+    }
+
+    TrackedEvent* findTracked(const char* key) {
+        for (auto& e : tracked_) if (e.used && !strcmp(e.vtecKey, key)) return &e;
+        return nullptr;
+    }
+
+    // Drops entries whose warning expired at least 48h ago, once the clock
+    // is synced (can't tell age without it, so entries just sit until then —
+    // matches today's effective behavior when the clock is never synced).
+    // Called once per poll; cheap (16-entry scan, no I/O unless something
+    // actually gets pruned).
+    void pruneTracked() {
+        uint32_t now = nowEpoch();
+        if (!now) return;
+        for (auto& e : tracked_) {
+            if (e.used && !e.pending && e.firstSeenEpoch &&
+                now - e.firstSeenEpoch > 48UL * 3600) {
+                e.used = false;
+                trackedDirty_ = true;
+            }
+        }
+    }
+
+    // One blob, "wxwatch"/"tracked" (separate key from Settings' own data in
+    // the same namespace). ~28 bytes/entry x 16 = well under NVS's practical
+    // per-entry limits. Written only when trackedDirty_ (on change), not
+    // every poll.
+    void loadTracked() {
+        Preferences p;
+        p.begin("wxwatch", true);
+        size_t n = p.getBytesLength("tracked");
+        if (n == sizeof(tracked_)) p.getBytes("tracked", tracked_, sizeof(tracked_));
+        p.end();
+        // lastSeenMs is a millis() timestamp from a previous boot — meaningless
+        // now, and would otherwise make every loaded entry look ancient for
+        // eviction purposes. Reset to "now" so a fresh boot doesn't instantly
+        // start evicting everything it just loaded.
+        for (auto& e : tracked_) if (e.used) e.lastSeenMs = millis();
+    }
+
+    void saveTrackedIfDirty() {
+        if (!trackedDirty_) return;
+        Preferences p;
+        p.begin("wxwatch", false);
+        p.putBytes("tracked", tracked_, sizeof(tracked_));
+        p.end();
+        trackedDirty_ = false;
     }
 
     // Extracts "office.phenomena.significance.etn" from a raw P-VTEC string
@@ -343,6 +458,13 @@ private:
         everPolled_      = true;
         lastPollSuccess_ = ok;
         lastPollError_   = err;
+        if (ok) {
+            consecutiveFailures_ = 0;
+            retryAfterMs_        = 0;
+            lastSuccessMs_       = millis();
+        } else if (!retryAfterMs_ && consecutiveFailures_ < 255) {
+            consecutiveFailures_++;
+        }
     }
 
     static String capped(const char* str) {
@@ -384,6 +506,13 @@ private:
 
         int code = http.GET();
         if (code != 200) {
+            // Honor a rate-limit Retry-After on 429/503 for exactly one wait
+            // (capped at 300s) instead of the normal backoff schedule.
+            if (code == 429 || code == 503) {
+                String ra = http.header("Retry-After");
+                long seconds = ra.length() ? ra.toInt() : 0;
+                if (seconds > 0) retryAfterMs_ = (uint32_t)(min(seconds, 300L)) * 1000UL;
+            }
             setPollResult(false, (code > 0)
                 ? ("HTTP " + String(code) + " from api.weather.gov")
                 : ("Connection failed (error " + String(code) + ") — check Wi-Fi/internet"));
@@ -449,19 +578,32 @@ private:
                 strlcpy(key, id, sizeof(key)); // fallback if VTEC is ever missing
 
             TrackedEvent* te = findOrCreateTracked(key, now);
-            te->lastSeenMs = now;
 
             const char* mode = modeForCategory(category);
             uint8_t categoryVal = (uint8_t)category;
-            if (strcmp(mode, "OFF") != 0) {
-                bool firstTime = te->lastActedCategory == 0;
-                bool escalated = settingsMgr.s.repeatOnUpgrade &&
-                                  te->lastActedCategory > 0 &&
-                                  categoryVal > te->lastActedCategory;
-                if (firstTime || escalated) {
+            // "acted" (lastActedCategory set) only once a disposition is
+            // final — see finalizeQueueHead()/the OFF-mode branch just below
+            // — not at enqueue time, so a still-pending retry doesn't look
+            // like "already handled" and get silently skipped. `pending`
+            // covers the in-between window so the same crossing can't be
+            // queued twice while its first attempt is still resolving.
+            bool firstTime = te->lastActedCategory == 0;
+            bool escalated = settingsMgr.s.repeatOnUpgrade &&
+                              te->lastActedCategory > 0 &&
+                              categoryVal > te->lastActedCategory;
+            if ((firstTime || escalated) && !te->pending) {
+                if (!strcmp(mode, "OFF")) {
+                    // Awareness-only crossing: no siren command, but still a
+                    // real disposition (NOTIFY_ONLY) for the log/ntfy (WP3/
+                    // WP4) to pick up, and still marks this category acted
+                    // so it isn't re-evaluated every poll.
                     te->lastActedCategory = categoryVal;
-                    sendTrigger(mode, key, categoryDescriptor(category, event));
-                    recordRecentTrigger(event, mode);
+                    trackedDirty_ = true;
+                    Serial.printf("%s: category crossed with siren mode OFF -> NOTIFY_ONLY\n", key);
+                } else {
+                    te->pending         = true;
+                    te->pendingCategory = categoryVal;
+                    enqueueTrigger(mode, key, categoryDescriptor(category, event), event);
                 }
             }
 
@@ -475,6 +617,8 @@ private:
                 ca.triggeredSiren = (te->lastActedCategory > 0);
             }
         }
+        pruneTracked();
+        saveTrackedIfDirty();
 
         // Sort by severity, highest first (simple insertion sort — at most
         // MAX_CURRENT=8 entries, no need for anything fancier).
@@ -499,19 +643,135 @@ private:
         if (recentCount_ < MAX_RECENT) recentCount_++;
     }
 
-    // vtecKey is the same stable "office.phen.sig.etn" id (or the alert's raw
-    // id as a fallback) already used for de-dup/escalation tracking above —
-    // reused here as the alert's cross-referenceable unique ID, since it has
-    // no spaces and is already NWS's own identifier for this warning.
-    void sendTrigger(const char* mode, const char* vtecKey, const String& descriptor) {
-        Serial.printf("Qualifying alert — sending WX %s %s %s\n", mode, vtecKey, descriptor.c_str());
+    // ── Trigger retry queue (docs/uart-protocol.md WP1 item 2) ──────────────
+    // vtecKey doubles as the alert's cross-referenceable unique ID sent to
+    // the main board (no spaces, already NWS's own identifier). Only
+    // queue_[0] is ever "in flight" — a strict FIFO, shifted down on
+    // completion; MAX_QUEUED=8 is generous for how many distinct warnings
+    // could plausibly be mid-retry at once for a single point.
+    struct QueuedTrigger {
+        bool     active      = false;
+        char     vtecKey[20] = "";
+        char     mode[10]    = "";
+        String   descriptor;
+        String   event;
+        uint32_t firstSentMs = 0;
+        uint32_t lastSentMs  = 0;
+        uint8_t  sendCount   = 0;
+        char     blockCode[12] = ""; // last retryable ACK code ("" = still awaiting any first ACK)
+    };
+    static constexpr uint8_t MAX_QUEUED = 8;
+    QueuedTrigger queue_[MAX_QUEUED];
+
+    void enqueueTrigger(const char* mode, const char* vtecKey, const String& descriptor, const char* event) {
+        // A higher-category escalation for an already-queued event replaces
+        // rather than duplicates — restart its attempt counter too, since
+        // this is effectively a fresh trigger attempt.
+        for (auto& q : queue_) {
+            if (q.active && !strcmp(q.vtecKey, vtecKey)) {
+                strlcpy(q.mode, mode, sizeof(q.mode));
+                q.descriptor  = descriptor;
+                q.event       = event;
+                q.sendCount   = 0;
+                q.blockCode[0] = '\0';
+                return;
+            }
+        }
+        for (auto& q : queue_) {
+            if (!q.active) {
+                q.active = true;
+                strlcpy(q.vtecKey, vtecKey, sizeof(q.vtecKey));
+                strlcpy(q.mode, mode, sizeof(q.mode));
+                q.descriptor  = descriptor;
+                q.event       = event;
+                q.sendCount   = 0;
+                q.blockCode[0] = '\0';
+                return;
+            }
+        }
+        Serial.printf("Trigger queue full (%u) — dropping %s %s\n", MAX_QUEUED, vtecKey, mode);
+    }
+
+    void transmitQueued(QueuedTrigger& q, uint32_t now) {
+        Serial.printf("Trigger queue: sending WX %s %s %s (attempt %u)\n",
+            q.mode, q.vtecKey, q.descriptor.c_str(), q.sendCount + 1);
         digitalWrite(STATUS_LED, HIGH);
         Serial1.print("WX ");
-        Serial1.print(mode);
+        Serial1.print(q.mode);
         Serial1.print(' ');
-        Serial1.print(vtecKey);
+        Serial1.print(q.vtecKey);
         Serial1.print(' ');
-        Serial1.println(descriptor);
+        Serial1.println(q.descriptor);
+        if (q.sendCount == 0) q.firstSentMs = now;
+        q.lastSentMs = now;
+        q.sendCount++;
+    }
+
+    void updateTriggerQueue(uint32_t now) {
+        if (!queue_[0].active) return;
+        QueuedTrigger& q = queue_[0];
+        if (q.sendCount == 0) { transmitQueued(q, now); return; }
+        if (q.blockCode[0]) {
+            // A retryable block (STOPPING/JOG/OTA/TESTMODE) was ACKed —
+            // keep retrying every 3s for up to 30s total from the first send.
+            if (now - q.firstSentMs >= 30000) {
+                char disp[24];
+                snprintf(disp, sizeof(disp), "GAVE_UP_%s", q.blockCode);
+                finalizeQueueHead(disp);
+                return;
+            }
+            if (now - q.lastSentMs >= 3000) transmitQueued(q, now);
+            return;
+        }
+        // No ACK at all yet for the most recent send — resend up to 3 times
+        // (4 sends total) at 3s intervals, then give up.
+        if (now - q.lastSentMs >= 3000) {
+            if (q.sendCount >= 4) { finalizeQueueHead("NO_RESPONSE"); return; }
+            transmitQueued(q, now);
+        }
+    }
+
+    // "ACK <vtecKey> <CODE> [detail]" — only ever matched against the
+    // current queue head, since that's the only trigger ever in flight.
+    void handleAck(char* line) {
+        char* p = line + 3; // skip "ACK"
+        while (*p == ' ') p++;
+        char* vtec = p;
+        p = strchr(p, ' ');
+        if (!p) return;
+        *p = '\0'; p++;
+        while (*p == ' ') p++;
+        char* code = p;
+        p = strchr(p, ' ');
+        if (p) { *p = '\0'; p++; while (*p == ' ') p++; }
+
+        if (!queue_[0].active || strcmp(queue_[0].vtecKey, vtec) != 0) return;
+        QueuedTrigger& q = queue_[0];
+        if      (!strcmp(code, "TRIGGERED")) finalizeQueueHead(q.sendCount > 1 ? "RETRIED_TRIGGERED" : "TRIGGERED");
+        else if (!strcmp(code, "ACTIVE"))    finalizeQueueHead("ALREADY_ACTIVE");
+        else if (!strcmp(code, "DISABLED"))  finalizeQueueHead("AUTO_OFF");
+        else if (!strcmp(code, "BADCMD"))    finalizeQueueHead("BADCMD");
+        else if (!strcmp(code, "STOPPING") || !strcmp(code, "JOG") ||
+                 !strcmp(code, "OTA") || !strcmp(code, "TESTMODE")) {
+            strlcpy(q.blockCode, code, sizeof(q.blockCode));
+        }
+    }
+
+    void finalizeQueueHead(const char* disposition) {
+        QueuedTrigger& q = queue_[0];
+        Serial.printf("Trigger queue: %s %s -> %s\n", q.vtecKey, q.mode, disposition);
+        if (!strcmp(disposition, "TRIGGERED") || !strcmp(disposition, "RETRIED_TRIGGERED"))
+            recordRecentTrigger(q.event.c_str(), q.mode);
+        TrackedEvent* te = findTracked(q.vtecKey);
+        if (te) {
+            te->pending       = false;
+            te->lastActedCategory = te->pendingCategory;
+            trackedDirty_ = true;
+        }
+        // TODO(WP3): persist `disposition` into the WW alert log here.
+        // TODO(WP4): hand `disposition` to the ntfy queue here.
+        for (uint8_t i = 1; i < MAX_QUEUED; i++) queue_[i - 1] = queue_[i];
+        queue_[MAX_QUEUED - 1] = QueuedTrigger{};
     }
 
     // Unprompted, fire-and-forget push of this board's own WiFi/NWS API
@@ -537,6 +797,7 @@ private:
         else if (!wifiOk)            { state = "ERROR";   detail = "WiFi not connected"; }
         else if (!polledOnline_)     { state = "PENDING"; detail = "Waiting for first poll"; }
         else if (!lastPollSuccess_)  { state = "ERROR";   detail = lastPollError_; }
+        else if (stale())            { state = "ERROR";   detail = "NWS data stale (" + String(dataAgeSec() / 60) + " min old)"; }
         else                         { state = "OK";      detail = "All systems normal"; }
         if (detail.length() > 48) detail = detail.substring(0, 48);
         Serial1.print("WX STATUS ");
@@ -581,14 +842,27 @@ private:
         Serial.print("Main board reply: ");
         Serial.println(line);
         digitalWrite(STATUS_LED, LOW);
-        if (!strcasecmp(line, "OK: pong")) {
+        if (!strcasecmp(line, "OK: pong") || !strcasecmp(line, "OK: pong 2")) {
             CtrlLock lock;
+            sirenLegacyProtocol_ = !strcasecmp(line, "OK: pong");
             if (linkTestInProgress_) {
                 linkTestInProgress_ = false;
                 everTestedLink_     = true;
                 linkOk_             = true;
                 linkDetail_         = "Status OK";
             }
+        } else if (!strncasecmp(line, "ACK ", 4)) {
+            handleAck(line);
+        } else if (!strncasecmp(line, "SX ", 3)) {
+            // Unsolicited siren-activity event (main board's weather_link.h
+            // sendStatusEvents(), docs/uart-protocol.md section 2.3) — a
+            // WEB/MESH/button-initiated run the WW didn't cause itself.
+            // Logged for now; WP3 (persistent log) and WP4 (ntfy) will hang
+            // their own handling off this same branch rather than needing a
+            // second parser.
+            CtrlLock lock;
+            strlcpy(lastSxEvent_, line + 3, sizeof(lastSxEvent_));
+            lastSxEventMs_ = millis();
         } else if (!strcasecmp(line, "REBOOT")) {
             Serial.println("Main board requested a reboot — restarting");
             delay(100);
