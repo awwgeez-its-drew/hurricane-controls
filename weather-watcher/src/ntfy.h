@@ -55,8 +55,12 @@ static const char NTFY_ISRG_ROOT_X1[] =
 
 class Ntfy {
 public:
-    // priority: ntfy's own 1 (min) - 5 (max/urgent) scale.
-    void notify(uint8_t priority, const String& title, const String& message) {
+    // priority: ntfy's own 1 (min) - 5 (max/urgent) scale. tags: a
+    // comma-separated list of ntfy emoji shortcodes (e.g. "rotating_light"),
+    // rendered as emoji in the notification — the visual half of making
+    // real activations/warnings stand out from routine status pushes.
+    // Empty (the default) renders with no emoji.
+    void notify(uint8_t priority, const String& title, const String& message, const char* tags = "") {
         if (!settingsMgr.s.ntfyEnabled || !settingsMgr.s.ntfyTopic[0]) return;
         if (count_ >= MAX_QUEUED) {
             Serial.println("ntfy queue full — dropping lowest-priority pending message");
@@ -72,6 +76,7 @@ public:
         queue_[i].priority = priority;
         queue_[i].title    = title;
         queue_[i].message  = message;
+        queue_[i].tags     = tags;
         count_++;
     }
 
@@ -90,7 +95,7 @@ public:
     String  lastSendDetail() const { return lastSendDetail_; }
 
 private:
-    struct QueuedMsg { uint8_t priority = 3; String title; String message; };
+    struct QueuedMsg { uint8_t priority = 3; String title; String message; String tags; };
     static constexpr uint8_t MAX_QUEUED = 16;
     QueuedMsg queue_[MAX_QUEUED];
     uint8_t   count_ = 0;
@@ -118,6 +123,7 @@ private:
         }
         http.addHeader("Title", m.title);
         http.addHeader("Priority", String(m.priority));
+        if (m.tags.length()) http.addHeader("Tags", m.tags);
         if (settingsMgr.s.ntfyToken[0]) {
             http.addHeader("Authorization", String("Bearer ") + settingsMgr.s.ntfyToken);
         }

@@ -80,6 +80,36 @@ on real hardware before this is trusted as the new baseline.**
       default path against ntfy.sh/a Let's-Encrypt-issued instance should
       already be covered by the test above).
 
+## Mirrored mesh events on ntfy
+
+All of this is code-reviewed and traced sender-to-receiver (not run on
+real hardware from this sandbox) — see `docs/uart-protocol.md`'s `SX ...`
+table. With `ntfyNotifySystemEvents`/`ntfyNotifyStop`/`ntfyNotifyStatus`
+all on:
+
+- [ ] Toggle the physical lockout icon on the main dashboard — one
+      "Local button lockout" push arrives, priority 3, no special tag.
+- [ ] Press a physical button while locked out — one "Locked button
+      pressed" push arrives, priority 4, with the ⚠️ tag.
+- [ ] Toggle the weather-trigger kill-switch (Settings checkbox or a
+      mesh `WEATHERON`/`WEATHEROFF` command) — one "Weather auto-trigger"
+      push arrives, priority 3.
+- [ ] Power-cycle the main board — a "Main board started up" push
+      arrives shortly after boot, priority 3; wait or adjust
+      `SX_STATUS_INTERVAL_MS` down temporarily to also confirm the
+      periodic "Main board status" push.
+- [ ] Start a run from any source and let it finish — a "Siren stopped"
+      push arrives once it's actually idle again (not immediately when
+      stop is pressed), priority 3, with the ✅ tag.
+- [ ] Confirm a real siren activation (any source) and a real NWS
+      warning crossing threshold (`NOTIFY_ONLY` or `TRIGGERED`) both
+      arrive at priority 5 with the 🚨 tag — visually distinct at a
+      glance from the priority-3 pushes above.
+- [ ] With `ntfyNotifySystemEvents` off, confirm none of the
+      lockout/locked-press/weather-trigger pushes arrive, while the
+      priority-5 activation/warning pushes still do (those aren't gated
+      by that toggle).
+
 ## UI pieces (WP5–WP8)
 
 These were checked via headless-browser screenshots against the

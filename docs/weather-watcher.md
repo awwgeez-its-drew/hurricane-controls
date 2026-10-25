@@ -205,9 +205,22 @@ board) lives in this page's navbar, not the public Dashboard's.
   which alert categories notify (independent of whether that category's
   siren mode is OFF — "notify but don't trigger" and "trigger but don't
   notify" are both expressible), plus toggles for faults (NWS poll errors,
-  a siren that never confirmed a command) and the three non-NWS activation
-  sources (physical button/web UI/Meshtastic), all off by default since
-  those are "someone's using the siren," not a fault. A "Send Test
+  a siren that never confirmed a command), the three non-NWS activation
+  sources (physical button/web UI/Meshtastic), the siren stopping/cycle
+  completing, lockout/weather-trigger toggles + a locked button pressed,
+  and the boot announcement + 12-hour status push — together mirroring
+  everything `src/mesh.h` broadcasts over Meshtastic (see
+  `docs/uart-protocol.md`'s `SX ...` events for exactly what maps to
+  what), except the Weather Watcher's own health (`WEATHER WATCHER LOST`/
+  `RECOVERED`/`ERROR`): `LOST` can't be mirrored over the very link
+  that's gone quiet, and `ERROR`/`RECOVERED` would just repeat what this
+  board already told the main board via `WX STATUS`, duplicating its own
+  NWS-poll-failing/recovered pushes. Real activations and warnings (the
+  siren actually running, or a real NWS warning crossing threshold even
+  with that category's siren mode off) push at ntfy's top priority with
+  a 🚨 tag, faults at high priority with a ⚠️ tag, and everything else
+  (stops, toggles, status) at normal priority — so an urgent notification
+  is visually distinct from routine chatter at a glance. A "Send Test
   Notification" button queues a one-off message so you can confirm the
   topic/token/cert setup works. These notifications are a **supplement**,
   never a replacement, for the siren and the Settings page itself — a dead

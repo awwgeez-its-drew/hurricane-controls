@@ -603,6 +603,9 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   <div class="trow"><label for="ntfyNotifySrcLocal">Siren activated — physical button</label><input type="checkbox" id="ntfyNotifySrcLocal"></div>
   <div class="trow"><label for="ntfyNotifySrcWeb">Siren activated — web UI</label><input type="checkbox" id="ntfyNotifySrcWeb"></div>
   <div class="trow"><label for="ntfyNotifySrcMesh">Siren activated — Meshtastic</label><input type="checkbox" id="ntfyNotifySrcMesh"></div>
+  <div class="trow"><label for="ntfyNotifyStop">Siren stopped / cycle completed</label><input type="checkbox" id="ntfyNotifyStop"></div>
+  <div class="trow"><label for="ntfyNotifySystemEvents">Lockout toggled, weather-trigger toggled, locked button pressed</label><input type="checkbox" id="ntfyNotifySystemEvents"></div>
+  <div class="trow"><label for="ntfyNotifyStatus">Boot announcement + 12-hour status</label><input type="checkbox" id="ntfyNotifyStatus"></div>
   <button class="btn save" onclick="saveNtfy()">Save Notification Settings</button>
   <button class="btn logout" onclick="testNtfy()">Send Test Notification</button>
   <div class="msg" id="ntfyMsg"></div>
@@ -705,6 +708,9 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('ntfyNotifySrcLocal').checked=!!d.ntfyNotifySrcLocal;
   document.getElementById('ntfyNotifySrcWeb').checked=!!d.ntfyNotifySrcWeb;
   document.getElementById('ntfyNotifySrcMesh').checked=!!d.ntfyNotifySrcMesh;
+  document.getElementById('ntfyNotifyStop').checked=!!d.ntfyNotifyStop;
+  document.getElementById('ntfyNotifySystemEvents').checked=!!d.ntfyNotifySystemEvents;
+  document.getElementById('ntfyNotifyStatus').checked=!!d.ntfyNotifyStatus;
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -793,6 +799,9 @@ function saveNtfy(){
     ntfyNotifySrcLocal: document.getElementById('ntfyNotifySrcLocal').checked,
     ntfyNotifySrcWeb: document.getElementById('ntfyNotifySrcWeb').checked,
     ntfyNotifySrcMesh: document.getElementById('ntfyNotifySrcMesh').checked,
+    ntfyNotifyStop: document.getElementById('ntfyNotifyStop').checked,
+    ntfyNotifySystemEvents: document.getElementById('ntfyNotifySystemEvents').checked,
+    ntfyNotifyStatus: document.getElementById('ntfyNotifyStatus').checked,
   };
   const tok=document.getElementById('ntfyToken').value;
   const saveMain=()=>post('/settings-data',b);
@@ -1239,6 +1248,9 @@ private:
                     if (doc["ntfyNotifySrcLocal"].is<bool>()) s.ntfyNotifySrcLocal = doc["ntfyNotifySrcLocal"].as<bool>();
                     if (doc["ntfyNotifySrcWeb"].is<bool>()) s.ntfyNotifySrcWeb = doc["ntfyNotifySrcWeb"].as<bool>();
                     if (doc["ntfyNotifySrcMesh"].is<bool>()) s.ntfyNotifySrcMesh = doc["ntfyNotifySrcMesh"].as<bool>();
+                    if (doc["ntfyNotifyStop"].is<bool>()) s.ntfyNotifyStop = doc["ntfyNotifyStop"].as<bool>();
+                    if (doc["ntfyNotifySystemEvents"].is<bool>()) s.ntfyNotifySystemEvents = doc["ntfyNotifySystemEvents"].as<bool>();
+                    if (doc["ntfyNotifyStatus"].is<bool>()) s.ntfyNotifyStatus = doc["ntfyNotifyStatus"].as<bool>();
 
                     settingsMgr.save();
                     applyTimeConfig();
@@ -1430,6 +1442,9 @@ private:
         doc["ntfyNotifySrcLocal"] = s.ntfyNotifySrcLocal;
         doc["ntfyNotifySrcWeb"]   = s.ntfyNotifySrcWeb;
         doc["ntfyNotifySrcMesh"]  = s.ntfyNotifySrcMesh;
+        doc["ntfyNotifyStop"]         = s.ntfyNotifyStop;
+        doc["ntfyNotifySystemEvents"] = s.ntfyNotifySystemEvents;
+        doc["ntfyNotifyStatus"]       = s.ntfyNotifyStatus;
 
         doc["resetReason"]      = resetReasonName();
         doc["fwVersion"]        = FW_VERSION;

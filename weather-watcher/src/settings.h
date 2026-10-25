@@ -75,6 +75,15 @@ struct Settings {
     bool ntfyNotifySrcLocal = false;
     bool ntfyNotifySrcWeb   = false;
     bool ntfyNotifySrcMesh  = false;
+
+    // Mirrors the rest of src/mesh.h's Meshtastic broadcasts that aren't
+    // covered above (see docs/uart-protocol.md's new SX message types) —
+    // off by default like the source toggles, since these are routine
+    // state changes, not faults.
+    bool ntfyNotifySystemEvents = false; // lockout toggled, weather-trigger toggled, a locked button pressed
+    bool ntfyNotifyStop         = true;  // siren stopped/cycle completed — on, since anyone notified of an
+                                          // activation almost certainly wants the closure push too
+    bool ntfyNotifyStatus       = false; // boot announcement + the 12-hour periodic status push
 };
 
 class SettingsManager {
@@ -121,6 +130,9 @@ public:
         s.ntfyNotifySrcLocal = p.getBool("ntfySrcL", s.ntfyNotifySrcLocal);
         s.ntfyNotifySrcWeb   = p.getBool("ntfySrcW", s.ntfyNotifySrcWeb);
         s.ntfyNotifySrcMesh  = p.getBool("ntfySrcM", s.ntfyNotifySrcMesh);
+        s.ntfyNotifySystemEvents = p.getBool("ntfySysEv", s.ntfyNotifySystemEvents);
+        s.ntfyNotifyStop         = p.getBool("ntfyStop", s.ntfyNotifyStop);
+        s.ntfyNotifyStatus       = p.getBool("ntfyStat", s.ntfyNotifyStatus);
         p.end();
     }
 
@@ -164,6 +176,9 @@ public:
         p.putBool("ntfySrcL", s.ntfyNotifySrcLocal);
         p.putBool("ntfySrcW", s.ntfyNotifySrcWeb);
         p.putBool("ntfySrcM", s.ntfyNotifySrcMesh);
+        p.putBool("ntfySysEv", s.ntfyNotifySystemEvents);
+        p.putBool("ntfyStop", s.ntfyNotifyStop);
+        p.putBool("ntfyStat", s.ntfyNotifyStatus);
         p.end();
     }
 

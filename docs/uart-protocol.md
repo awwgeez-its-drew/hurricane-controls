@@ -117,15 +117,61 @@ Every final disposition is persisted to `weather-watcher/src/alertlog.h`
 (WP3) and, depending on settings, pushed via ntfy (WP4) — see
 `docs/weather-watcher.md`.
 
-### `SX ACTIVATED <MODE> <SOURCE>` / `SX STOPPED <MODE>` / `SX STOP <SOURCE>` (main → WW, unsolicited)
+### `SX ...` events (main → WW, unsolicited)
 
-Mirrors the same edge-detection `src/mesh.h` uses for its own
-activation/stop broadcasts (`sourceWord()`/`runModeWord()` duplicated in
-`weather_link.h` rather than shared, to avoid a circular include), so the
-Weather Watcher hears about siren activity it didn't itself cause — a
-WEB/MESH/button-initiated run while an NWS warning is still active is
-exactly the kind of thing worth logging/notifying on (WP3/WP4).
-`SOURCE` ∈ `LOCAL` / `WEB` / `MESH` / `NWS_ALERT`.
+Mirrors the same edge-detection `src/mesh.h` uses for its own Meshtastic
+broadcasts (`sourceWord()`/`runModeWord()`/`lockedButtonWord()`
+duplicated in `weather_link.h` rather than shared, to avoid a circular
+include), so the Weather Watcher hears about everything the owner would
+see on mesh — not just siren activity it didn't itself cause. Each is
+independently edge-detected off the same shared `sm`/`buttons`/
+`settingsMgr` state mesh.h already watches; `sendStatusEvents()` is the
+single place all of them are sent from.
+
+| Event | Fires when | Mirrors mesh broadcast |
+|---|---|---|
+| `SX ACTIVATED <MODE> <SOURCE>` | `sm.trigger()` succeeds, any source | `<MODE> ACTIVATED (activation point: ...)` |
+| `SX STOPPED <MODE>` | The run cycle actually completes (reaches IDLE) | `<MODE> CYCLE COMPLETED - SIREN STOPPED` |
+| `SX STOP <SOURCE>` | `sm.stop()` is called, even a no-op | `STOP ACTIVATED (activation point: ...)` |
+| `SX LOCKOUT ON` / `OFF` | `buttons.locked` changes | `LOCAL BUTTON LOCKOUT ACTIVE` / `INACTIVE` |
+| `SX LOCKEDPRESS <BUTTON>` | A physical button is pressed while locked | `<BUTTON> PRESSED - LOCKED OUT` |
+| `SX WEATHERTRIG ON` / `OFF` | `weatherAutoTriggerEnabled` changes | `WEATHER TRIGGER ENABLED` / `DISABLED` |
+| `SX STARTUP` | Once, on the first `sendStatusEvents()` tick after boot | `STARTUP COMPLETE` |
+| `SX STATUS <MODE\|IDLE> <LOCKED:0\|1> <UPTIME_SEC> <TEMP_F>` | Right after `SX STARTUP`, then every 12h | the periodic `STATUS: ...` line |
+
+`SOURCE` ∈ `LOCAL` / `WEB` / `MESH` / `NWS_ALERT`. `BUTTON` ∈ `STOP` /
+`WAIL` / `ATTACK`.
+
+**Deliberately not mirrored**: mesh's `WEATHER WATCHER LOST`/
+`RECOVERED`/`ERROR` broadcasts, which are about the Weather Watcher's
+own health as seen *by* the main board. `LOST` specifically can't be
+mirrored — it fires exactly when this link has gone quiet, so a message
+sent over it could never arrive. `ERROR`/`RECOVERED` would just tell the
+Weather Watcher what it already told the main board (it's the source of
+that health info, via `WX STATUS`) and duplicate its own existing
+NWS-poll-failing/recovered ntfy pushes for the same condition.
+
+### ntfy priority and tags
+
+`weather-watcher/src/nws_client.h`'s `handleReply()` turns each `SX`
+event (and the trigger-queue/poll-health events from earlier sections)
+into an `ntfy.notify(priority, title, message, tags)` call, gated by a
+Settings toggle. `tags` is a comma-separated ntfy emoji shortcode,
+rendered as an emoji in the notification — the visual half of making
+real activations/warnings stand out:
+
+| Tier | Priority | Tag | Covers |
+|---|---|---|---|
+| Activation / real warning | 5 | 🚨 `rotating_light` | `SX ACTIVATED`, a trigger-queue `TRIGGERED`/`RETRIED_TRIGGERED`, `NOTIFY_ONLY` (a real warning crossed threshold with that category's siren mode OFF), `NO_RESPONSE`/`GAVE_UP_*` (siren failed to respond) |
+| Fault / security-relevant | 4 | ⚠️ `warning` | NWS poll failing, `SX LOCKEDPRESS` |
+| Routine / informational | 3 | none, or ✅ `white_check_mark` for a recovery | `SX STOPPED`/`STOP`, `SX LOCKOUT`, `SX WEATHERTRIG`, `SX STARTUP`/`STATUS`, NWS poll recovered |
+
+Settings toggles: `ntfyNotifySrcLocal`/`Web`/`Mesh` gate `SX ACTIVATED`
+by source (an `NWS_ALERT`-sourced activation is never sent this way —
+see the table above — so it can't double-fire alongside the trigger
+queue's own `TRIGGERED` push); `ntfyNotifyStop` gates `SX STOPPED`/
+`STOP`; `ntfyNotifySystemEvents` gates `SX LOCKOUT`/`LOCKEDPRESS`/
+`WEATHERTRIG`; `ntfyNotifyStatus` gates `SX STARTUP`/`STATUS`.
 
 ### `REBOOT` (main → WW, unsolicited)
 

@@ -138,12 +138,24 @@ private:
     // section 2.3), so it can log/notify (WP3/WP4) on siren activity it
     // didn't itself cause — a WEB/MESH/button activation while an NWS
     // warning is still active is exactly the kind of thing worth a push.
-    // Edge-detected the same way mesh.h does, off the same shared sm
-    // counters/state — an independent "last seen" here doesn't interfere
-    // with mesh.h's own edge-detection on those same fields.
+    // Edge-detected the same way mesh.h does, off the same shared sm/
+    // buttons/settingsMgr state — an independent "last seen" here doesn't
+    // interfere with mesh.h's own edge-detection on those same fields.
+    // This set mirrors every mesh.h broadcast except the ones *about* the
+    // Weather Watcher's own health (WEATHER WATCHER LOST/RECOVERED/ERROR) —
+    // LOST is informationally impossible to mirror over the very link
+    // that's gone quiet, and ERROR/RECOVERED would just tell the Weather
+    // Watcher what it already told the main board ("WX STATUS ERROR..."),
+    // redundant with its own existing NWS-poll-failing/recovered pushes.
     bool     sxWasActive_         = false;
     RunMode  sxLastKnownRunMode_  = RunMode::NONE;
     uint32_t sxLastSeenStopSeq_   = 0;
+    bool     sxWasLocked_         = false;
+    uint32_t sxLastSeenLockedPressSeq_ = 0;
+    bool     sxWasWeatherEnabled_ = false;
+    bool     sxStartupSent_       = false;
+    uint32_t sxLastStatusTs_      = 0;
+    static constexpr uint32_t SX_STATUS_INTERVAL_MS = 12UL * 60 * 60 * 1000; // 12 hours
 
     void sendStatusEvents() {
         if (sm.runMode != RunMode::NONE) sxLastKnownRunMode_ = sm.runMode;
@@ -166,6 +178,58 @@ private:
             Serial1.print("SX STOP ");
             Serial1.println(sourceWord(sm.lastStopSource));
         }
+
+        if (buttons.locked != sxWasLocked_) {
+            sxWasLocked_ = buttons.locked;
+            Serial1.println(sxWasLocked_ ? "SX LOCKOUT ON" : "SX LOCKOUT OFF");
+        }
+
+        if (buttons.lockedPressSeq != sxLastSeenLockedPressSeq_) {
+            sxLastSeenLockedPressSeq_ = buttons.lockedPressSeq;
+            Serial1.print("SX LOCKEDPRESS ");
+            Serial1.println(lockedButtonWord(buttons.lastLockedPress));
+        }
+
+        if (settingsMgr.s.weatherAutoTriggerEnabled != sxWasWeatherEnabled_) {
+            sxWasWeatherEnabled_ = settingsMgr.s.weatherAutoTriggerEnabled;
+            Serial1.println(sxWasWeatherEnabled_ ? "SX WEATHERTRIG ON" : "SX WEATHERTRIG OFF");
+        }
+
+        uint32_t now = millis();
+        if (!sxStartupSent_) {
+            sxStartupSent_ = true;
+            Serial1.println("SX STARTUP");
+            sxLastStatusTs_ = now;
+            sendSxStatus();
+        } else if (now - sxLastStatusTs_ >= SX_STATUS_INTERVAL_MS) {
+            sxLastStatusTs_ = now;
+            sendSxStatus();
+        }
+    }
+
+    static const char* lockedButtonWord(LockedButton b) {
+        switch (b) {
+        case LockedButton::STOP:   return "STOP";
+        case LockedButton::WAIL:   return "WAIL";
+        case LockedButton::ATTACK: return "ATTACK";
+        default:                   return "UNKNOWN";
+        }
+    }
+
+    // "SX STATUS <MODE|IDLE> <LOCKED:0|1> <UPTIME_SEC> <TEMP_F>" — sent once
+    // right after SX STARTUP and then every SX_STATUS_INTERVAL_MS, mirroring
+    // mesh.h's own periodic STATUS broadcast. Doesn't include the Weather
+    // Watcher's own health the way mesh's STATUS does (it already knows its
+    // own state) — just this board's.
+    void sendSxStatus() {
+        Serial1.print("SX STATUS ");
+        Serial1.print(sm.isIdle() ? "IDLE" : runModeWord(sm.runMode));
+        Serial1.print(' ');
+        Serial1.print(buttons.locked ? 1 : 0);
+        Serial1.print(' ');
+        Serial1.print(millis() / 1000);
+        Serial1.print(' ');
+        Serial1.println((int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f));
     }
 
     static const char* runModeWord(RunMode m) {

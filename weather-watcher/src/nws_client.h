@@ -526,8 +526,8 @@ private:
         // Edge-detected, not every poll — the backoff schedule already
         // keeps a sustained outage from being chatty on its own.
         if (settingsMgr.s.ntfyNotifyErrors) {
-            if (wasOk && !ok) ntfy.notify(4, "NWS poll failing", err);
-            else if (!wasOk && ok) ntfy.notify(3, "NWS poll recovered", "Back to normal after " + String(failedAttempts) + " failed attempt(s)");
+            if (wasOk && !ok) ntfy.notify(4, "NWS poll failing", err, "warning");
+            else if (!wasOk && ok) ntfy.notify(3, "NWS poll recovered", "Back to normal after " + String(failedAttempts) + " failed attempt(s)", "white_check_mark");
         }
     }
 
@@ -672,9 +672,12 @@ private:
                     le.escalation = escalated;
                     alertLog.record(le);
                     if (categoryNotifyEnabled(category)) {
-                        ntfy.notify(3, "Weather alert (auto-trigger off)",
+                        // Still a real NWS warning crossing threshold, just
+                        // without an activation — top priority tier same as
+                        // an actual activation (see docs/uart-protocol.md).
+                        ntfy.notify(5, "Weather alert (auto-trigger off)",
                             String(event) + " — " + categoryDescriptor(category, event) +
-                            " (siren mode OFF, awareness only)");
+                            " (siren mode OFF, awareness only)", "rotating_light");
                     }
                 } else {
                     te->pending         = true;
@@ -869,11 +872,11 @@ private:
         if (isFailure && settingsMgr.s.ntfyNotifyErrors) {
             ntfy.notify(5, "Siren did not respond",
                 String(q.event.c_str()) + " — " + q.mode + " command " + disposition +
-                " (" + q.sendCount + " attempt" + (q.sendCount == 1 ? "" : "s") + ")");
+                " (" + q.sendCount + " attempt" + (q.sendCount == 1 ? "" : "s") + ")", "rotating_light");
         } else if ((!strcmp(disposition, "TRIGGERED") || !strcmp(disposition, "RETRIED_TRIGGERED")) &&
                    categoryNotifyEnabled((AlertCategory)q.category)) {
-            ntfy.notify(4, String(q.mode) + " activated",
-                String(q.event.c_str()) + " — " + q.descriptor);
+            ntfy.notify(5, String(q.mode) + " activated",
+                String(q.event.c_str()) + " — " + q.descriptor, "rotating_light");
         }
 
         for (uint8_t i = 1; i < MAX_QUEUED; i++) queue_[i - 1] = queue_[i];
@@ -960,6 +963,93 @@ private:
         }
     }
 
+    // Dispatches one "SX ..." unsolicited event from the main board
+    // (weather_link.h's sendStatusEvents(), docs/uart-protocol.md section
+    // 2.3) — mirrors src/mesh.h's own Meshtastic broadcasts onto ntfy,
+    // except the Weather Watcher's own health (WEATHER WATCHER LOST/
+    // RECOVERED/ERROR), which mesh.h never forwards here in the first
+    // place — see weather_link.h's sendStatusEvents() comment for why.
+    // body is "line + 3" from handleReply(), i.e. everything after "SX ".
+    void handleSxEvent(char* body) {
+        {
+            CtrlLock lock;
+            strlcpy(lastSxEvent_, body, sizeof(lastSxEvent_));
+            lastSxEventMs_ = millis();
+        }
+        char rest[64];
+        strlcpy(rest, body, sizeof(rest));
+        char* tok = strtok(rest, " ");
+        if (!tok) return;
+
+        if (!strcmp(tok, "ACTIVATED")) {
+            // The three non-NWS activation sources each have their own
+            // opt-in toggle (off by default — "someone's using the siren",
+            // not a fault). An NWS-triggered activation is never reported
+            // this way (see sourceWord() in weather_link.h), so there's no
+            // double-notification with finalizeQueueHead()'s own TRIGGERED
+            // push below.
+            char* modeW = strtok(nullptr, " ");
+            char* srcW  = strtok(nullptr, " ");
+            bool wanted = srcW && (
+                (!strcmp(srcW, "LOCAL") && settingsMgr.s.ntfyNotifySrcLocal) ||
+                (!strcmp(srcW, "WEB")   && settingsMgr.s.ntfyNotifySrcWeb) ||
+                (!strcmp(srcW, "MESH")  && settingsMgr.s.ntfyNotifySrcMesh));
+            if (wanted) {
+                ntfy.notify(5, "Siren activated",
+                    String(modeW ? modeW : "?") + " — activated from " + srcW, "rotating_light");
+            }
+        } else if (!strcmp(tok, "STOPPED")) {
+            if (settingsMgr.s.ntfyNotifyStop) {
+                char* modeW = strtok(nullptr, " ");
+                ntfy.notify(3, "Siren stopped",
+                    String(modeW ? modeW : "?") + " — cycle completed", "white_check_mark");
+            }
+        } else if (!strcmp(tok, "STOP")) {
+            if (settingsMgr.s.ntfyNotifyStop) {
+                char* srcW = strtok(nullptr, " ");
+                ntfy.notify(3, "Stop command", String("Stop activated from ") + (srcW ? srcW : "?"));
+            }
+        } else if (!strcmp(tok, "LOCKOUT")) {
+            if (settingsMgr.s.ntfyNotifySystemEvents) {
+                char* state = strtok(nullptr, " ");
+                bool on = state && !strcmp(state, "ON");
+                ntfy.notify(3, "Local button lockout", on ? "Lockout enabled" : "Lockout disabled");
+            }
+        } else if (!strcmp(tok, "LOCKEDPRESS")) {
+            if (settingsMgr.s.ntfyNotifySystemEvents) {
+                char* btn = strtok(nullptr, " ");
+                ntfy.notify(4, "Locked button pressed",
+                    String(btn ? btn : "?") + " pressed while locked out", "warning");
+            }
+        } else if (!strcmp(tok, "WEATHERTRIG")) {
+            if (settingsMgr.s.ntfyNotifySystemEvents) {
+                char* state = strtok(nullptr, " ");
+                bool on = state && !strcmp(state, "ON");
+                ntfy.notify(3, "Weather auto-trigger", on ? "Enabled" : "Disabled");
+            }
+        } else if (!strcmp(tok, "STARTUP")) {
+            if (settingsMgr.s.ntfyNotifyStatus) {
+                ntfy.notify(3, "Main board started up", "Hurricane Controls board has booted.");
+            }
+        } else if (!strcmp(tok, "STATUS")) {
+            if (settingsMgr.s.ntfyNotifyStatus) {
+                char* mode      = strtok(nullptr, " ");
+                char* locked    = strtok(nullptr, " ");
+                char* uptimeSec = strtok(nullptr, " ");
+                char* tempF     = strtok(nullptr, " ");
+                uint32_t upSec = uptimeSec ? strtoul(uptimeSec, nullptr, 10) : 0;
+                char upBuf[24];
+                snprintf(upBuf, sizeof(upBuf), "%lud %luh %lum",
+                    (unsigned long)(upSec / 86400), (unsigned long)((upSec % 86400) / 3600),
+                    (unsigned long)((upSec % 3600) / 60));
+                ntfy.notify(3, "Main board status",
+                    String(mode ? mode : "?") + " — local controls " +
+                    ((locked && locked[0] == '1') ? "LOCKED" : "UNLOCKED") +
+                    " — uptime " + upBuf + " — " + (tempF ? tempF : "?") + "F");
+            }
+        }
+    }
+
     // Despite the name, one line this recognizes isn't a reply to anything
     // this board sent: a bare "REBOOT" is an unprompted command from the
     // main board (see src/weather_link.h's requestReboot(), sent for the
@@ -985,32 +1075,7 @@ private:
         } else if (!strncasecmp(line, "ACK ", 4)) {
             handleAck(line);
         } else if (!strncasecmp(line, "SX ", 3)) {
-            // Unsolicited siren-activity event (main board's weather_link.h
-            // sendStatusEvents(), docs/uart-protocol.md section 2.3) — a
-            // WEB/MESH/button-initiated run the WW didn't cause itself.
-            {
-                CtrlLock lock;
-                strlcpy(lastSxEvent_, line + 3, sizeof(lastSxEvent_));
-                lastSxEventMs_ = millis();
-            }
-            // "SX ACTIVATED <MODE> <SOURCE>" — the three non-NWS activation
-            // sources each have their own opt-in toggle (off by default,
-            // since this is "someone's using the siren", not a fault).
-            char rest[40];
-            strlcpy(rest, line + 3, sizeof(rest));
-            char* tok = strtok(rest, " ");
-            if (tok && !strcmp(tok, "ACTIVATED")) {
-                char* modeW = strtok(nullptr, " ");
-                char* srcW  = strtok(nullptr, " ");
-                bool wanted = srcW && (
-                    (!strcmp(srcW, "LOCAL") && settingsMgr.s.ntfyNotifySrcLocal) ||
-                    (!strcmp(srcW, "WEB")   && settingsMgr.s.ntfyNotifySrcWeb) ||
-                    (!strcmp(srcW, "MESH")  && settingsMgr.s.ntfyNotifySrcMesh));
-                if (wanted) {
-                    ntfy.notify(3, "Siren activated",
-                        String(modeW ? modeW : "?") + " — activated from " + srcW);
-                }
-            }
+            handleSxEvent(line + 3);
         } else if (!strcasecmp(line, "REBOOT")) {
             Serial.println("Main board requested a reboot — restarting");
             delay(100);
