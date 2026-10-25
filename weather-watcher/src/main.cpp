@@ -7,6 +7,7 @@
 #include "settings.h"
 #include "wifi_manager.h"
 #include "alertlog.h"
+#include "ntfy.h"
 #include "nws_client.h"
 #include "webserver.h"
 
@@ -14,6 +15,7 @@
 SettingsManager settingsMgr;
 WiFiManager     wifiMgr;
 AlertLog        alertLog;
+Ntfy            ntfy;
 NwsClient       nwsClient;
 WeatherWebUI    webUI;
 
@@ -94,6 +96,7 @@ void loop() {
     }
     nwsClient.update();
     alertLog.flushPending();
+    ntfy.flushPending(); // after nwsClient.update() — never concurrent with the NWS poll
     webUI.update();
 
     uint32_t intervalMs = settingsMgr.s.ntpUpdateHours * 3600000UL;

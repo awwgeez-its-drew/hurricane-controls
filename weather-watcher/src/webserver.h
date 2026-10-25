@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "wifi_manager.h"
 #include "nws_client.h"
+#include "ntfy.h"
 #include "assets.h"
 
 extern void applyTimeConfig(); // src/main.cpp
@@ -485,6 +486,43 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
   </div>
 </div>
 
+<!-- Notifications (ntfy) -->
+<div class="card">
+  <div class="card-head" onclick="toggleCard(this)"><h2>Notifications (ntfy)</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="card-body">
+  <p class="hint">Push notifications via <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--cyan)">ntfy</a> — self-hosted or ntfy.sh. These are a <b>supplement</b>, not a replacement, for the siren and the Settings page itself: a dead battery, no Wi-Fi, or a crashed app can all silently stop them.</p>
+  <div class="trow">
+    <label for="ntfyEnabled">Enable ntfy notifications</label>
+    <input type="checkbox" id="ntfyEnabled">
+  </div>
+  <div class="row"><label>Server</label><input type="text" id="ntfyServer" placeholder="https://ntfy.sh"></div>
+  <div class="row"><label>Topic</label><input type="text" id="ntfyTopic" placeholder="my-private-topic-name"></div>
+  <p class="hint" style="margin:-4px 0 10px">A topic is a shared secret — anyone who knows it can read your notifications. Use a long, random one, not something guessable.</p>
+  <div class="row"><label>Access token</label><input type="password" id="ntfyToken" placeholder="Leave blank to keep existing" autocomplete="new-password"></div>
+  <p class="hint" id="ntfyTokenHint" style="margin:-4px 0 10px">No token saved.</p>
+  <div class="trow">
+    <label for="ntfyVerifyCert">Verify server certificate (recommended)</label>
+    <input type="checkbox" id="ntfyVerifyCert">
+  </div>
+  <h3 style="font-size:.75rem;color:#9aa3af;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Notify for these alert categories</h3>
+  <div class="trow"><label for="ntfyCatTornadoEmergency">Tornado Emergency</label><input type="checkbox" id="ntfyCatTornadoEmergency"></div>
+  <div class="trow"><label for="ntfyCatTornadoConfirmed">Tornado Warning (confirmed/damage tag)</label><input type="checkbox" id="ntfyCatTornadoConfirmed"></div>
+  <div class="trow"><label for="ntfyCatTornadoUnconfirmed">Tornado Warning (unconfirmed/base)</label><input type="checkbox" id="ntfyCatTornadoUnconfirmed"></div>
+  <div class="trow"><label for="ntfyCatThunderstormDestructive">Severe T-storm — DESTRUCTIVE</label><input type="checkbox" id="ntfyCatThunderstormDestructive"></div>
+  <div class="trow"><label for="ntfyCatThunderstormConsiderable">Severe T-storm — CONSIDERABLE</label><input type="checkbox" id="ntfyCatThunderstormConsiderable"></div>
+  <div class="trow"><label for="ntfyCatThunderstormBase">Severe T-storm — base (no damage tag)</label><input type="checkbox" id="ntfyCatThunderstormBase"></div>
+  <div class="trow"><label for="ntfyCatOtherExtreme">Other Extreme Emergency</label><input type="checkbox" id="ntfyCatOtherExtreme"></div>
+  <h3 style="font-size:.75rem;color:#9aa3af;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Also notify for</h3>
+  <div class="trow"><label for="ntfyNotifyErrors">Faults (NWS poll errors, siren not responding)</label><input type="checkbox" id="ntfyNotifyErrors"></div>
+  <div class="trow"><label for="ntfyNotifySrcLocal">Siren activated — physical button</label><input type="checkbox" id="ntfyNotifySrcLocal"></div>
+  <div class="trow"><label for="ntfyNotifySrcWeb">Siren activated — web UI</label><input type="checkbox" id="ntfyNotifySrcWeb"></div>
+  <div class="trow"><label for="ntfyNotifySrcMesh">Siren activated — Meshtastic</label><input type="checkbox" id="ntfyNotifySrcMesh"></div>
+  <button class="btn save" onclick="saveNtfy()">Save Notification Settings</button>
+  <button class="btn logout" onclick="testNtfy()">Send Test Notification</button>
+  <div class="msg" id="ntfyMsg"></div>
+  </div>
+</div>
+
 <!-- Firmware Update -->
 <div class="card">
   <div class="card-head" onclick="toggleCard(this)"><h2>Firmware Update</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
@@ -564,6 +602,23 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('autoDst').checked=d.autoDst!==false;
   document.getElementById('verNum').textContent=d.fwVersion||'-';
   document.getElementById('rstReason').textContent=d.resetReason||'-';
+
+  document.getElementById('ntfyEnabled').checked=!!d.ntfyEnabled;
+  document.getElementById('ntfyServer').value=d.ntfyServer||'https://ntfy.sh';
+  document.getElementById('ntfyTopic').value=d.ntfyTopic||'';
+  document.getElementById('ntfyTokenHint').textContent=d.ntfyHasToken?'A token is saved (leave blank to keep it).':'No token saved.';
+  document.getElementById('ntfyVerifyCert').checked=d.ntfyVerifyCert!==false;
+  document.getElementById('ntfyCatThunderstormBase').checked=!!d.ntfyCatThunderstormBase;
+  document.getElementById('ntfyCatOtherExtreme').checked=!!d.ntfyCatOtherExtreme;
+  document.getElementById('ntfyCatThunderstormConsiderable').checked=!!d.ntfyCatThunderstormConsiderable;
+  document.getElementById('ntfyCatTornadoUnconfirmed').checked=!!d.ntfyCatTornadoUnconfirmed;
+  document.getElementById('ntfyCatThunderstormDestructive').checked=!!d.ntfyCatThunderstormDestructive;
+  document.getElementById('ntfyCatTornadoConfirmed').checked=!!d.ntfyCatTornadoConfirmed;
+  document.getElementById('ntfyCatTornadoEmergency').checked=!!d.ntfyCatTornadoEmergency;
+  document.getElementById('ntfyNotifyErrors').checked=!!d.ntfyNotifyErrors;
+  document.getElementById('ntfyNotifySrcLocal').checked=!!d.ntfyNotifySrcLocal;
+  document.getElementById('ntfyNotifySrcWeb').checked=!!d.ntfyNotifySrcWeb;
+  document.getElementById('ntfyNotifySrcMesh').checked=!!d.ntfyNotifySrcMesh;
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -635,6 +690,35 @@ function saveTime(){
   post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
 }
 
+function saveNtfy(){
+  const b={
+    ntfyEnabled: document.getElementById('ntfyEnabled').checked,
+    ntfyServer: document.getElementById('ntfyServer').value.trim(),
+    ntfyTopic: document.getElementById('ntfyTopic').value.trim(),
+    ntfyVerifyCert: document.getElementById('ntfyVerifyCert').checked,
+    ntfyCatThunderstormBase: document.getElementById('ntfyCatThunderstormBase').checked,
+    ntfyCatOtherExtreme: document.getElementById('ntfyCatOtherExtreme').checked,
+    ntfyCatThunderstormConsiderable: document.getElementById('ntfyCatThunderstormConsiderable').checked,
+    ntfyCatTornadoUnconfirmed: document.getElementById('ntfyCatTornadoUnconfirmed').checked,
+    ntfyCatThunderstormDestructive: document.getElementById('ntfyCatThunderstormDestructive').checked,
+    ntfyCatTornadoConfirmed: document.getElementById('ntfyCatTornadoConfirmed').checked,
+    ntfyCatTornadoEmergency: document.getElementById('ntfyCatTornadoEmergency').checked,
+    ntfyNotifyErrors: document.getElementById('ntfyNotifyErrors').checked,
+    ntfyNotifySrcLocal: document.getElementById('ntfyNotifySrcLocal').checked,
+    ntfyNotifySrcWeb: document.getElementById('ntfyNotifySrcWeb').checked,
+    ntfyNotifySrcMesh: document.getElementById('ntfyNotifySrcMesh').checked,
+  };
+  const tok=document.getElementById('ntfyToken').value;
+  const saveMain=()=>post('/settings-data',b);
+  const saveTok=tok.length?post('/ntfy-token',{token:tok}):Promise.resolve({ok:true});
+  Promise.all([saveMain(),saveTok]).then(r=>{
+    document.getElementById('ntfyToken').value='';
+    msg('ntfyMsg', r.every(x=>x.ok)?'Saved!':'Error', r.every(x=>x.ok));
+  });
+}
+function testNtfy(){
+  post('/ntfy-test',{}).then(()=>msg('ntfyMsg','Test queued — check your device in a few seconds',true));
+}
 function saveApPw(){
   const pw=document.getElementById('apPw').value;
   if(pw.length<8||pw.length>63){msg('apm','Must be 8-63 characters',false);return;}
@@ -946,6 +1030,43 @@ private:
             nullptr, bodyAccumulator
         );
 
+        // Write-only, same pattern as /password — never echoed back by
+        // /settings-data, never logged (ground rule 4).
+        server_.on("/ntfy-token", HTTP_POST,
+            [this](AsyncWebServerRequest* req) {
+                if (!isAuthed(req)) { unauth(req); return; }
+                if (req->_tempObject) {
+                    JsonDocument doc;
+                    deserializeJson(doc, (const char*)req->_tempObject);
+                    free(req->_tempObject);
+                    req->_tempObject = nullptr;
+                    const char* tok = doc["token"] | "";
+                    CtrlLock lock;
+                    strlcpy(settingsMgr.s.ntfyToken, tok, sizeof(settingsMgr.s.ntfyToken));
+                    settingsMgr.save();
+                }
+                req->send(200, "application/json", "{\"ok\":true}");
+            },
+            nullptr, bodyAccumulator
+        );
+
+        server_.on("/ntfy-test", HTTP_POST, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            ntfy.notify(3, "Test notification", "This is a test push from your Weather Watcher board.");
+            req->send(200, "application/json", "{\"ok\":true}");
+        });
+
+        server_.on("/ntfy-status", HTTP_GET, [this](AsyncWebServerRequest* req) {
+            if (!isAuthed(req)) { unauth(req); return; }
+            JsonDocument doc;
+            doc["queued"] = ntfy.queued();
+            doc["lastOk"] = ntfy.lastSendOk();
+            doc["lastDetail"] = ntfy.lastSendDetail();
+            String out;
+            serializeJson(doc, out);
+            req->send(200, "application/json", out);
+        });
+
         server_.on("/status-data", HTTP_GET, [this](AsyncWebServerRequest* req) {
             // Public — feeds the unauthenticated dashboard.
             req->send(200, "application/json", buildStatusJson());
@@ -1000,6 +1121,25 @@ private:
                     if (doc["timeZone"].is<const char*>())
                         strlcpy(s.timeZone, doc["timeZone"].as<const char*>(), sizeof(s.timeZone));
                     if (doc["autoDst"].is<bool>()) s.autoDst = doc["autoDst"].as<bool>();
+
+                    if (doc["ntfyEnabled"].is<bool>()) s.ntfyEnabled = doc["ntfyEnabled"].as<bool>();
+                    if (doc["ntfyServer"].is<const char*>())
+                        strlcpy(s.ntfyServer, doc["ntfyServer"].as<const char*>(), sizeof(s.ntfyServer));
+                    if (doc["ntfyTopic"].is<const char*>())
+                        strlcpy(s.ntfyTopic, doc["ntfyTopic"].as<const char*>(), sizeof(s.ntfyTopic));
+                    if (doc["ntfyVerifyCert"].is<bool>()) s.ntfyVerifyCert = doc["ntfyVerifyCert"].as<bool>();
+                    if (doc["ntfyCatThunderstormBase"].is<bool>()) s.ntfyCatThunderstormBase = doc["ntfyCatThunderstormBase"].as<bool>();
+                    if (doc["ntfyCatOtherExtreme"].is<bool>()) s.ntfyCatOtherExtreme = doc["ntfyCatOtherExtreme"].as<bool>();
+                    if (doc["ntfyCatThunderstormConsiderable"].is<bool>()) s.ntfyCatThunderstormConsiderable = doc["ntfyCatThunderstormConsiderable"].as<bool>();
+                    if (doc["ntfyCatTornadoUnconfirmed"].is<bool>()) s.ntfyCatTornadoUnconfirmed = doc["ntfyCatTornadoUnconfirmed"].as<bool>();
+                    if (doc["ntfyCatThunderstormDestructive"].is<bool>()) s.ntfyCatThunderstormDestructive = doc["ntfyCatThunderstormDestructive"].as<bool>();
+                    if (doc["ntfyCatTornadoConfirmed"].is<bool>()) s.ntfyCatTornadoConfirmed = doc["ntfyCatTornadoConfirmed"].as<bool>();
+                    if (doc["ntfyCatTornadoEmergency"].is<bool>()) s.ntfyCatTornadoEmergency = doc["ntfyCatTornadoEmergency"].as<bool>();
+                    if (doc["ntfyNotifyErrors"].is<bool>()) s.ntfyNotifyErrors = doc["ntfyNotifyErrors"].as<bool>();
+                    if (doc["ntfyNotifySrcLocal"].is<bool>()) s.ntfyNotifySrcLocal = doc["ntfyNotifySrcLocal"].as<bool>();
+                    if (doc["ntfyNotifySrcWeb"].is<bool>()) s.ntfyNotifySrcWeb = doc["ntfyNotifySrcWeb"].as<bool>();
+                    if (doc["ntfyNotifySrcMesh"].is<bool>()) s.ntfyNotifySrcMesh = doc["ntfyNotifySrcMesh"].as<bool>();
+
                     settingsMgr.save();
                     applyTimeConfig();
                 }
@@ -1173,6 +1313,24 @@ private:
         doc["ntpUpdateHours"]   = s.ntpUpdateHours;
         doc["timeZone"]         = s.timeZone;
         doc["autoDst"]          = s.autoDst;
+
+        doc["ntfyEnabled"]    = s.ntfyEnabled;
+        doc["ntfyServer"]     = s.ntfyServer;
+        doc["ntfyTopic"]      = s.ntfyTopic;
+        doc["ntfyHasToken"]   = s.ntfyToken[0] != '\0'; // never the token itself (ground rule 4)
+        doc["ntfyVerifyCert"] = s.ntfyVerifyCert;
+        doc["ntfyCatThunderstormBase"]         = s.ntfyCatThunderstormBase;
+        doc["ntfyCatOtherExtreme"]             = s.ntfyCatOtherExtreme;
+        doc["ntfyCatThunderstormConsiderable"] = s.ntfyCatThunderstormConsiderable;
+        doc["ntfyCatTornadoUnconfirmed"]       = s.ntfyCatTornadoUnconfirmed;
+        doc["ntfyCatThunderstormDestructive"]  = s.ntfyCatThunderstormDestructive;
+        doc["ntfyCatTornadoConfirmed"]         = s.ntfyCatTornadoConfirmed;
+        doc["ntfyCatTornadoEmergency"]         = s.ntfyCatTornadoEmergency;
+        doc["ntfyNotifyErrors"]   = s.ntfyNotifyErrors;
+        doc["ntfyNotifySrcLocal"] = s.ntfyNotifySrcLocal;
+        doc["ntfyNotifySrcWeb"]   = s.ntfyNotifySrcWeb;
+        doc["ntfyNotifySrcMesh"]  = s.ntfyNotifySrcMesh;
+
         doc["resetReason"]      = resetReasonName();
         doc["fwVersion"]        = FW_VERSION;
         String out;

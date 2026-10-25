@@ -191,6 +191,28 @@ board) lives in this page's navbar, not the public Dashboard's.
   adjusts for DST on its own twice a year with no string-editing required.
   Applied immediately on save, no reboot needed — though it only has
   anything to sync against while connected to WiFi with internet access.
+- **Notifications (ntfy)** — push notifications via
+  [ntfy](https://ntfy.sh) (self-hosted or ntfy.sh), off by default. Server
+  URL, topic (a shared secret — use a long, random one, not something
+  guessable), and a write-only bearer token (masked, never echoed back by
+  `/settings-data`, never logged, saved through its own `POST /ntfy-token`
+  endpoint — same pattern as the login password). "Verify server
+  certificate" is on by default (an embedded ISRG Root X1 lets this board
+  validate ntfy.sh and almost any self-hosted instance, since those are
+  nearly always Let's Encrypt-issued, without needing internet access to a
+  CA for the check itself); turning it off falls back to no verification,
+  for anything else (e.g. a self-signed local instance). Seven toggles pick
+  which alert categories notify (independent of whether that category's
+  siren mode is OFF — "notify but don't trigger" and "trigger but don't
+  notify" are both expressible), plus toggles for faults (NWS poll errors,
+  a siren that never confirmed a command) and the three non-NWS activation
+  sources (physical button/web UI/Meshtastic), all off by default since
+  those are "someone's using the siren," not a fault. A "Send Test
+  Notification" button queues a one-off message so you can confirm the
+  topic/token/cert setup works. These notifications are a **supplement**,
+  never a replacement, for the siren and the Settings page itself — a dead
+  phone battery, no Wi-Fi, or a crashed app can all silently stop them from
+  arriving.
 
 ## Login
 

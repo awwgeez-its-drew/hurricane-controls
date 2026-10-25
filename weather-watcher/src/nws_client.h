@@ -11,6 +11,7 @@
 #include "settings.h"
 #include "other_extreme_types.h"
 #include "alertlog.h"
+#include "ntfy.h"
 #include <Preferences.h>
 
 // Alert categories for display (Current Alerts card) and for deciding
@@ -415,6 +416,19 @@ private:
         return true;
     }
 
+    static bool categoryNotifyEnabled(AlertCategory c) {
+        switch (c) {
+        case AlertCategory::THUNDERSTORM_BASE:         return settingsMgr.s.ntfyCatThunderstormBase;
+        case AlertCategory::OTHER_EXTREME:             return settingsMgr.s.ntfyCatOtherExtreme;
+        case AlertCategory::THUNDERSTORM_CONSIDERABLE: return settingsMgr.s.ntfyCatThunderstormConsiderable;
+        case AlertCategory::TORNADO_UNCONFIRMED:        return settingsMgr.s.ntfyCatTornadoUnconfirmed;
+        case AlertCategory::THUNDERSTORM_DESTRUCTIVE:   return settingsMgr.s.ntfyCatThunderstormDestructive;
+        case AlertCategory::TORNADO_CONFIRMED:           return settingsMgr.s.ntfyCatTornadoConfirmed;
+        case AlertCategory::TORNADO_EMERGENCY:           return settingsMgr.s.ntfyCatTornadoEmergency;
+        default:                                         return false;
+        }
+    }
+
     static AlertCategory classify(const char* event, JsonObject params,
                                    const char* severity, const char* urgency, const char* certainty) {
         if (!strcmp(event, "Tornado Warning")) {
@@ -455,6 +469,8 @@ private:
 
     void setPollResult(bool ok, const String& err) {
         CtrlLock lock;
+        bool wasOk = !everPolled_ || lastPollSuccess_;
+        uint8_t failedAttempts = consecutiveFailures_;
         lastPollEpoch_   = nowEpoch();
         everPolled_      = true;
         lastPollSuccess_ = ok;
@@ -465,6 +481,12 @@ private:
             lastSuccessMs_       = millis();
         } else if (!retryAfterMs_ && consecutiveFailures_ < 255) {
             consecutiveFailures_++;
+        }
+        // Edge-detected, not every poll — the backoff schedule already
+        // keeps a sustained outage from being chatty on its own.
+        if (settingsMgr.s.ntfyNotifyErrors) {
+            if (wasOk && !ok) ntfy.notify(4, "NWS poll failing", err);
+            else if (!wasOk && ok) ntfy.notify(3, "NWS poll recovered", "Back to normal after " + String(failedAttempts) + " failed attempt(s)");
         }
     }
 
@@ -610,6 +632,11 @@ private:
                     strlcpy(le.disposition, "NOTIFY_ONLY", sizeof(le.disposition));
                     le.escalation = escalated;
                     alertLog.record(le);
+                    if (categoryNotifyEnabled(category)) {
+                        ntfy.notify(3, "Weather alert (auto-trigger off)",
+                            String(event) + " — " + categoryDescriptor(category, event) +
+                            " (siren mode OFF, awareness only)");
+                    }
                 } else {
                     te->pending         = true;
                     te->pendingCategory = categoryVal;
@@ -795,7 +822,18 @@ private:
         le.attempts   = q.sendCount;
         le.escalation = q.escalation;
         alertLog.record(le);
-        // TODO(WP4): hand `disposition` to the ntfy queue here.
+
+        bool isFailure = !strcmp(disposition, "NO_RESPONSE") || !strncmp(disposition, "GAVE_UP_", 8);
+        if (isFailure && settingsMgr.s.ntfyNotifyErrors) {
+            ntfy.notify(5, "Siren did not respond",
+                String(q.event.c_str()) + " — " + q.mode + " command " + disposition +
+                " (" + q.sendCount + " attempt" + (q.sendCount == 1 ? "" : "s") + ")");
+        } else if ((!strcmp(disposition, "TRIGGERED") || !strcmp(disposition, "RETRIED_TRIGGERED")) &&
+                   categoryNotifyEnabled((AlertCategory)q.category)) {
+            ntfy.notify(4, String(q.mode) + " activated",
+                String(q.event.c_str()) + " — " + q.descriptor);
+        }
+
         for (uint8_t i = 1; i < MAX_QUEUED; i++) queue_[i - 1] = queue_[i];
         queue_[MAX_QUEUED - 1] = QueuedTrigger{};
     }
@@ -883,12 +921,29 @@ private:
             // Unsolicited siren-activity event (main board's weather_link.h
             // sendStatusEvents(), docs/uart-protocol.md section 2.3) — a
             // WEB/MESH/button-initiated run the WW didn't cause itself.
-            // Logged for now; WP3 (persistent log) and WP4 (ntfy) will hang
-            // their own handling off this same branch rather than needing a
-            // second parser.
-            CtrlLock lock;
-            strlcpy(lastSxEvent_, line + 3, sizeof(lastSxEvent_));
-            lastSxEventMs_ = millis();
+            {
+                CtrlLock lock;
+                strlcpy(lastSxEvent_, line + 3, sizeof(lastSxEvent_));
+                lastSxEventMs_ = millis();
+            }
+            // "SX ACTIVATED <MODE> <SOURCE>" — the three non-NWS activation
+            // sources each have their own opt-in toggle (off by default,
+            // since this is "someone's using the siren", not a fault).
+            char rest[40];
+            strlcpy(rest, line + 3, sizeof(rest));
+            char* tok = strtok(rest, " ");
+            if (tok && !strcmp(tok, "ACTIVATED")) {
+                char* modeW = strtok(nullptr, " ");
+                char* srcW  = strtok(nullptr, " ");
+                bool wanted = srcW && (
+                    (!strcmp(srcW, "LOCAL") && settingsMgr.s.ntfyNotifySrcLocal) ||
+                    (!strcmp(srcW, "WEB")   && settingsMgr.s.ntfyNotifySrcWeb) ||
+                    (!strcmp(srcW, "MESH")  && settingsMgr.s.ntfyNotifySrcMesh));
+                if (wanted) {
+                    ntfy.notify(3, "Siren activated",
+                        String(modeW ? modeW : "?") + " — activated from " + srcW);
+                }
+            }
         } else if (!strcasecmp(line, "REBOOT")) {
             Serial.println("Main board requested a reboot — restarting");
             delay(100);

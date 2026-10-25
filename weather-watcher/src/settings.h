@@ -41,6 +41,40 @@ struct Settings {
     char     timeZone[16]   = "EASTERN";    // EASTERN/CENTRAL/MOUNTAIN/PACIFIC/ALASKA/HAWAII
     bool     autoDst        = true;         // adjust the clock for daylight saving automatically
     uint32_t ntpUpdateHours = 12;           // how often to re-sync with the NTP server
+
+    // ── ntfy push notifications (WP4) ────────────────────────────────────
+    bool     ntfyEnabled   = false;
+    char     ntfyServer[64] = "https://ntfy.sh";
+    char     ntfyTopic[64]  = "";
+    // Write-only: never echoed back by /settings-data, never logged. A
+    // non-empty value here means "keep the stored token" on save unless
+    // explicitly replaced — see webserver.h's settings POST handler.
+    char     ntfyToken[80]  = "";
+    bool     ntfyVerifyCert = true;         // Decision A — off = setInsecure(), explicit opt-out only
+
+    // One toggle per alert category this board can classify into (see
+    // AlertCategory in nws_client.h) — independent of whether that
+    // category's siren mode is OFF, so "notify me but don't trigger" and
+    // "trigger but don't notify" are both expressible.
+    bool ntfyCatThunderstormBase        = false;
+    bool ntfyCatOtherExtreme            = true;
+    bool ntfyCatThunderstormConsiderable = false;
+    bool ntfyCatTornadoUnconfirmed       = false;
+    bool ntfyCatThunderstormDestructive  = true;
+    bool ntfyCatTornadoConfirmed         = true;
+    bool ntfyCatTornadoEmergency         = true;
+
+    // Fault conditions: NWS poll failures/stale data, this board's own
+    // link-test failures, and a trigger queue disposition of NO_RESPONSE/
+    // GAVE_UP_* (the siren never actually confirmed the command).
+    bool ntfyNotifyErrors = true;
+
+    // The three non-NWS activation sources (an SX event received from the
+    // main board, see weather_link.h's sendStatusEvents()) — off by default
+    // since these are "someone's using the siren", not a fault.
+    bool ntfyNotifySrcLocal = false;
+    bool ntfyNotifySrcWeb   = false;
+    bool ntfyNotifySrcMesh  = false;
 };
 
 class SettingsManager {
@@ -70,6 +104,23 @@ public:
         loadStr(p, "timeZone",   s.timeZone,  sizeof(s.timeZone));
         s.autoDst        = p.getBool("autoDst", s.autoDst);
         s.ntpUpdateHours = p.getUInt("ntpUpdHrs", s.ntpUpdateHours);
+
+        s.ntfyEnabled    = p.getBool("ntfyOn", s.ntfyEnabled);
+        loadStr(p, "ntfySrv", s.ntfyServer, sizeof(s.ntfyServer));
+        loadStr(p, "ntfyTopic", s.ntfyTopic, sizeof(s.ntfyTopic));
+        loadStr(p, "ntfyTok", s.ntfyToken, sizeof(s.ntfyToken));
+        s.ntfyVerifyCert = p.getBool("ntfyVerCert", s.ntfyVerifyCert);
+        s.ntfyCatThunderstormBase         = p.getBool("ntfyCTsB", s.ntfyCatThunderstormBase);
+        s.ntfyCatOtherExtreme             = p.getBool("ntfyCOE", s.ntfyCatOtherExtreme);
+        s.ntfyCatThunderstormConsiderable = p.getBool("ntfyCTsC", s.ntfyCatThunderstormConsiderable);
+        s.ntfyCatTornadoUnconfirmed       = p.getBool("ntfyCToU", s.ntfyCatTornadoUnconfirmed);
+        s.ntfyCatThunderstormDestructive  = p.getBool("ntfyCTsD", s.ntfyCatThunderstormDestructive);
+        s.ntfyCatTornadoConfirmed         = p.getBool("ntfyCToC", s.ntfyCatTornadoConfirmed);
+        s.ntfyCatTornadoEmergency         = p.getBool("ntfyCToE", s.ntfyCatTornadoEmergency);
+        s.ntfyNotifyErrors  = p.getBool("ntfyErr", s.ntfyNotifyErrors);
+        s.ntfyNotifySrcLocal = p.getBool("ntfySrcL", s.ntfyNotifySrcLocal);
+        s.ntfyNotifySrcWeb   = p.getBool("ntfySrcW", s.ntfyNotifySrcWeb);
+        s.ntfyNotifySrcMesh  = p.getBool("ntfySrcM", s.ntfyNotifySrcMesh);
         p.end();
     }
 
@@ -96,6 +147,23 @@ public:
         p.putString("timeZone", s.timeZone);
         p.putBool("autoDst", s.autoDst);
         p.putUInt("ntpUpdHrs", s.ntpUpdateHours);
+
+        p.putBool("ntfyOn", s.ntfyEnabled);
+        p.putString("ntfySrv", s.ntfyServer);
+        p.putString("ntfyTopic", s.ntfyTopic);
+        p.putString("ntfyTok", s.ntfyToken);
+        p.putBool("ntfyVerCert", s.ntfyVerifyCert);
+        p.putBool("ntfyCTsB", s.ntfyCatThunderstormBase);
+        p.putBool("ntfyCOE", s.ntfyCatOtherExtreme);
+        p.putBool("ntfyCTsC", s.ntfyCatThunderstormConsiderable);
+        p.putBool("ntfyCToU", s.ntfyCatTornadoUnconfirmed);
+        p.putBool("ntfyCTsD", s.ntfyCatThunderstormDestructive);
+        p.putBool("ntfyCToC", s.ntfyCatTornadoConfirmed);
+        p.putBool("ntfyCToE", s.ntfyCatTornadoEmergency);
+        p.putBool("ntfyErr", s.ntfyNotifyErrors);
+        p.putBool("ntfySrcL", s.ntfyNotifySrcLocal);
+        p.putBool("ntfySrcW", s.ntfyNotifySrcWeb);
+        p.putBool("ntfySrcM", s.ntfyNotifySrcMesh);
         p.end();
     }
 
