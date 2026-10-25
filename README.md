@@ -182,6 +182,16 @@ Version 1.9.0 changed the partition table to make room for this, so
 **updating to 1.9.0 itself must be done over USB**. Saved settings and WiFi
 credentials are kept.
 
+### Hold-to-confirm activation buttons
+
+WAIL, ATTACK, FAST WAIL, and the STOP bar require a deliberate hold rather
+than a single tap — a fill overlay shows progress as you hold, and the
+command only fires once the bar is full (1 second to start the siren, 0.4
+seconds to stop it — stopping stays fast and easy). Releasing early cancels
+with no effect. This guards against an accidental tap setting off the
+siren; MANUAL's existing press-and-hold behavior and the Component Test
+page's buttons are unchanged.
+
 ### System health strip
 
 A small colored-dot bar above the main status card gives an at-a-glance

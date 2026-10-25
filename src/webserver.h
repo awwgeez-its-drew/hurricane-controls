@@ -212,6 +212,12 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 .bfastwail{background:var(--fastwail);color:#fff3e0}
 .bmanual  {background:var(--manual);color:#f3eaff}
 .bmanual.on{box-shadow:0 0 0 2px var(--green),0 1px 3px rgba(0,0,0,.35)}
+/* Hold-to-confirm fill — a bottom-anchored overlay that grows with the
+   hold, so the button only fires once it's full (WP6). touch-action:none
+   stops the browser treating the hold as a scroll/selection gesture. */
+.holdable{position:relative;overflow:hidden;touch-action:none;user-select:none}
+.hfill{position:absolute;left:0;bottom:0;width:100%;height:0%;background:rgba(255,255,255,.28);
+       pointer-events:none;transition:height .05s linear}
 .overlay{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:50}
 .mbox{background:var(--surface);border-radius:var(--radius);padding:28px 24px;text-align:center;
       max-width:280px;width:calc(100% - 32px)}
@@ -268,16 +274,16 @@ body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI"
 </div>
 
 <div class="grid">
-  <button class="btn bwail"     onclick="activate('wail')">WAIL</button>
-  <button class="btn battack"   onclick="activate('attack')">ATTACK</button>
-  <button class="btn bfastwail" onclick="activate('fastwail')">FAST WAIL</button>
+  <button class="btn bwail holdable" id="bWail">WAIL<div class="hfill"></div></button>
+  <button class="btn battack holdable" id="bAttack">ATTACK<div class="hfill"></div></button>
+  <button class="btn bfastwail holdable" id="bFastWail">FAST WAIL<div class="hfill"></div></button>
   <button class="btn bmanual" id="bm"
     onmousedown="manualDown(event)" onmouseup="manualUp(event)" onmouseleave="manualUp(event)"
     ontouchstart="manualDown(event)" ontouchend="manualUp(event)" ontouchcancel="manualUp(event)">MANUAL</button>
 </div>
 </div>
 
-<div class="stopbar" onclick="claxon();cmd('stop')">&#9632; STOP</div>
+<div class="stopbar holdable" id="bStop">&#9632; STOP<div class="hfill"></div></div>
 
 <div class="overlay" id="rmModal">
   <div class="mbox">
@@ -383,6 +389,42 @@ function cmd(m){
     body:JSON.stringify({mode:m})});
 }
 function activate(m){claxon();cmd(m);}
+
+// Hold-to-confirm (WP6): Wail/Attack/Fast-Wail/Stop only fire once the
+// button has been held for the full duration — a bottom-up fill shows
+// progress. Manual's own momentary-hold (manualDown/manualUp above) and
+// the Test page's component buttons are untouched; /cmd itself doesn't
+// change, this is purely a client-side gate before the same POST fires.
+const HOLD_START_MS=1000, HOLD_STOP_MS=400;
+const REDUCE_MOTION=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function armHold(id,ms,onComplete){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const fill=el.querySelector('.hfill');
+  let raf=null,startT=0;
+  function frame(now){
+    const pct=Math.min(1,(now-startT)/ms);
+    if(fill&&!REDUCE_MOTION)fill.style.height=(pct*100)+'%';
+    if(pct>=1){cancel();onComplete();return;}
+    raf=requestAnimationFrame(frame);
+  }
+  function cancel(){if(raf)cancelAnimationFrame(raf);raf=null;if(fill)fill.style.height='0%';}
+  function down(e){
+    e.preventDefault();
+    if(el.setPointerCapture)try{el.setPointerCapture(e.pointerId);}catch(err){}
+    startT=performance.now();
+    raf=requestAnimationFrame(frame);
+  }
+  el.addEventListener('pointerdown',down);
+  el.addEventListener('pointerup',cancel);
+  el.addEventListener('pointercancel',cancel);
+  el.addEventListener('pointerleave',cancel);
+}
+armHold('bWail',     HOLD_START_MS, ()=>activate('wail'));
+armHold('bAttack',   HOLD_START_MS, ()=>activate('attack'));
+armHold('bFastWail', HOLD_START_MS, ()=>activate('fastwail'));
+armHold('bStop',     HOLD_STOP_MS,  ()=>{claxon();cmd('stop');});
+
 function manualDown(e){
   e.preventDefault(); // suppress synthetic mouse events on touch
   if(sirenActive)return;
