@@ -1,5 +1,7 @@
 # Hurricane Controls
 
+[![CI](https://github.com/awwgeez-its-drew/hurricane-controls/actions/workflows/ci.yml/badge.svg)](https://github.com/awwgeez-its-drew/hurricane-controls/actions/workflows/ci.yml)
+
 ESP32 firmware + web interface for controlling a motor-driven mechanical siren
 (chopper, blower, rotator) — WAIL, ATTACK, FAST WAIL, and MANUAL run modes, a
 Component Test page for bench-testing relays independently (including a
@@ -151,6 +153,10 @@ staying in AP mode (Settings → Wi-Fi). Note: the ESP32 only supports
 **2.4 GHz** WiFi, not 5 GHz — if your router broadcasts separate 2.4 GHz and
 5 GHz networks (or names, e.g. `MyNetwork` vs. `MyNetwork-5G`), make sure you
 join the 2.4 GHz one.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for what's new in each release, and
+[`docs/bench-test.md`](docs/bench-test.md) for the checklist to run on real
+hardware before trusting a new one.
 
 ## Setup
 

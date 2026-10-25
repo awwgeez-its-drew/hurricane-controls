@@ -1,0 +1,48 @@
+name: CI
+
+# Builds both boards with PlatformIO on every push/PR. This repo's
+# development sandbox (see docs/bench-test.md) cannot reach the
+# PlatformIO package registry, so this workflow is the first place these
+# builds are actually exercised — read its results, don't assume green
+# just because the diff looks right.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - name: main-board
+            dir: .
+          - name: weather-watcher
+            dir: weather-watcher
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+          key: pio-${{ matrix.project.name }}-${{ hashFiles(format('{0}/platformio.ini', matrix.project.dir)) }}
+          restore-keys: pio-${{ matrix.project.name }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build (${{ matrix.project.name }})
+        working-directory: ${{ matrix.project.dir }}
+        # pio run already prints a RAM/Flash usage summary on success —
+        # watch it in the step output for the 90%-of-budget check in
+        # docs/bench-test.md, no separate size target needed.
+        run: pio run -e esp32dev

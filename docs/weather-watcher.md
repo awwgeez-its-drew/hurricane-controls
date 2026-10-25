@@ -252,6 +252,11 @@ default to 38400.
 
 ## Wire protocol
 
+**See [`docs/uart-protocol.md`](uart-protocol.md) for the full, current
+protocol** (ACKs, the trigger retry queue, `WX ALERTS`, `SX` events,
+`WX PING`/`OK: pong 2`) — the summary below covers only the original
+trigger command, kept here for a quick read of the common case.
+
 One command, sent by the Weather Watcher whenever a tracked warning first
 crosses its activation threshold (or re-crosses it on escalation, if that
 setting is on):
