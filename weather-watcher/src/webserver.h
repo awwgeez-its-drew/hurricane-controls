@@ -359,7 +359,9 @@ function refresh(){
     document.getElementById('apiDot').className='dot '+(d.apiGreen?'green':'red');
     document.getElementById('apiDetail').textContent=d.apiDetail;
     document.getElementById('linkDot').className='dot'+(d.everTestedLink?(d.linkOk?' green':' red'):'');
-    document.getElementById('linkDetail').textContent=d.linkDetail+(d.sirenLegacyProtocol?' (older siren firmware — update it for trigger confirmations)':'');
+    const sxAge=d.lastSxEventAgeSec;
+    const sxTxt=d.lastSxEvent?(' — last main-board event: "'+d.lastSxEvent+'" ('+(sxAge<60?sxAge+'s':Math.floor(sxAge/60)+'m')+' ago)'):' — no SX event received yet';
+    document.getElementById('linkDetail').textContent=d.linkDetail+(d.sirenLegacyProtocol?' (older siren firmware — update it for trigger confirmations)':'')+sxTxt;
     document.getElementById('staleDot').className='dot '+(d.stale?'red':'green');
     document.getElementById('staleDetail').textContent=d.stale?('Stale — last successful poll '+Math.floor(d.dataAgeSec/60)+'m ago'):'Up to date';
     document.getElementById('clock').textContent=d.currentTime;
@@ -1535,6 +1537,15 @@ private:
         doc["linkOk"]         = nwsClient.linkOk();
         doc["linkDetail"]     = nwsClient.linkTestInProgress() ? String("Testing...") : nwsClient.linkDetail();
         doc["sirenLegacyProtocol"] = nwsClient.sirenLegacyProtocol();
+
+        // Diagnostic: the raw text of the most recent "SX ..." line
+        // received from the main board, regardless of which notification
+        // toggles are on — lets you confirm what's actually arriving over
+        // the wire straight from the dashboard, no serial connection
+        // needed. -1 sentinel for "nothing received yet".
+        doc["lastSxEvent"] = nwsClient.lastSxEvent();
+        doc["lastSxEventAgeSec"] = nwsClient.lastSxEventMs()
+            ? (int32_t)((millis() - nwsClient.lastSxEventMs()) / 1000) : -1;
 
         doc["stale"]       = nwsClient.stale();
         doc["dataAgeSec"]  = nwsClient.dataAgeSec();
