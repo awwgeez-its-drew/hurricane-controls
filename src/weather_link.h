@@ -29,6 +29,18 @@ class WeatherLink {
 public:
     void begin() {
         Serial1.begin(WEATHER_BAUD, SERIAL_8N1, WEATHER_RX_PIN, WEATHER_TX_PIN);
+        // Prime the SX edge-detection fields to their actual boot-time
+        // value, same reason mesh.h's begin() does this for its own
+        // equivalents: without it, any field whose real value differs
+        // from the struct default (e.g. weatherAutoTriggerEnabled
+        // defaults true) looks like a change on the very first tick and
+        // fires a spurious SX event instead of staying quiet until a
+        // real change happens.
+        sxWasActive_              = sm.isActive();
+        sxLastSeenStopSeq_        = sm.stopCallSeq;
+        sxWasLocked_              = buttons.locked;
+        sxLastSeenLockedPressSeq_ = buttons.lockedPressSeq;
+        sxWasWeatherEnabled_      = settingsMgr.s.weatherAutoTriggerEnabled;
     }
 
     void update() {
