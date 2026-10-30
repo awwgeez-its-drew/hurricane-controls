@@ -627,6 +627,12 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:poin
     <input type="text" id="meshWL" placeholder="e.g. 3A3C, 1B93"></div>
   <div class="row"><label>Command Password (optional, plaintext)</label>
     <input type="text" id="meshPW" placeholder="leave blank for no password"></div>
+  <h3 style="font-size:.75rem;color:#9aa3af;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Broadcast these over mesh</h3>
+  <div class="trow"><label for="meshNotifyActivation">Activations &amp; stops</label><input type="checkbox" id="meshNotifyActivation"></div>
+  <div class="trow"><label for="meshNotifySystemEvents">Lockout toggled, weather-trigger toggled, locked button pressed</label><input type="checkbox" id="meshNotifySystemEvents"></div>
+  <div class="trow"><label for="meshNotifyWwHealth">Weather Watcher health (lost/recovered/error)</label><input type="checkbox" id="meshNotifyWwHealth"></div>
+  <div class="trow"><label for="meshNotifyStatus">Boot announcement + periodic status</label><input type="checkbox" id="meshNotifyStatus"></div>
+  <p class="hint" style="margin-top:-2px">A direct <code>SIREN PING</code> always gets a reply regardless of these — they only control the unprompted broadcasts.</p>
   <button class="btn save" onclick="saveMeshWL()">Save Mesh Settings</button>
   <div class="msg" id="mwlm"></div>
   </div>
@@ -802,6 +808,10 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('rstReason').textContent=d.resetReason||'—';
   document.getElementById('meshWL').value=d.meshWhitelist||'';
   document.getElementById('meshPW').value=d.meshPassword||'';
+  document.getElementById('meshNotifyActivation').checked=d.meshNotifyActivation!==false;
+  document.getElementById('meshNotifySystemEvents').checked=d.meshNotifySystemEvents!==false;
+  document.getElementById('meshNotifyWwHealth').checked=d.meshNotifyWwHealth!==false;
+  document.getElementById('meshNotifyStatus').checked=d.meshNotifyStatus!==false;
   document.getElementById('ntpServer').value=d.ntpServer||'pool.ntp.org';
   document.getElementById('ntpUpdateHours').value=d.ntpUpdateHours||12;
   document.getElementById('timeZone').value=d.timeZone||'EASTERN';
@@ -920,7 +930,14 @@ function saveTime(){
 function saveMeshWL(){
   const wl=document.getElementById('meshWL').value.trim();
   const pw=document.getElementById('meshPW').value.trim();
-  post('/settings-data',{meshWhitelist:wl,meshPassword:pw}).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
+  post('/settings-data',{
+    meshWhitelist:wl,
+    meshPassword:pw,
+    meshNotifyActivation: document.getElementById('meshNotifyActivation').checked,
+    meshNotifySystemEvents: document.getElementById('meshNotifySystemEvents').checked,
+    meshNotifyWwHealth: document.getElementById('meshNotifyWwHealth').checked,
+    meshNotifyStatus: document.getElementById('meshNotifyStatus').checked,
+  }).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
 }
 function saveWeatherAutoTrigger(){
   const on=document.getElementById('wxAutoTrig').checked;
@@ -1655,6 +1672,10 @@ private:
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
                     applyString(doc, "meshPassword", s.meshPassword, sizeof(s.meshPassword));
                     applyBool(doc, "weatherAutoTriggerEnabled", s.weatherAutoTriggerEnabled);
+                    applyBool(doc, "meshNotifyActivation", s.meshNotifyActivation);
+                    applyBool(doc, "meshNotifySystemEvents", s.meshNotifySystemEvents);
+                    applyBool(doc, "meshNotifyWwHealth", s.meshNotifyWwHealth);
+                    applyBool(doc, "meshNotifyStatus", s.meshNotifyStatus);
                     applyString(doc, "ntpServer", s.ntpServer, sizeof(s.ntpServer));
                     applyUInt(doc, "ntpUpdateHours", s.ntpUpdateHours, 1, 168);
                     applyString(doc, "timeZone", s.timeZone, sizeof(s.timeZone));
@@ -1989,6 +2010,10 @@ private:
         doc["meshWhitelist"]       = s.meshWhitelist;
         doc["meshPassword"]        = s.meshPassword;
         doc["weatherAutoTriggerEnabled"] = s.weatherAutoTriggerEnabled;
+        doc["meshNotifyActivation"]   = s.meshNotifyActivation;
+        doc["meshNotifySystemEvents"] = s.meshNotifySystemEvents;
+        doc["meshNotifyWwHealth"]     = s.meshNotifyWwHealth;
+        doc["meshNotifyStatus"]       = s.meshNotifyStatus;
         doc["ntpServer"]        = s.ntpServer;
         doc["ntpUpdateHours"]   = s.ntpUpdateHours;
         doc["timeZone"]         = s.timeZone;

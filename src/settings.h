@@ -27,6 +27,17 @@ struct Settings {
     char     meshPassword[64] = "";        // plaintext, optional trailing token on mesh commands ("SIREN WAIL <password>"); empty = not required. PING is exempt.
     bool     weatherAutoTriggerEnabled = true;  // dedicated kill-switch for the Weather Watcher link, independent of buttons.locked
 
+    // Per-event-type Meshtastic broadcast toggles (src/mesh.h's update()),
+    // mirroring the grouping of the Weather Watcher's ntfy toggles
+    // (weather-watcher/src/settings.h's ntfyNotify*) so the two notification
+    // channels can be tuned independently. All default true — every one of
+    // these has always broadcast unconditionally, so this only lets an
+    // owner opt specific ones OUT, never silently changes existing behavior.
+    bool meshNotifyActivation   = true;  // <MODE> ACTIVATED / CYCLE COMPLETED / STOP ACTIVATED
+    bool meshNotifySystemEvents = true;  // lockout toggled, weather-trigger toggled, a locked button pressed
+    bool meshNotifyWwHealth     = true;  // WEATHER WATCHER LOST/RECOVERED/ERROR
+    bool meshNotifyStatus       = true;  // STARTUP COMPLETE + the periodic status broadcast (not the SIREN PING reply, which always answers)
+
     // NTP fallback — this board normally gets its clock from the Weather
     // Watcher's "WX TIME" push over the UART link; these settings only
     // matter if that link is offline/unpaired and the board has to sync
@@ -70,6 +81,10 @@ public:
         String mpw = prefs.getString("meshPW", s.meshPassword);
         strlcpy(s.meshPassword, mpw.c_str(), sizeof(s.meshPassword));
         s.weatherAutoTriggerEnabled = prefs.getBool("wxAutoTrig", s.weatherAutoTriggerEnabled);
+        s.meshNotifyActivation   = prefs.getBool("meshNtfAct",  s.meshNotifyActivation);
+        s.meshNotifySystemEvents = prefs.getBool("meshNtfSys",  s.meshNotifySystemEvents);
+        s.meshNotifyWwHealth     = prefs.getBool("meshNtfWw",   s.meshNotifyWwHealth);
+        s.meshNotifyStatus       = prefs.getBool("meshNtfStat", s.meshNotifyStatus);
         String ntpSrv = prefs.getString("ntpServer", s.ntpServer);
         strlcpy(s.ntpServer, ntpSrv.c_str(), sizeof(s.ntpServer));
         String tz = prefs.getString("timeZone", s.timeZone);
@@ -104,6 +119,10 @@ public:
         prefs.putString("meshWL",       s.meshWhitelist);
         prefs.putString("meshPW",       s.meshPassword);
         prefs.putBool("wxAutoTrig",     s.weatherAutoTriggerEnabled);
+        prefs.putBool("meshNtfAct",     s.meshNotifyActivation);
+        prefs.putBool("meshNtfSys",     s.meshNotifySystemEvents);
+        prefs.putBool("meshNtfWw",      s.meshNotifyWwHealth);
+        prefs.putBool("meshNtfStat",    s.meshNotifyStatus);
         prefs.putString("ntpServer",    s.ntpServer);
         prefs.putString("timeZone",     s.timeZone);
         prefs.putBool("autoDst",        s.autoDst);

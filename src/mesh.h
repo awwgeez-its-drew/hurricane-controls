@@ -66,19 +66,22 @@ public:
         // now, not the informational CYCLE COMPLETED/STATUS lines.
         bool active = sm.isActive();
         if (!wasActive_ && active) {
-            String msg = String("\x07") + modeWord(sm.runMode) + " ACTIVATED (activation point: " +
-                         sourceWord(sm.lastTriggerSource) + ")";
-            // NWS-triggered activations carry a "TYPE - THREAT LEVEL"
-            // descriptor from the Weather Watcher (e.g. "TORNADO EMERGENCY
-            // - CATASTROPHIC") — see weather_link.h's lastAlertDescriptor().
-            if (sm.lastTriggerSource == TriggerSource::NWS_ALERT && weatherLink.lastAlertDescriptor()[0]) {
-                msg += " | ";
-                msg += weatherLink.lastAlertDescriptor();
+            if (settingsMgr.s.meshNotifyActivation) {
+                String msg = String("\x07") + modeWord(sm.runMode) + " ACTIVATED (activation point: " +
+                             sourceWord(sm.lastTriggerSource) + ")";
+                // NWS-triggered activations carry a "TYPE - THREAT LEVEL"
+                // descriptor from the Weather Watcher (e.g. "TORNADO EMERGENCY
+                // - CATASTROPHIC") — see weather_link.h's lastAlertDescriptor().
+                if (sm.lastTriggerSource == TriggerSource::NWS_ALERT && weatherLink.lastAlertDescriptor()[0]) {
+                    msg += " | ";
+                    msg += weatherLink.lastAlertDescriptor();
+                }
+                reply(msg);
             }
-            reply(msg);
         }
         if (wasActive_ && !active) {
-            reply(String(modeWord(lastKnownRunMode_)) + " CYCLE COMPLETED - SIREN STOPPED");
+            if (settingsMgr.s.meshNotifyActivation)
+                reply(String(modeWord(lastKnownRunMode_)) + " CYCLE COMPLETED - SIREN STOPPED");
         }
         wasActive_ = active;
 
@@ -88,13 +91,15 @@ public:
         // alert-bell prefix, same rationale as the activation broadcast.
         if (sm.stopCallSeq != lastSeenStopSeq_) {
             lastSeenStopSeq_ = sm.stopCallSeq;
-            reply(String("\x07STOP ACTIVATED (activation point: ") + sourceWord(sm.lastStopSource) + ")");
+            if (settingsMgr.s.meshNotifyActivation)
+                reply(String("\x07STOP ACTIVATED (activation point: ") + sourceWord(sm.lastStopSource) + ")");
         }
 
         // Physical-button lockout state changed.
         if (buttons.locked != wasLocked_) {
             wasLocked_ = buttons.locked;
-            reply(wasLocked_ ? "LOCAL BUTTON LOCKOUT ACTIVE" : "LOCAL BUTTON LOCKOUT INACTIVE");
+            if (settingsMgr.s.meshNotifySystemEvents)
+                reply(wasLocked_ ? "LOCAL BUTTON LOCKOUT ACTIVE" : "LOCAL BUTTON LOCKOUT INACTIVE");
         }
 
         // Someone physically pressed a button while it's locked out — alert,
@@ -102,7 +107,8 @@ public:
         // disabled controls.
         if (buttons.lockedPressSeq != lastSeenLockedPressSeq_) {
             lastSeenLockedPressSeq_ = buttons.lockedPressSeq;
-            reply(String("\x07") + lockedButtonWord(buttons.lastLockedPress) + " PRESSED - LOCKED OUT");
+            if (settingsMgr.s.meshNotifySystemEvents)
+                reply(String("\x07") + lockedButtonWord(buttons.lastLockedPress) + " PRESSED - LOCKED OUT");
         }
 
         // Automatic weather-triggered activation toggled — regardless of
@@ -110,7 +116,8 @@ public:
         // "broadcast on change, from any source" treatment as the lockout.
         if (settingsMgr.s.weatherAutoTriggerEnabled != wasWeatherEnabled_) {
             wasWeatherEnabled_ = settingsMgr.s.weatherAutoTriggerEnabled;
-            reply(wasWeatherEnabled_ ? "WEATHER TRIGGER ENABLED" : "WEATHER TRIGGER DISABLED");
+            if (settingsMgr.s.meshNotifySystemEvents)
+                reply(wasWeatherEnabled_ ? "WEATHER TRIGGER ENABLED" : "WEATHER TRIGGER DISABLED");
         }
 
         // Weather Watcher went quiet / came back — a fault condition worth
@@ -119,7 +126,8 @@ public:
         bool wwLost = weatherLink.lost();
         if (wwLost != wasWwLost_) {
             wasWwLost_ = wwLost;
-            reply(String("\x07WEATHER WATCHER ") + (wwLost ? "LOST" : "RECOVERED"));
+            if (settingsMgr.s.meshNotifyWwHealth)
+                reply(String("\x07WEATHER WATCHER ") + (wwLost ? "LOST" : "RECOVERED"));
         }
 
         uint32_t now = millis();
@@ -132,10 +140,12 @@ public:
                        !weatherLink.pending() && !weatherLink.reportedOk();
         if (wwError && (now - lastWwErrorTs_ >= WW_ERROR_REANNOUNCE_MS)) {
             lastWwErrorTs_ = now;
-            reply(String("\x07WEATHER WATCHER ERROR: ") + weatherLink.detail());
+            if (settingsMgr.s.meshNotifyWwHealth)
+                reply(String("\x07WEATHER WATCHER ERROR: ") + weatherLink.detail());
         }
         if (wasWwError_ && !wwError) {
-            reply("WEATHER WATCHER RECOVERED");
+            if (settingsMgr.s.meshNotifyWwHealth)
+                reply("WEATHER WATCHER RECOVERED");
         }
         wasWwError_ = wwError;
 
@@ -148,9 +158,11 @@ public:
                          now - bootTs_ >= STARTUP_ANNOUNCE_MAX_WAIT_MS; // give up waiting
             if (ready) {
                 startupPending_ = false;
-                reply("STARTUP COMPLETE");
                 lastStatusTs_ = now;
-                reply(buildStatusMessage());
+                if (settingsMgr.s.meshNotifyStatus) {
+                    reply("STARTUP COMPLETE");
+                    reply(buildStatusMessage());
+                }
             }
             return;
         }
@@ -158,7 +170,8 @@ public:
         // Periodic status line.
         if (now - lastStatusTs_ >= STATUS_INTERVAL_MS) {
             lastStatusTs_ = now;
-            reply(buildStatusMessage());
+            if (settingsMgr.s.meshNotifyStatus)
+                reply(buildStatusMessage());
         }
     }
 

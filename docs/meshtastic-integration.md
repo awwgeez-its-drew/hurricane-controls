@@ -193,6 +193,27 @@ unit; only *incoming* lines need the `SIREN` prefix to be recognized.
 | Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once after boot, as soon as the Weather Watcher has reported a real `OK`/`ERROR` from its first NWS poll — or immediately if the weather trigger is off, or after 2 minutes (`MeshBridge::STARTUP_ANNOUNCE_MAX_WAIT_MS`) if the Weather Watcher never reports. Only this pair waits; activation/stop/lockout broadcasts during that window go out immediately. |
 | Periodic status | `STATUS: <IDLE\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|LOST\|STARTING\|OK\|ERROR>` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. `WW` is the Weather Watcher sub-board's last self-reported health over the dedicated UART link (see `docs/weather-watcher.md`) — `OFF` if the weather-trigger toggle is off, `N/A` if it's on but nothing has ever been heard from that board, `LOST` if it was heard from before but has gone quiet for 90s+, `STARTING` if it's alive but hasn't finished its first NWS poll, else its own last `OK`/`ERROR` push. |
 
+#### Per-event-type broadcast toggles
+
+Each row above (except the direct `SIREN PING` reply, which always
+answers) can be turned off independently from the Main page's Settings
+→ Mesh Settings card, mirroring the grouping of the Weather Watcher's
+own ntfy toggles (`docs/weather-watcher.md`) so the two notification
+channels — mesh broadcasts and ntfy pushes — can be tuned separately:
+
+| Toggle | Controls |
+|---|---|
+| Activations & stops | Run mode activated, stop invoked, run cycle completed |
+| Lockout/weather-trigger/locked-button | Lockout changed, locked button pressed, weather trigger toggled |
+| Weather Watcher health | Weather Watcher lost/recovered, Weather Watcher error/recovered |
+| Boot + periodic status | Startup, periodic status |
+
+All four default **on** — every one of these broadcasts has always
+fired unconditionally, so this only lets an owner opt specific ones
+*out*; it never silently changes default behavior. Settings are
+persisted (`Settings::meshNotifyActivation`/`meshNotifySystemEvents`/
+`meshNotifyWwHealth`/`meshNotifyStatus` in `src/settings.h`).
+
 Implementation notes (`src/mesh.h`, `src/statemachine.h`):
 - **Source attribution** (`LOCAL`/`WEB`/`MESH`) is threaded through a new
   `TriggerSource` parameter on `StateMachine::trigger()`/`stop()`, set by
