@@ -170,7 +170,13 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap
 .clock{font-family:var(--mono);font-size:56px;font-weight:500;letter-spacing:.03em;line-height:1.05;font-variant-numeric:tabular-nums}
 .clockmeta{font-family:var(--mono);font-size:13px;color:var(--muted)}
 .statusp{padding:8px 22px 12px}
-.shead{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+.shead{display:flex;align-items:center;justify-content:space-between;padding:12px 0;min-height:44px;cursor:pointer;list-style:none}
+.shead::-webkit-details-marker{display:none}
+.stitle{display:flex;align-items:center;gap:10px}
+.stitle .dot{margin-top:0}
+.chev{color:var(--muted);transition:transform .15s}
+.statusp[open] .chev{transform:rotate(180deg)}
+.statusp:not([open]){padding-bottom:8px}
 .srow{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line)}
 .dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0;background:#3A4554}
 .dot.green{background:var(--green);box-shadow:0 0 0 4px rgba(74,222,128,.14)}
@@ -215,6 +221,13 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap
 .d-warn{background:#2E2A0C;color:#FDE68A}.d-bad{background:#34131A;color:#FCA5A5}
 .foot{width:100%;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;padding:4px 4px 24px;font-family:var(--mono);font-size:12px;color:var(--muted)}
 .foot a{color:var(--muted)}
+/* Single column (phones/narrow windows): drop the two column wrappers so the
+   cards can be reordered — Current alerts, System status, Time, Recent alerts. */
+@media (max-width:919px){
+  main{flex-direction:column;flex-wrap:nowrap;align-items:stretch}
+  .colL,.colR{display:contents}
+  #alertsCard{order:1}#statusCard{order:2}#clockCard{order:3}#recentCard{order:4}.foot{order:5}
+}
 @media (max-width:560px){.clock{font-size:44px}.card,.clockp{padding:18px}.statusp{padding:6px 18px 10px}}
 </style></head>
 <body>
@@ -230,29 +243,32 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap
 
 <main>
 <div class="colL">
-  <section class="panel clockp" aria-label="Clock">
+  <section class="panel clockp" id="clockCard" aria-label="Clock">
     <span class="clock" id="clock">--:--:--</span>
     <span class="clockmeta">Watcher <span id="tempF">&mdash;</span>&deg;F &middot; Uptime <span id="uptime">&mdash;</span></span>
   </section>
 
-  <section class="panel statusp" aria-label="System status">
-    <div class="shead"><span class="eyebrow">System status</span><span class="hint" style="font-size:12px">Live</span></div>
+  <details class="panel statusp" id="statusCard" aria-label="System status">
+    <summary class="shead">
+      <span class="stitle"><span class="eyebrow">System status</span><span class="dot" id="overallDot" role="img" aria-label="Checking"></span></span>
+      <svg class="chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+    </summary>
     <div class="srow"><span class="dot" id="wifiDot"></span><div class="sbody"><span class="slabel">Wi-Fi</span><span class="status-detail" id="wifiDetail"></span></div></div>
     <div class="srow"><span class="dot" id="apiDot"></span><div class="sbody"><span class="slabel">NWS API</span><span class="status-detail" id="apiDetail"></span></div></div>
     <div class="srow"><span class="dot" id="linkDot"></span><div class="sbody"><span class="slabel">Controller link</span><span class="status-detail" id="linkDetail"></span></div>
       <button class="sbtn" onclick="testLink()">Test link</button></div>
     <div class="srow"><span class="dot" id="staleDot"></span><div class="sbody"><span class="slabel">Alert data freshness</span><span class="status-detail" id="staleDetail"></span></div></div>
     <div class="statline" id="lastPoll">Last polling attempt: &mdash;</div>
-  </section>
+  </details>
 </div>
 
 <div class="colR">
-  <section class="panel card" aria-label="Current alerts">
+  <section class="panel card" id="alertsCard" aria-label="Current alerts">
     <div class="chead"><span class="eyebrow">Current alerts</span><span class="hint" style="font-size:12px" id="alertCount"></span></div>
     <div id="currentAlerts"><p class="hint">Loading&hellip;</p></div>
   </section>
 
-  <section class="panel card" aria-label="Recent alerts">
+  <section class="panel card" id="recentCard" aria-label="Recent alerts">
     <div class="chead">
       <div><span class="eyebrow">Recent alerts</span><p class="hint" style="margin-top:6px">The last 20 trigger attempts &mdash; activations, skips and failures alike.</p></div>
       <a class="sbtn" href="/alertlog.csv">
@@ -270,6 +286,15 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap
 
 <script>
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+// System status starts expanded on wide screens and collapsed on phones,
+// where the title's single status light is enough at a glance. Crossing
+// that width later (rotating a tablet, resizing a window) follows suit.
+(function(){
+  const card=document.getElementById('statusCard'), wide=window.matchMedia('(min-width:920px)');
+  card.open=wide.matches;
+  if(wide.addEventListener)wide.addEventListener('change',e=>{card.open=e.matches;});
+})();
 
 let lastCurrentAlertsSig=null;
 function renderCurrentAlerts(list){
@@ -404,6 +429,13 @@ function refresh(){
     document.getElementById('linkDetail').textContent=d.linkDetail+(d.sirenLegacyProtocol?' (older siren firmware — update it for trigger confirmations)':'')+sxTxt;
     document.getElementById('staleDot').className='dot '+(d.stale?'red':'green');
     document.getElementById('staleDetail').textContent=d.stale?('Stale — last successful poll '+Math.floor(d.dataAgeSec/60)+'m ago'):'Up to date';
+    // Title light: red if any row is red, else green. An untested
+    // controller link is neutral, so it doesn't turn the light red.
+    const bad=!d.wifiConnected||!d.apiGreen||d.stale||(d.everTestedLink&&!d.linkOk);
+    const od=document.getElementById('overallDot');
+    od.className='dot '+(bad?'red':'green');
+    od.setAttribute('aria-label',bad?'Attention needed':'All systems normal');
+    od.title=od.getAttribute('aria-label');
     document.getElementById('clock').textContent=d.currentTime;
     if(d.tempF!=null)document.getElementById('tempF').textContent=d.tempF;
     if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);

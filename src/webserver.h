@@ -230,9 +230,14 @@ main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--mono);font-size:13px;color:var(--muted);padding-top:16px;border-top:1px solid var(--line)}
 .meta span span{color:var(--text)}
 /* Health */
-.health{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
-.hsum{display:flex;align-items:center;gap:10px;font-weight:600}
-.hsum .dot{width:10px;height:10px}
+.health{padding:0 20px}
+.health[open]{padding-bottom:18px}
+.health summary{display:flex;align-items:center;gap:10px;min-height:52px;cursor:pointer;list-style:none}
+.health summary::-webkit-details-marker{display:none}
+.health summary .dot{width:10px;height:10px}
+.hsum{flex:1;text-align:right;font-size:13px;color:var(--muted)}
+.chev{color:var(--muted);flex-shrink:0;transition:transform .15s}
+.health[open] .chev{transform:rotate(180deg)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 /* Controls */
 .ctrl{flex:1 1 420px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:18px}
@@ -277,6 +282,14 @@ main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;
 .mok,.mcancel{min-height:46px;border-radius:10px;font-weight:700;font-family:var(--sans);cursor:pointer;font-size:14px}
 .mok{border:0;background:var(--attack);color:#fff}
 .mcancel{border:1px solid var(--line2);background:#172030;color:var(--text)}
+/* Single column (phones/narrow windows): Siren status, System status,
+   Run modes — the controls stay close to the top with System status
+   collapsed (see healthCard below). */
+@media (max-width:959px){
+  .cols{flex-direction:column;flex-wrap:nowrap}
+  .left{display:contents}
+  .hero{order:1}#healthCard{order:2}.ctrl{order:3}
+}
 @media (max-width:560px){
   .ml{font-size:56px}.timer{font-size:44px}.hero{padding:20px}.ctrl{padding:18px}
   .btn{min-height:116px}.btn .bl{font-size:28px}
@@ -338,10 +351,14 @@ main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;
       </div>
     </section>
 
-    <section class="panel health" aria-label="System health">
-      <div class="hsum"><span class="dot" id="hdot"></span><span id="hsum">Checking system health&hellip;</span></div>
+    <details class="panel health" id="healthCard" aria-label="System status">
+      <summary>
+        <span class="eyebrow">System status</span><span class="dot" id="hdot"></span>
+        <span class="hsum" id="hsum">Checking&hellip;</span>
+        <svg class="chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
       <div class="chips" id="hchips"></div>
-    </section>
+    </details>
   </div>
 
   <section class="panel ctrl" aria-label="Run modes">
@@ -463,6 +480,15 @@ function refreshAlerts(){
 }
 refreshAlerts();
 setInterval(refreshAlerts,5000);
+
+// System status starts expanded on wide screens and collapsed on phones,
+// where its title light is enough and Run modes stay higher up. Crossing
+// that width later (rotating a tablet, resizing a window) follows suit.
+(function(){
+  const card=document.getElementById('healthCard'), wide=window.matchMedia('(min-width:960px)');
+  card.open=wide.matches;
+  if(wide.addEventListener)wide.addEventListener('change',e=>{card.open=e.matches;});
+})();
 
 const ML={idle:'Idle',wail:'Wail',attack:'Attack',fastwail:'Fast Wail',manual:'Manual',growl:'Growl Test',stop:'Stopping',test:'Test Mode'};
 function draw(d){
