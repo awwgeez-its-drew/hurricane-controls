@@ -322,6 +322,12 @@ public:
         return t;
     }
 
+    // Mode and UTC start (0 = clock wasn't set) of the most recent trigger().
+    // Kept until the next trigger, so the web UI can still say what an alert
+    // activated after that run has finished.
+    RunMode  lastTriggerMode()  const { return logMode_; }
+    uint32_t lastTriggerEpoch() const { return logEpoch_; }
+
 private:
     static constexpr uint32_t HEARTBEAT_INTERVAL_MS = 30000;  // idle "still alive" flash every 30s
     static constexpr uint32_t HEARTBEAT_FLASH_MS    = 150;    // flash duration

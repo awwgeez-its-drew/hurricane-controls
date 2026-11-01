@@ -71,50 +71,52 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
-:root{
-  --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
-  --wail:#1e3a8a;--attack:#7f1d1d;--fastwail:#78350f;--manual:#4c1d95;
-  --stop-bg:#fca5a5;--stop-text:#000;--radius:4px;
-}
+:root{--bg:#0A0E13;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;--text:#E7ECF3;--soft:#C9D4E3;
+      --muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--green:#4ADE80;--red:#F87171;
+      --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:#eaeaea;
-     font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-     display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
-.card{background:var(--surface);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:340px;
-      text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-h1{font-size:1.5rem;color:var(--cyan);letter-spacing:1px;margin-bottom:4px}
-.login-siren{width:120px;height:120px;display:block;margin:0 auto 12px}
-.sub{color:#9aa3af;font-size:.85rem;margin-bottom:28px}
-input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
-      border-radius:var(--radius);padding:13px 16px;font-size:1rem;margin-bottom:12px;font-family:inherit}
-input:focus{outline:none;border-color:var(--cyan)}
-button{width:100%;padding:14px;background:var(--green);color:#04220f;border:none;
-       border-radius:var(--radius);font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:1px;
-       font-family:inherit}
-button:active{opacity:.8}
-.err{color:#f87171;font-size:.85rem;margin-top:10px;min-height:1.1em}
-.pill{display:none;width:max-content;margin:0 auto 22px;padding:5px 18px;border-radius:var(--radius);
-      font-size:.78rem;font-weight:700;letter-spacing:2px}
-.pill.idle,.pill.seq,.pill.stop,.pill.wail,.pill.attack,.pill.fastwail,.pill.manual,.pill.growl,.pill.test{display:block}
-.pill.idle{color:#9aa3af;border:1px solid var(--cyan)}
-.pill.wail{background:var(--wail);color:#bcd2ff}
-.pill.attack,.pill.test{background:var(--attack);color:#ffc9c9}
-.pill.fastwail{background:var(--fastwail);color:#ffd9a0}
-.pill.manual{background:var(--manual);color:#e3caff}
-.pill.growl{background:#0f4c3d;color:#a7f3d0}
-.pill.seq,.pill.stop{background:var(--green);color:#04220f}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);
+     display:flex;align-items:center;justify-content:center;min-height:100vh;padding:32px 16px}
+.wrap{width:100%;max-width:380px;display:flex;flex-direction:column;gap:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:36px 28px 30px;
+      display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
+.login-siren{width:140px;height:140px;display:block;margin-bottom:-8px}
+h1{font-size:24px;font-weight:700;letter-spacing:.01em}
+.sub{color:var(--muted);font-size:14px;margin-top:6px}
+.pill{display:none;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:var(--inset);
+      border:1px solid #222D3D;font-size:12px;font-weight:600;letter-spacing:.12em;color:var(--soft)}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:#64748B}
+.pill.idle,.pill.seq,.pill.stop,.pill.wail,.pill.attack,.pill.fastwail,.pill.manual,.pill.growl,.pill.test{display:inline-flex}
+.pill.wail .dot{background:#8DB4FF}.pill.attack .dot,.pill.test .dot{background:var(--red)}
+.pill.fastwail .dot{background:#FDBA74}.pill.manual .dot{background:#C9B0FF}.pill.growl .dot{background:#6EE7C8}
+.pill.seq .dot,.pill.stop .dot{background:var(--green)}
+form{width:100%;display:flex;flex-direction:column;gap:12px;text-align:left}
+label{font-size:13px;font-weight:600;color:var(--soft)}
+input{width:100%;min-height:50px;padding:0 16px;border-radius:12px;border:1px solid var(--line2);background:var(--inset);
+      color:var(--text);font-family:var(--sans);font-size:16px}
+input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.2)}
+input::placeholder{color:var(--faint)}
+button{min-height:52px;border:0;border-radius:12px;background:var(--green);color:#052E16;font-family:var(--sans);
+       font-size:15px;font-weight:700;letter-spacing:.1em;cursor:pointer;margin-top:4px}
+button:active{opacity:.85}
+.err{color:var(--red);font-size:13px;min-height:18px;text-align:center}
+.foot{text-align:center;font-size:12px;color:var(--faint)}
 </style></head><body>
+<div class="wrap">
 <div class="card">
   <img class="login-siren" src="/login-siren.png" alt="">
-  <h1>Hurricane Controls</h1>
-  <p class="sub">Siren Controller</p>
-  <div id="pill" class="pill"></div>
+  <div><h1>Hurricane Controls</h1><p class="sub">Siren controller</p></div>
+  <div id="pill" class="pill"><span class="dot"></span><span id="pillTxt"></span></div>
   <form onsubmit="login(event)">
-    <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus>
+    <label for="pw">Password</label>
+    <input type="password" id="pw" placeholder="Enter the device password" autocomplete="current-password" autofocus>
     <button type="submit">UNLOCK</button>
+    <div class="err" id="err"></div>
   </form>
-  <div class="err" id="err"></div>
+</div>
+<p class="foot">Refreshes every 2 seconds.</p>
 </div>
 <script>
 function login(e){
@@ -134,7 +136,7 @@ const PL={idle:'IDLE',seq:'STARTING',wail:'WAIL',attack:'ATTACK',fastwail:'FAST 
 function pill(){
   const p=document.getElementById('pill');
   fetch('/pub-status').then(r=>r.json()).then(d=>{
-    p.textContent=PL[d.s]||String(d.s).toUpperCase();p.className='pill '+d.s;
+    document.getElementById('pillTxt').textContent=PL[d.s]||String(d.s).toUpperCase();p.className='pill '+d.s;
   }).catch(()=>{p.className='pill';});
 }
 pill();setInterval(pill,2000);
@@ -149,159 +151,239 @@ static const char MAIN_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
 :root{
-  --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
-  --wail:#1e3a8a;--attack:#7f1d1d;--fastwail:#78350f;--manual:#4c1d95;--growl:#0f4c3d;
-  --stop-bg:#fca5a5;--stop-text:#000;--radius:4px;
+  --bg:#0A0E13;--bar:#0D1219;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;
+  --text:#E7ECF3;--soft:#C9D4E3;--muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--green:#4ADE80;--red:#F87171;
+  --wail:#1D4ED8;--attack:#B91C1C;--fastwail:#A84A0A;--manual:#6D28D9;--growl:#0F766E;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+  --disp:"Barlow Condensed","Arial Narrow",Inter,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg)}
-body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-     min-height:100vh}
-.mono{font-family:ui-monospace,"SF Mono","Cascadia Code","Courier New",monospace}
-.navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
-        border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
-        padding:0 16px;z-index:20}
-.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden;margin-right:8px}
-.brand-icon{width:28px;height:28px;flex-shrink:0}
-.navbar .brand{display:flex;flex-direction:column;justify-content:center;overflow:hidden}
-.navbar h1{font-size:.82rem;color:var(--cyan);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.navbar .subtitle{font-size:.62rem;color:#8892a0;letter-spacing:1px}
-.navicons{display:flex;gap:14px;align-items:center;flex-shrink:0}
-.ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
-.ibtn.locked{color:#f87171}
-.content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
-/* Active-warning banner (WP7) */
-.warnItem{display:flex;align-items:baseline;gap:8px;background:var(--surface);border-radius:var(--radius);
-          padding:10px 14px;margin-bottom:8px;border-left:4px solid #555;font-size:.82rem}
-.warnItem.purple{border-left-color:#a855f7}
-.warnItem.red{border-left-color:#f87171}
-.warnItem.orange{border-left-color:#fb923c}
-.warnItem .wtag{font-weight:700;flex:1}
-.warnItem .wage{color:#8892a0;font-size:.72rem;white-space:nowrap}
+body{color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column}
+.mono{font-family:var(--mono)}.disp{font-family:var(--disp)}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.top{position:sticky;top:0;z-index:20;background:var(--bar);border-bottom:1px solid var(--line)}
+.topin{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.tile{width:40px;height:40px;border-radius:10px;background:#172030;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.tile img{width:32px;height:32px;display:block}
+.bt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bt b{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.ibtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;
+      border:1px solid #222D3D;background:var(--panel);color:var(--soft);cursor:pointer;text-decoration:none;padding:0}
+.ibtn:hover{background:#172030;color:#fff}
+.ibtn.locked{color:var(--red);border-color:#7A2531}
+main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--bar);
+      border:1px solid #222D3D;font-size:13px;color:var(--soft)}
+.dot{width:8px;height:8px;border-radius:50%;background:#64748B;flex-shrink:0}
+.dot.ok{background:var(--green)}.dot.warn{background:#FACC15}.dot.error{background:var(--red)}
+/* Active warnings */
+#warnBanner{display:none;padding:16px 18px;flex-direction:column;gap:10px;border-color:#5B2230;background:#160F15}
+#warnBanner.show{display:flex}
+.whead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.warnItem{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:10px;background:#2A1218}
+.warnItem.orange{background:#251A12}.warnItem.purple{background:#1E1530}
 .warnItem.stale{opacity:.55}
-.warnItem .wthis{color:var(--green);font-size:.7rem;font-weight:700;margin-left:6px}
-/* System health strip */
-.hstrip{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:var(--radius);
-        padding:8px 14px;margin-bottom:10px;font-size:.78rem;color:#9aa3af;cursor:pointer;
-        box-shadow:0 1px 3px rgba(0,0,0,.35)}
-.hdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#555}
-.hdot.ok{background:var(--green)}.hdot.warn{background:#facc15}.hdot.error{background:#f87171}
-.hdetail{display:none;flex-basis:100%;margin-top:6px;font-size:.72rem;line-height:1.5}
-.hstrip.open .hdetail{display:block}
-/* Status card */
-.scard{width:100%;background:var(--surface);border-radius:var(--radius);padding:22px 20px;
-       margin-bottom:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-.badge{display:inline-block;padding:5px 18px;border-radius:var(--radius);font-size:.8rem;
-       font-weight:700;letter-spacing:2px;margin-bottom:14px;font-family:inherit}
-.idle    {background:transparent;color:#9aa3af;border:1px solid var(--cyan)}
-.wail    {background:var(--wail);color:#bcd2ff}
-.attack  {background:var(--attack);color:#ffc9c9}
-.fastwail{background:var(--fastwail);color:#ffd9a0}
-.manual  {background:var(--manual);color:#e3caff}
-.growl   {background:var(--growl);color:#a7f3d0}
-.seq,.stop{background:var(--green);color:#04220f}
-.timer{font-size:3rem;font-weight:700;letter-spacing:3px;
-       font-variant-numeric:tabular-nums;min-height:3.5rem;line-height:1}
-.tsub{font-size:.9rem;color:#9aa3af;margin-top:8px;min-height:1.4em}
-/* Relay dots */
-.dots{display:flex;gap:24px;justify-content:center;margin-top:16px}
-.dw{display:flex;flex-direction:column;align-items:center;gap:3px}
-.dot{width:13px;height:13px;border-radius:50%;background:#2a2f3a;transition:background .3s}
-.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
-.dl{font-size:.65rem;color:#9aa3af;letter-spacing:.5px}
-/* Buttons */
-.grid{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.btn{padding:26px 10px;border:none;border-radius:var(--radius);font-size:1.02rem;font-weight:700;
-     cursor:pointer;letter-spacing:1px;transition:opacity .15s,transform .1s;width:100%;
-     box-shadow:0 1px 3px rgba(0,0,0,.35);font-family:inherit}
-.btn:active{transform:scale(.97)}
-.bwail    {background:var(--wail);color:#eaf1ff}
-.battack  {background:var(--attack);color:#ffeaea}
-.bfastwail{background:var(--fastwail);color:#fff3e0}
-.bmanual  {background:var(--manual);color:#f3eaff}
-.bmanual.on{box-shadow:0 0 0 2px var(--green),0 1px 3px rgba(0,0,0,.35)}
+.wdot{width:12px;height:12px;border-radius:50%;flex-shrink:0;background:#64748B}
+.warnItem.red .wdot{background:#EF4444}.warnItem.orange .wdot{background:#F97316}.warnItem.purple .wdot{background:#A855F7}
+.wname{flex:1;min-width:180px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600}
+.wtag{font-size:11px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:999px;border:1px solid var(--red);color:#FECACA}
+.warnItem.orange .wtag{border-color:#F97316;color:#FED7AA}.warnItem.purple .wtag{border-color:#A855F7;color:#E9D5FF}
+.wthis{font-size:11px;font-weight:700;letter-spacing:.08em;padding:4px 8px;border-radius:6px;background:#14301F;color:#86EFAC}
+.wage{font-size:12px;color:var(--soft)}
+/* Layout */
+.cols{display:flex;flex-wrap:wrap;gap:20px;align-items:stretch}
+.left{flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px}
+/* Status hero */
+.hero{padding:26px 28px;display:flex;flex-direction:column;gap:22px;transition:background .3s,border-color .3s}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hmain{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.ml{font-family:var(--disp);font-size:72px;line-height:.9;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--soft)}
+.tsub{font-size:15px;color:var(--soft);min-height:1.3em;margin-top:4px}
+.tright{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.timer{font-family:var(--mono);font-size:56px;font-weight:500;line-height:1;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.hero[data-m=wail]{background:#0F1930;border-color:#2B4C8F}.hero[data-m=wail] .ml{color:#8DB4FF}
+.hero[data-m=attack]{background:#22111A;border-color:#7A2531}.hero[data-m=attack] .ml{color:#FF9A9A}
+.hero[data-m=fastwail]{background:#21170F;border-color:#7A4A1A}.hero[data-m=fastwail] .ml{color:#FDBA74}
+.hero[data-m=manual]{background:#19132E;border-color:#4C2F8A}.hero[data-m=manual] .ml{color:#C9B0FF}
+.hero[data-m=growl]{background:#0E211F;border-color:#1F5E57}.hero[data-m=growl] .ml{color:#6EE7C8}
+.hero[data-m=stop] .ml{color:#86EFAC}
+.hero[data-m=test]{background:#22111A;border-color:#7A2531}.hero[data-m=test] .ml{color:#FF9A9A}
+@keyframes strobe{0%,45%{opacity:1;box-shadow:0 0 8px 2px rgba(74,222,128,.85)}50%,100%{opacity:.18;box-shadow:none}}
+.dot.strobe{background:var(--green);animation:strobe .9s linear infinite}
+.dot.test{background:var(--red)}
+.relays{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.relay{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:var(--inset);border:1px solid var(--line);min-width:0}
+.lamp{width:14px;height:14px;border-radius:50%;flex-shrink:0;background:#263142;transition:background .3s,box-shadow .3s}
+.lamp.on{background:var(--green);box-shadow:0 0 10px rgba(74,222,128,.7)}
+.rname{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.rstate{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.relay.on .rstate{color:#86EFAC}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--mono);font-size:13px;color:var(--muted);padding-top:16px;border-top:1px solid var(--line)}
+.meta span span{color:var(--text)}
+/* Health */
+.health{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.hsum{display:flex;align-items:center;gap:10px;font-weight:600}
+.hsum .dot{width:10px;height:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+/* Controls */
+.ctrl{flex:1 1 420px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:18px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.btn{position:relative;overflow:hidden;border:0;border-radius:14px;min-height:136px;padding:18px 20px;text-align:left;color:#fff;
+     cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;gap:14px;font-family:var(--sans);
+     touch-action:none;user-select:none;-webkit-user-select:none;transition:filter .15s}
+.btn:hover{filter:brightness(1.1)}
+.btn .bl{position:relative;font-family:var(--disp);font-size:34px;font-weight:700;letter-spacing:.04em;line-height:1}
+.btn .bc{position:relative;font-size:13px;opacity:.88}
+.bwail{background:var(--wail)}.battack{background:var(--attack)}.bfastwail{background:var(--fastwail)}.bmanual{background:var(--manual)}
+.bmanual.on{box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--green)}
 /* Hold-to-confirm fill — a bottom-anchored overlay that grows with the
    hold, so the button only fires once it's full (WP6). touch-action:none
    stops the browser treating the hold as a scroll/selection gesture. */
-.holdable{position:relative;overflow:hidden;touch-action:none;user-select:none}
+.holdable{position:relative;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
 .hfill{position:absolute;left:0;bottom:0;width:100%;height:0%;background:rgba(255,255,255,.28);
        pointer-events:none;transition:height .05s linear}
-.overlay{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:50}
-.mbox{background:var(--surface);border-radius:var(--radius);padding:28px 24px;text-align:center;
-      max-width:280px;width:calc(100% - 32px)}
-.mbox p{margin-bottom:20px;font-size:1rem}
+.lockrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;
+         border-radius:12px;background:var(--inset);border:1px solid var(--line)}
+.lockl{display:flex;align-items:center;gap:14px;min-width:0}
+.locktxt{display:flex;flex-direction:column;gap:2px}
+.locktxt b{font-size:14px}
+#lockTxt{font-size:13px;color:var(--muted)}
+#lockTxt.locked{color:var(--red)}
+.lockbtn{cursor:pointer;min-height:44px;padding:0 16px;font-family:var(--sans)}
+.lockbtn:hover{background:#172030}
+/* STOP */
+.stopbar{position:sticky;bottom:0;z-index:20;width:100%;border:0;background:#FECACA;color:#3B0A0A;cursor:pointer;
+         display:flex;align-items:center;justify-content:center;gap:14px;min-height:76px;font-family:var(--sans)}
+.stopbar:hover{background:#FDB4B4}
+.stopbar .hfill{background:rgba(127,29,29,.28)}
+.stopbar svg,.stopbar .sl{position:relative}
+.sl{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.sl b{font-family:var(--disp);font-size:30px;letter-spacing:.12em;line-height:1}
+.sl span{font-size:12px;font-weight:500}
+/* Restart modal */
+.overlay{position:fixed;inset:0;background:rgba(4,6,10,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.mbox{width:100%;max-width:360px;padding:24px;display:flex;flex-direction:column;gap:18px;background:#131B26}
+.mbox p{font-size:14px;color:var(--muted);line-height:1.5}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.mok{padding:12px;background:var(--attack);color:#fff;border:none;border-radius:var(--radius);
-     font-weight:700;cursor:pointer;font-family:inherit}
-.mcancel{padding:12px;background:#1b2438;color:#9aa3af;border:none;border-radius:var(--radius);
-         font-weight:700;cursor:pointer;font-family:inherit}
-.stopbar{position:fixed;bottom:0;left:0;right:0;background:var(--stop-bg);color:var(--stop-text);
-         display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;letter-spacing:1px;
-         padding:18px;cursor:pointer;border-top:2px solid rgba(0,0,0,.15);z-index:20;font-size:1.1rem}
-.stopbar:active{opacity:.85}
+.mok,.mcancel{min-height:46px;border-radius:10px;font-weight:700;font-family:var(--sans);cursor:pointer;font-size:14px}
+.mok{border:0;background:var(--attack);color:#fff}
+.mcancel{border:1px solid var(--line2);background:#172030;color:var(--text)}
+@media (max-width:560px){
+  .ml{font-size:56px}.timer{font-size:44px}.hero{padding:20px}.ctrl{padding:18px}
+  .btn{min-height:116px}.btn .bl{font-size:28px}
+  .relays{gap:6px}.relay{padding:10px;gap:8px}
+}
+@media (max-width:420px){
+  .topin{padding:10px 14px}
+  .bt b{white-space:normal;font-size:15px;line-height:1.15}.bt .eyebrow{display:none}
+  .nav{gap:6px}.ibtn{width:40px;height:40px}
+}
+@media (prefers-reduced-motion:reduce){
+  .dot.strobe{animation:none;box-shadow:0 0 8px 2px rgba(74,222,128,.85)}
+}
 </style></head><body>
-<div class="navbar">
-  <div class="brandrow">
-    <img class="brand-icon" src="/brand-icon.png" alt="">
-    <div class="brand">
-      <h1>Hurricane Controls</h1>
-      <span class="subtitle">CONTROL PANEL</span>
-    </div>
+<header class="top"><div class="topin">
+  <div class="brand">
+    <span class="tile"><img src="/brand-icon.png" alt=""></span>
+    <div class="bt"><b>Hurricane Controls</b><span class="eyebrow" style="font-size:10px">Control panel</span></div>
   </div>
-  <div class="navicons">
-    <button class="ibtn" onclick="goHome()" title="Log out">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+  <nav class="nav" aria-label="Device actions">
+    <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons" aria-label="Lock physical buttons">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path id="lockShackle" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
     </button>
-    <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path id="lockShackle" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
+    <button class="ibtn" onclick="showRestart()" title="Restart" aria-label="Restart controller">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
     </button>
-    <button class="ibtn" onclick="showRestart()" title="Restart">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
-    </button>
-    <a href="/settings" class="ibtn" title="Settings">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <a href="/settings" class="ibtn" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </a>
+    <button class="ibtn" onclick="goHome()" title="Log out" aria-label="Log out">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </nav>
+</div></header>
+
+<main>
+<section class="panel" id="warnBanner" aria-label="Active weather warnings">
+  <div class="whead"><span class="eyebrow" style="color:#FCA5A5">Active warnings &middot; from Weather Watcher</span><span class="wage" id="warnAge"></span></div>
+  <div id="warnList" style="display:flex;flex-direction:column;gap:10px"></div>
+</section>
+
+<div class="cols">
+  <div class="left">
+    <section class="panel hero" id="hero" data-m="idle" aria-label="Siren status">
+      <div class="hrow"><span class="eyebrow">Siren status</span><span class="chip"><span class="dot" id="chipDot"></span><span id="chipTxt">Ready</span></span></div>
+      <div class="hmain">
+        <div><div class="ml" id="modeLbl">Idle</div><div class="tsub" id="tsub">Ready</div></div>
+        <div class="tright"><span class="eyebrow" id="bigLbl">Remaining</span><span class="timer" id="timer">--:--</span></div>
+      </div>
+      <div class="relays">
+        <div class="relay" id="r0"><span class="lamp" id="d0"></span><span><span class="rname">Chopper</span><br><span class="rstate" id="s0">OFF</span></span></div>
+        <div class="relay" id="r1"><span class="lamp" id="d1"></span><span><span class="rname">Blower</span><br><span class="rstate" id="s1">OFF</span></span></div>
+        <div class="relay" id="r2"><span class="lamp" id="d2"></span><span><span class="rname">Rotator</span><br><span class="rstate" id="s2">OFF</span></span></div>
+      </div>
+      <div class="meta">
+        <span>Controller <span id="tempF">&mdash;</span>&deg;F</span>
+        <span>Uptime <span id="uptime">&mdash;</span></span>
+        <span>Clock <span id="clockTime">--:--:--</span></span>
+      </div>
+    </section>
+
+    <section class="panel health" aria-label="System health">
+      <div class="hsum"><span class="dot" id="hdot"></span><span id="hsum">Checking system health&hellip;</span></div>
+      <div class="chips" id="hchips"></div>
+    </section>
   </div>
-</div>
 
-<div class="content">
-<div id="warnBanner"></div>
-<div class="hstrip" id="hstrip" onclick="this.classList.toggle('open')">
-  <div id="hdot" class="hdot"></div><span id="hsum">Checking system health&hellip;</span>
-  <div id="hdetail" class="hdetail"></div>
+  <section class="panel ctrl" aria-label="Run modes">
+    <span class="eyebrow">Run modes</span>
+    <div class="grid">
+      <button class="btn bwail holdable" id="bWail"><div class="hfill"></div><span class="bl">WAIL</span><span class="bc">Hold to start</span></button>
+      <button class="btn battack holdable" id="bAttack"><div class="hfill"></div><span class="bl">ATTACK</span><span class="bc">Hold to start</span></button>
+      <button class="btn bfastwail holdable" id="bFastWail"><div class="hfill"></div><span class="bl">FAST WAIL</span><span class="bc">Hold to start</span></button>
+      <button class="btn bmanual" id="bm"
+        onmousedown="manualDown(event)" onmouseup="manualUp(event)" onmouseleave="manualUp(event)"
+        ontouchstart="manualDown(event)" ontouchend="manualUp(event)" ontouchcancel="manualUp(event)"><span class="bl" id="bmLbl">MANUAL</span><span class="bc">Sounds only while held</span></button>
+    </div>
+    <div class="lockrow">
+      <div class="lockl">
+        <svg width="48" height="48" viewBox="0 0 48 48" role="img" id="padIcon" aria-label="Panel buttons unlocked" style="flex-shrink:0">
+          <circle cx="21" cy="21" r="19" fill="#2B3543" stroke="#556377" stroke-width="1.5"/>
+          <circle cx="21" cy="21" r="15" fill="#151C26"/>
+          <circle cx="21" cy="21" r="12" fill="#3A4554"/>
+          <ellipse cx="21" cy="16" rx="8" ry="4.5" fill="rgba(255,255,255,.16)"/>
+          <circle cx="36" cy="36" r="11.5" fill="#0B1017"/>
+          <path id="padShackle" d="M32 34.5v-3.5a4 4 0 0 1 7.6-1.8" fill="none" stroke="#22C55E" stroke-width="2.4" stroke-linecap="round"/>
+          <rect id="padBody" x="29.5" y="34.5" width="13" height="10" rx="2.2" fill="#22C55E"/>
+          <circle cx="36" cy="39.5" r="1.4" fill="#0B1017"/>
+        </svg>
+        <div class="locktxt"><b>Physical buttons</b><span id="lockTxt">Unlocked &mdash; the panel buttons work</span></div>
+      </div>
+      <button class="chip lockbtn" id="lockAct" onclick="toggleLock()">Lock</button>
+    </div>
+  </section>
 </div>
-<div class="scard">
-  <div><span id="badge" class="badge idle">IDLE</span></div>
-  <div class="timer mono" id="timer">--:--</div>
-  <div class="tsub"  id="tsub">Ready</div>
-  <div class="dots">
-    <div class="dw"><div id="d0" class="dot"></div><span class="dl">CHOPPER</span></div>
-    <div class="dw"><div id="d1" class="dot"></div><span class="dl">BLOWER</span></div>
-    <div class="dw"><div id="d2" class="dot"></div><span class="dl">ROTATOR</span></div>
-  </div>
-  <div class="mono" style="font-size:.72rem;color:#8892a0;margin-top:10px">Controller <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span> &nbsp;&bull;&nbsp; <span id="clockTime">--:--:--</span></div>
-</div>
+</main>
 
-<div class="grid">
-  <button class="btn bwail holdable" id="bWail">WAIL<div class="hfill"></div></button>
-  <button class="btn battack holdable" id="bAttack">ATTACK<div class="hfill"></div></button>
-  <button class="btn bfastwail holdable" id="bFastWail">FAST WAIL<div class="hfill"></div></button>
-  <button class="btn bmanual" id="bm"
-    onmousedown="manualDown(event)" onmouseup="manualUp(event)" onmouseleave="manualUp(event)"
-    ontouchstart="manualDown(event)" ontouchend="manualUp(event)" ontouchcancel="manualUp(event)">MANUAL</button>
-</div>
-</div>
-
-<div class="stopbar holdable" id="bStop">&#9632; STOP<div class="hfill"></div></div>
+<button class="stopbar holdable" id="bStop"><div class="hfill"></div>
+  <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="2" y="2" width="18" height="18" rx="3" fill="#B91C1C"/></svg>
+  <span class="sl"><b>STOP</b><span>Hold briefly to stop the siren</span></span>
+</button>
 
 <div class="overlay" id="rmModal">
-  <div class="mbox">
-    <p>Restart the controller?</p>
+  <div class="panel mbox" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
+    <div><b id="rmTitle" style="font-size:18px">Restart the controller?</b><p style="margin-top:6px">The page reconnects on its own once the board is back up.</p></div>
     <div class="mgrid">
-      <button class="mok"     onclick="doRestart()">Restart</button>
       <button class="mcancel" onclick="closeModal()">Cancel</button>
+      <button class="mok"     onclick="doRestart()">Restart</button>
     </div>
   </div>
 </div>
@@ -327,76 +409,103 @@ function fmt(sec){
   const m=Math.floor(sec/60),s=sec%60;
   return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
 }
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 
 function drawHealth(h){
   if(!h)return;
-  const dot=document.getElementById('hdot'),sum=document.getElementById('hsum'),det=document.getElementById('hdetail');
-  dot.className='hdot '+h.overall;
-  const wwWord={'OFF':'off','N/A':'not connected','LOST':'LOST','STARTING':'starting up','OK':'ok','ERROR':'ERROR'}[h.ww]||h.ww;
-  sum.textContent=h.overall==='ok'?'All systems normal':h.overall==='warn'?'Check system status':'Attention needed';
-  det.innerHTML='Wi-Fi: '+(h.wifi?'connected':'<b>disconnected</b>')+'<br>'+
-    'Weather Watcher: '+wwWord+'<br>'+
-    'Free memory: '+h.freeHeapKB+' KB'+(h.otaActive?'<br><b>Firmware update in progress</b>':'');
+  const wwWord={'OFF':'off','N/A':'not connected','LOST':'LOST','STARTING':'starting up','OK':'OK','ERROR':'ERROR'}[h.ww]||h.ww;
+  const wwCls=h.ww==='OK'?'ok':(h.ww==='LOST'||h.ww==='ERROR')?'error':(h.ww==='STARTING')?'warn':'';
+  document.getElementById('hdot').className='dot '+h.overall;
+  document.getElementById('hsum').textContent=h.overall==='ok'?'All systems normal':h.overall==='warn'?'Check system status':'Attention needed';
+  const chip=(cls,txt)=>'<span class="chip"><span class="dot '+cls+'"></span>'+txt+'</span>';
+  document.getElementById('hchips').innerHTML=
+    chip(h.wifi?'ok':'error','Wi-Fi '+(h.wifi?'connected':'disconnected'))+
+    chip(wwCls,'Weather Watcher '+wwWord)+
+    chip('','Free memory '+h.freeHeapKB+' KB')+
+    (h.otaActive?chip('warn','Firmware update in progress'):'');
 }
 function refreshAlerts(){
   fetch('/alerts').then(r=>r.json()).then(d=>{
-    const el=document.getElementById('warnBanner');
+    const box=document.getElementById('warnBanner');
     let list=d.alerts||[];
     if(d.nowEpoch) list=list.filter(a=>!a.exp||a.exp>d.nowEpoch);
-    if(!list.length){el.innerHTML='';return;}
+    if(!list.length){box.classList.remove('show');document.getElementById('warnList').innerHTML='';return;}
     const ageMs=d.receivedMs?(d.uptimeMs-d.receivedMs):null;
     const stale=ageMs!=null&&ageMs>180000;
-    const ageTxt=stale?' &mdash; last heard '+Math.floor(ageMs/60000)+'m ago':'';
-    el.innerHTML=list.map(a=>
-      '<div class="warnItem '+(a.color||'')+(stale?' stale':'')+'">'+
-      '<span class="wtag">'+a.event+(a.activatedThis?'<span class="wthis">ACTIVATED THIS SIREN</span>':'')+'</span>'+
-      '<span class="wage">'+(stale?ageTxt.replace(' &mdash; ',''):'active')+'</span>'+
-      '</div>'
-    ).join('');
+    document.getElementById('warnAge').textContent=stale?'Last heard '+Math.floor(ageMs/60000)+'m ago':'';
+    document.getElementById('warnList').innerHTML=list.map(a=>{
+      let act='';
+      if(a.activatedThis){
+        act='SIREN ACTIVATED'+(a.actMode?' &mdash; '+esc(a.actMode):'')+(a.actTime?' at '+esc(a.actTime):'');
+        act='<span class="wthis">'+act+'</span>';
+      }
+      return '<div class="warnItem '+esc(a.color)+(stale?' stale':'')+'">'+
+        '<span class="wdot" role="img" aria-label="'+esc(a.color||'')+' alert"></span>'+
+        '<span class="wname">'+esc(a.event)+(a.tag?'<span class="wtag">'+esc(a.tag)+'</span>':'')+'</span>'+
+        act+'<span class="wage">'+(stale?'stale':'active')+'</span></div>';
+    }).join('');
+    box.classList.add('show');
   }).catch(()=>{});
 }
 refreshAlerts();
 setInterval(refreshAlerts,5000);
 
+const ML={idle:'Idle',wail:'Wail',attack:'Attack',fastwail:'Fast Wail',manual:'Manual',growl:'Growl Test',stop:'Stopping',test:'Test Mode'};
 function draw(d){
   drawHealth(d.health);
   const st=d.mode||'idle', rm=d.runMode||'idle';
-  const badge=document.getElementById('badge');
-  if(d.testMode){
-    badge.textContent='TEST MODE';
-    badge.className='badge attack';
-  } else {
-    badge.textContent=rm.toUpperCase();
-    badge.className='badge '+(st==='idle'?'idle':st.startsWith('seq')||st.startsWith('stop')?'seq':
-      st.startsWith('attack')?'attack':st.startsWith('fastwail')?'fastwail':st);
-  }
+  let key;
+  if(d.testMode&&st==='idle') key='test';
+  else if(st==='idle') key='idle';
+  else if(st==='stop') key='stop';
+  else key=(rm!=='idle')?rm:(st.startsWith('attack')?'attack':st.startsWith('fastwail')?'fastwail':st);
+  document.getElementById('hero').dataset.m=key;
+  document.getElementById('modeLbl').textContent=ML[key]||key;
+
+  const chipDot=document.getElementById('chipDot'),chipTxt=document.getElementById('chipTxt');
+  if(key==='test'){chipDot.className='dot test';chipTxt.textContent='Test mode';}
+  else if(st==='idle'){chipDot.className='dot';chipTxt.textContent='Ready';}
+  else{chipDot.className='dot strobe';chipTxt.textContent=st==='stop'?'Stopping':'Running';}
 
   const r=d.relays||[0,0,0];
-  [0,1,2].forEach(i=>document.getElementById('d'+i).classList.toggle('on',!!r[i]));
+  [0,1,2].forEach(i=>{
+    const on=!!r[i];
+    document.getElementById('d'+i).classList.toggle('on',on);
+    document.getElementById('r'+i).classList.toggle('on',on);
+    document.getElementById('s'+i).textContent=on?'ON':'OFF';
+  });
 
-  const te=document.getElementById('timer'),ts=document.getElementById('tsub');
-  if(st==='idle'){te.textContent='--:--';ts.textContent='Ready';}
-  else if(st.startsWith('seq')){te.textContent='--:--';ts.textContent='Starting…';}
-  else if(st.startsWith('stop')){te.textContent=fmt(d.elapsed);ts.textContent='Stopping…';}
-  else{
-    te.textContent=fmt(d.elapsed);
-    if(d.hasRemaining)ts.textContent=fmt(d.remaining)+' remaining';
-    else ts.textContent='';
-  }
+  const te=document.getElementById('timer'),ts=document.getElementById('tsub'),bl=document.getElementById('bigLbl');
+  if(key==='test'){bl.textContent='Remaining';te.textContent='--:--';ts.textContent='Software STOP disabled — use the hardware E-stop';}
+  else if(st==='idle'){bl.textContent='Remaining';te.textContent='--:--';ts.textContent='Ready';}
+  else if(st==='seq'){bl.textContent='Remaining';te.textContent='--:--';ts.textContent='Starting…';}
+  else if(st==='stop'){bl.textContent='Elapsed';te.textContent=fmt(d.elapsed);ts.textContent='Stopping…';}
+  else if(d.hasRemaining){bl.textContent='Remaining';te.textContent=fmt(d.remaining);ts.textContent=fmt(d.elapsed)+' elapsed';}
+  else{bl.textContent='Elapsed';te.textContent=fmt(d.elapsed);ts.textContent=rm==='manual'?'Sounding while held':'';}
 
   if(d.tempF!=null)document.getElementById('tempF').textContent=d.tempF;
   if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);
   if(d.currentTime)document.getElementById('clockTime').textContent=d.currentTime;
-  const bl=document.getElementById('btnLock');
-  const lk=!!d.btnLocked;
+
+  const lk=!!d.btnLocked, btn=document.getElementById('btnLock');
   document.getElementById('lockShackle').setAttribute('d', lk ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2');
-  bl.classList.toggle('locked',lk);
-  bl.title=lk?'Physical buttons LOCKED — click to unlock':'Lock physical buttons';
+  btn.classList.toggle('locked',lk);
+  btn.title=lk?'Physical buttons LOCKED — click to unlock':'Lock physical buttons';
+  btn.setAttribute('aria-label',btn.title);
+  const pc=lk?'#EF4444':'#22C55E';
+  document.getElementById('padShackle').setAttribute('d', lk ? 'M32 34.5v-3.5a4 4 0 0 1 8 0v3.5' : 'M32 34.5v-3.5a4 4 0 0 1 7.6-1.8');
+  document.getElementById('padShackle').setAttribute('stroke',pc);
+  document.getElementById('padBody').setAttribute('fill',pc);
+  document.getElementById('padIcon').setAttribute('aria-label',lk?'Panel buttons locked':'Panel buttons unlocked');
+  const lt=document.getElementById('lockTxt');
+  lt.textContent=lk?'Locked — the panel buttons are ignored':'Unlocked — the panel buttons work';
+  lt.classList.toggle('locked',lk);
+  document.getElementById('lockAct').textContent=lk?'Unlock':'Lock';
+
   sirenActive=(st!=='idle');
   manOn=(rm==='manual');
-  const bm=document.getElementById('bm');
-  bm.textContent=manOn?'MANUAL ●':'MANUAL';
-  bm.classList.toggle('on',manOn);
+  document.getElementById('bmLbl').textContent=manOn?'MANUAL ●':'MANUAL';
+  document.getElementById('bm').classList.toggle('on',manOn);
 }
 
 function claxon(){
@@ -423,7 +532,7 @@ function activate(m){claxon();cmd(m);}
 
 // Hold-to-confirm (WP6): Wail/Attack/Fast-Wail/Stop only fire once the
 // button has been held for the full duration — a bottom-up fill shows
-// progress. Manual's own momentary-hold (manualDown/manualUp above) and
+// progress. Manual's own momentary-hold (manualDown/manualUp below) and
 // the Test page's component buttons are untouched; /cmd itself doesn't
 // change, this is purely a client-side gate before the same POST fires.
 const HOLD_START_MS=1000, HOLD_STOP_MS=400;
@@ -491,305 +600,311 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
 :root{
-  --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
-  --wail:#1e3a8a;--attack:#7f1d1d;--fastwail:#78350f;--manual:#4c1d95;
-  --stop-bg:#fca5a5;--stop-text:#000;--radius:4px;
+  --bg:#0A0E13;--bar:#0D1219;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;
+  --text:#E7ECF3;--soft:#C9D4E3;--muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--accent2:#0EA5E9;--green:#4ADE80;--red:#F87171;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+  --disp:"Barlow Condensed","Arial Narrow",Inter,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg)}
-body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-     min-height:100vh}
-.mono{font-family:ui-monospace,"SF Mono","Cascadia Code","Courier New",monospace}
-.navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
-        border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
-        padding:0 16px;z-index:20}
-.navbar h1{font-size:1.05rem;color:var(--cyan)}
-.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
-.brand-icon{width:26px;height:26px;flex-shrink:0}
-.navicons{display:flex;gap:14px;align-items:center}
-.ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
-.ibtn.locked{color:#f87171}
-.content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
-.card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
-      box-shadow:0 1px 3px rgba(0,0,0,.35)}
-h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af}
-.card-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:12px}
-.card-head h2{margin-bottom:0}
-.chevron{color:#9aa3af;flex-shrink:0;transition:transform .15s}
-.card.expanded .chevron{transform:rotate(180deg)}
-.card-body{display:none;margin-top:14px}
-.card.expanded .card-body{display:block}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
-.row{margin-bottom:10px}
-.hint{font-size:.78rem;color:#9aa3af;margin-bottom:12px}
-label{font-size:.78rem;color:#9aa3af;display:block;margin-bottom:3px}
-label.strong{font-weight:700;color:#eaeaea}
-input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
-      border-radius:var(--radius);padding:9px 11px;font-size:.9rem;font-family:inherit}
-input:focus{outline:none;border-color:var(--cyan)}
-input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:pointer;flex-shrink:0}
-.ws{font-size:.8rem;padding:9px 12px;background:#0a0e18;border-radius:var(--radius);
-    margin-bottom:12px;color:#9aa3af;display:flex;align-items:center;gap:8px;border-left:3px solid transparent}
-.ws.ok{color:var(--green);border-left-color:var(--green)}
-.ws.er{color:#f87171;border-left-color:#f87171}
-.btn{width:100%;margin-top:12px;padding:12px;font-weight:700;border:none;
-     border-radius:var(--radius);cursor:pointer;font-size:.95rem;letter-spacing:.5px;font-family:inherit}
-.btn:active{opacity:.8}
-.save{background:var(--green);color:#04220f}
-.danger{background:var(--attack);color:#fff;margin-top:6px}
-.logout{background:#1b2438;color:#9aa3af;margin-top:6px}
-.msg{font-size:.8rem;margin-top:6px;min-height:1.1em;text-align:center}
-.ok{color:var(--green)}.er{color:#f87171}
-.trow{display:flex;align-items:center;justify-content:space-between;padding:8px 0;
-      border-top:1px solid #1a2a3a;margin-top:10px}
-.trow label:first-child{font-size:.85rem;color:#eaeaea}
-.ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
-     background:var(--surface);border-radius:var(--radius)}
-.ver a{color:inherit;text-decoration:none}
-.lrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #1a2a3a;
-      font-size:.75rem;color:#c9cdd3}
-.lrow span:last-child{color:#9aa3af;text-align:right}
-.ver a:hover{text-decoration:underline}
-.stopbar{position:fixed;bottom:0;left:0;right:0;background:var(--stop-bg);color:var(--stop-text);
-         display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;letter-spacing:1px;
-         padding:18px;cursor:pointer;border-top:2px solid rgba(0,0,0,.15);z-index:20;font-size:1.1rem}
-.stopbar:active{opacity:.85}
+body{color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.top{position:sticky;top:0;z-index:20;background:var(--bar);border-bottom:1px solid var(--line)}
+.topin{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.bt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bt b{font-size:17px}
+.nav{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.ibtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;
+      border:1px solid #222D3D;background:var(--panel);color:var(--soft);cursor:pointer;text-decoration:none;padding:0}
+.ibtn:hover{background:#172030;color:#fff}
+.ibtn.locked{color:var(--red);border-color:#7A2531}
+.layout{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.side{flex:1 1 200px;max-width:240px;display:flex;flex-direction:column;gap:2px;position:sticky;top:88px}
+.side .eyebrow{padding:16px 12px 8px}.side .eyebrow:first-child{padding-top:0}
+.side a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:8px;color:var(--soft);text-decoration:none;font-size:14px}
+.side a:hover{background:#151D29;color:#fff}
+.content{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;scroll-margin-top:88px}
+h2{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.desc{margin-top:4px;font-size:14px;color:var(--muted);line-height:1.55}
+.hint{font-size:13px;color:var(--muted);line-height:1.5}
+label{display:block;font-size:13px;font-weight:600;color:var(--soft);margin-bottom:6px}
+input,select{width:100%;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line2);background:var(--inset);
+      color:var(--text);font-family:var(--sans);font-size:15px}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.2)}
+input::placeholder{color:var(--faint)}
+input[type=number]{font-family:var(--mono);text-align:right}
+code{font-family:var(--mono);font-size:.92em;background:var(--inset);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.inl{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}.inl>div{flex:1 1 260px}
+.sub{padding-top:18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{min-height:44px;padding:0 18px;border-radius:10px;border:0;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer}
+.save{background:var(--accent2);color:#04131D}.save:hover{background:var(--accent)}
+.logout{background:#172030;color:var(--text);border:1px solid var(--line2);font-weight:600}.logout:hover{background:#1D2838}
+.danger{background:transparent;color:#FCA5A5;border:1px solid #7A2531;font-weight:600}.danger:hover{background:#22111A}
+.msg{font-size:13px;min-height:1.1em}
+.ok{color:var(--green)}.er{color:var(--red)}
+.ws{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;background:var(--inset);border:1px solid var(--line);font-size:14px;color:var(--muted)}
+.ws.ok{color:#86EFAC;border-color:#1F5236}.ws.er{color:#FCA5A5;border-color:#7A2531}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.trow label{margin:0;font-size:14px;font-weight:400;color:var(--text);line-height:1.45}
+input[type=checkbox]{appearance:none;-webkit-appearance:none;width:46px;min-height:0;height:28px;padding:0;border:0;border-radius:999px;
+      background:#263142;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+input[type=checkbox]::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:left .15s}
+input[type=checkbox]:checked{background:var(--accent2)}
+input[type=checkbox]:checked::after{left:22px;background:#fff}
+input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
+.tblw{overflow-x:auto}
+.tbl{display:grid;gap:10px 14px;align-items:center}
+.seq{grid-template-columns:minmax(120px,1.3fr) repeat(2,minmax(110px,1fr));min-width:380px}
+.modes{grid-template-columns:minmax(120px,1.3fr) repeat(3,minmax(90px,1fr));min-width:520px}
+.th{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.th.r{text-align:right}
+.mn{display:flex;align-items:center;gap:10px;font-weight:600}
+.sw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.na{text-align:right;color:var(--faint)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{padding:12px 14px;border-radius:10px;background:var(--inset);border:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.stat b{font-family:var(--mono);font-size:26px}
+.ulog{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(90px,1fr) minmax(80px,.8fr) minmax(70px,.6fr) minmax(150px,1.4fr);min-width:620px;font-size:14px}
+.ulog>span{padding:11px 8px 11px 0;border-top:1px solid var(--line)}
+.ulog>.th{padding:8px 0;border-top:0}
+.ulog .when{font-family:var(--mono);color:var(--soft)}
+.ulog .len{font-family:var(--mono)}
+.ulog .ok{color:#86EFAC}.ulog .bad{color:var(--red);font-weight:600}
+.ulog .ua{grid-column:1/-1;border-top:0;padding:0 0 10px;font-size:12px;color:var(--muted);word-break:break-word}
+.fw{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:18px;border:1px dashed #2F3D52;border-radius:12px;background:var(--inset)}
+.fw input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.fw label{margin:0;display:inline-flex;align-items:center}
+#fwName{flex:1;min-width:160px;font-size:14px;color:var(--muted)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;padding:8px 4px 24px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.foot a{color:var(--muted)}
+.stopbar{position:sticky;bottom:0;z-index:20;width:100%;border:0;background:#FECACA;color:#3B0A0A;cursor:pointer;
+         display:flex;align-items:center;justify-content:center;gap:14px;min-height:68px}
+.stopbar:hover{background:#FDB4B4}
+.stopbar b{font-family:var(--disp);font-size:28px;letter-spacing:.12em;line-height:1}
+@media (max-width:800px){
+  .side{position:static;max-width:none;flex-basis:100%;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px}
+  .side .eyebrow{display:none}
+  .side a{white-space:nowrap;border:1px solid var(--line);background:var(--panel);min-height:36px;font-size:13px}
+}
+@media (max-width:560px){.g2,.g3{grid-template-columns:1fr}.card{padding:18px}}
 </style></head><body>
-<div class="navbar">
-  <a href="/" class="ibtn" title="Back">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-  </a>
-  <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Settings</h1></div>
-  <div class="navicons">
-    <button class="ibtn" onclick="logout()" title="Log out">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    </button>
-    <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path id="lockShackle" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
-    </button>
-    <button class="ibtn" onclick="doRestart()" title="Restart">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
-    </button>
-    <a href="/test" class="ibtn" title="Component Test">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+<header class="top"><div class="topin">
+  <div class="brand">
+    <a href="/" class="ibtn" title="Back" aria-label="Back to control panel">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
     </a>
+    <div class="bt"><span class="eyebrow" style="font-size:10px">Hurricane Controls</span><b>Settings</b></div>
   </div>
-</div>
+  <nav class="nav" aria-label="Device actions">
+    <button class="ibtn" id="btnLock" onclick="toggleLock()" title="Lock physical buttons" aria-label="Lock physical buttons">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path id="lockShackle" d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>
+    </button>
+    <button class="ibtn" onclick="doRestart()" title="Restart" aria-label="Restart controller">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+    </button>
+    <a href="/test" class="ibtn" title="Component Test" aria-label="Component test">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    </a>
+    <button class="ibtn" onclick="logout()" title="Log out" aria-label="Log out">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </nav>
+</div></header>
 
-<div class="content">
+<div class="layout">
+<nav class="side" aria-label="Settings sections">
+  <span class="eyebrow">Device</span>
+  <a href="#network">Wi-Fi &amp; network</a>
+  <a href="#security">Security</a>
+  <a href="#time">Time</a>
+  <span class="eyebrow">Integrations</span>
+  <a href="#weather">Weather Watcher</a>
+  <a href="#mesh">Meshtastic</a>
+  <span class="eyebrow">Siren</span>
+  <a href="#sequence">Start &amp; stop sequence</a>
+  <a href="#modes">Mode timing</a>
+  <a href="#buttons">Physical buttons</a>
+  <span class="eyebrow">Maintenance</span>
+  <a href="#usage">Usage log</a>
+  <a href="#firmware">Firmware</a>
+</nav>
 
-<!-- WiFi -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Wi-Fi</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
+<main class="content">
+
+<section class="card" id="network">
+  <div><h2>Wi-Fi &amp; network</h2><p class="desc">How this controller joins your network, and the fallback access point it broadcasts when it can't.</p></div>
   <div id="ws" class="ws">Checking&hellip;</div>
-  <div class="row"><label>Device Hostname</label>
-    <input type="text" id="wHost" placeholder="hurricane" maxlength="32" autocomplete="off"></div>
-  <p class="hint">Letters, numbers, and hyphens only. Sets both the name your router shows for this device and its <code>http://&lt;hostname&gt;.local</code> address. Takes effect after a restart.</p>
-  <button class="btn save" onclick="saveHostname()">Save Hostname</button>
+  <div class="inl">
+    <div><label for="wHost">Device hostname</label><input type="text" id="wHost" placeholder="hurricane" maxlength="32" autocomplete="off"></div>
+    <button class="btn save" onclick="saveHostname()">Save hostname</button>
+  </div>
+  <p class="hint" style="margin-top:-8px">Letters, numbers and hyphens. Also sets the <code>http://&lt;hostname&gt;.local</code> address. Applies after a restart.</p>
   <div class="msg" id="hm"></div>
-  <div class="row" style="margin-top:14px"><label>Access Point Password</label>
-    <input type="password" id="apPw" placeholder="New AP password (8-63 characters)" autocomplete="new-password"></div>
-  <p class="hint" id="apHint">Needed to join the &quot;HurricaneControls&quot; network this device broadcasts when it isn't on your home Wi-Fi. Takes effect after a restart.</p>
-  <button class="btn save" onclick="saveApPw()">Save AP Password</button>
-  <div class="msg" id="apm"></div>
-  <div class="row" style="margin-top:14px"><label>Network SSID</label>
-    <input type="text" id="wSSID" placeholder="Your WiFi name" autocomplete="off"></div>
-  <div class="row"><label>Password</label>
-    <input type="password" id="wPass" placeholder="WiFi password" autocomplete="new-password"></div>
-  <button class="btn save" onclick="saveWifi()">Connect to Network</button>
-  <button class="btn danger" onclick="clearWifi()">Use AP Mode Only</button>
-  <div class="msg" id="wm"></div>
+  <div class="sub">
+    <span class="eyebrow">Join a network</span>
+    <div class="g2">
+      <div><label for="wSSID">Network name (SSID)</label><input type="text" id="wSSID" placeholder="Your Wi-Fi name" autocomplete="off"></div>
+      <div><label for="wPass">Password</label><input type="password" id="wPass" placeholder="Wi-Fi password" autocomplete="new-password"></div>
+    </div>
+    <div class="actions"><button class="btn save" onclick="saveWifi()">Connect to network</button><button class="btn danger" onclick="clearWifi()">Use access point only</button></div>
+    <div class="msg" id="wm"></div>
   </div>
-</div>
+  <div class="sub">
+    <span class="eyebrow">Fallback access point</span>
+    <div class="inl">
+      <div><label for="apPw">Access point password</label><input type="password" id="apPw" placeholder="8&ndash;63 characters" autocomplete="new-password"></div>
+      <button class="btn save" onclick="saveApPw()">Save AP password</button>
+    </div>
+    <p class="hint" id="apHint" style="margin-top:-8px">Used to join the &quot;HurricaneControls&quot; network this device broadcasts when it isn't on your home Wi-Fi. Applies after a restart.</p>
+    <div class="msg" id="apm"></div>
+  </div>
+</section>
 
-<!-- Security -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Security</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="row"><label>New Password</label>
-    <input type="password" id="p1" placeholder="New password" autocomplete="new-password"></div>
-  <div class="row"><label>Confirm Password</label>
-    <input type="password" id="p2" placeholder="Confirm" autocomplete="new-password"></div>
-  <button class="btn save" onclick="savePw()">Change Password</button>
-  <button class="btn logout" onclick="logout()">Log Out</button>
+<section class="card" id="security">
+  <div><h2>Security</h2><p class="desc">The password that unlocks this control panel.</p></div>
+  <div class="g2">
+    <div><label for="p1">New password</label><input type="password" id="p1" autocomplete="new-password"></div>
+    <div><label for="p2">Confirm password</label><input type="password" id="p2" autocomplete="new-password"></div>
+  </div>
+  <div class="actions"><button class="btn save" onclick="savePw()">Change password</button><button class="btn logout" onclick="logout()">Log out</button></div>
   <div class="msg" id="pm"></div>
-  </div>
-</div>
+</section>
 
-<!-- Mesh Settings -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Mesh Settings</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="row"><label>Allowed sender IDs (comma-separated, leave empty to block all)</label>
-    <input type="text" id="meshWL" placeholder="e.g. 3A3C, 1B93"></div>
-  <div class="row"><label>Command Password (optional, plaintext)</label>
-    <input type="text" id="meshPW" placeholder="leave blank for no password"></div>
-  <h3 style="font-size:.75rem;color:#9aa3af;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Broadcast these over mesh</h3>
-  <div class="trow"><label for="meshNotifyActivation">Activations &amp; stops</label><input type="checkbox" id="meshNotifyActivation"></div>
-  <div class="trow"><label for="meshNotifySystemEvents">Lockout toggled, weather-trigger toggled, locked button pressed</label><input type="checkbox" id="meshNotifySystemEvents"></div>
-  <div class="trow"><label for="meshNotifyWwHealth">Weather Watcher health (lost/recovered/error)</label><input type="checkbox" id="meshNotifyWwHealth"></div>
-  <div class="trow"><label for="meshNotifyStatus">Boot announcement + periodic status</label><input type="checkbox" id="meshNotifyStatus"></div>
-  <p class="hint" style="margin-top:-2px">A direct <code>SIREN PING</code> always gets a reply regardless of these — they only control the unprompted broadcasts.</p>
-  <button class="btn save" onclick="saveMeshWL()">Save Mesh Settings</button>
-  <div class="msg" id="mwlm"></div>
+<section class="card" id="time">
+  <div><h2>Time</h2><p class="desc">A fallback only &mdash; the clock normally comes from the Weather Watcher over the UART link. These apply when it is offline or not yet paired.</p></div>
+  <div class="g3">
+    <div><label for="ntpServer">NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
+    <div><label for="ntpUpdateHours">Sync every (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
+    <div><label for="timeZone">Time zone</label>
+      <select id="timeZone">
+        <option value="EASTERN">Eastern</option>
+        <option value="CENTRAL">Central</option>
+        <option value="MOUNTAIN">Mountain</option>
+        <option value="ARIZONA">Arizona (no DST)</option>
+        <option value="PACIFIC">Pacific</option>
+        <option value="ALASKA">Alaska</option>
+        <option value="HAWAII">Hawaii (no DST)</option>
+      </select></div>
   </div>
-</div>
-
-<!-- Weather Watcher -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Weather Watcher</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Allows a second, separately-wired ESP32 polling National Weather Service alerts to automatically trigger the siren. See docs/weather-watcher.md. This does not bypass TEST MODE.</p>
-  <div id="wwStatus" class="ws">Checking&hellip;</div>
-  <div class="trow">
-    <label for="wxAutoTrig">Automatic weather-triggered activation</label>
-    <input type="checkbox" id="wxAutoTrig" onchange="saveWeatherAutoTrigger()">
-  </div>
-  <div class="msg" id="wxm"></div>
-  </div>
-</div>
-
-<!-- Time / NTP fallback -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Time (NTP Fallback)</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Used only as a fallback — this board normally gets its clock from the Weather Watcher over the UART link. These settings take effect if the Weather Watcher is offline or not yet paired.</p>
-  <div class="row"><label>NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
-  <div class="row"><label>Update frequency (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
-  <div class="row"><label>Time zone</label>
-    <select id="timeZone">
-      <option value="EASTERN">Eastern</option>
-      <option value="CENTRAL">Central</option>
-      <option value="MOUNTAIN">Mountain</option>
-      <option value="ARIZONA">Arizona (no DST)</option>
-      <option value="PACIFIC">Pacific</option>
-      <option value="ALASKA">Alaska</option>
-      <option value="HAWAII">Hawaii (no DST)</option>
-    </select></div>
-  <div class="trow">
-    <label for="autoDst">Automatically adjust for Daylight Saving Time</label>
-    <input type="checkbox" id="autoDst">
-  </div>
-  <button class="btn save" onclick="saveTime()">Save Time Settings</button>
+  <div class="trow"><label for="autoDst">Adjust for daylight saving time automatically</label><input type="checkbox" id="autoDst"></div>
+  <div class="actions"><button class="btn save" onclick="saveTime()">Save time settings</button></div>
   <div class="msg" id="tmz"></div>
-  </div>
-</div>
+</section>
 
-<!-- Startup Sequence -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Startup Sequence</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="grid2">
-    <div><label>Chopper delay (sec)</label><input type="number" id="s_chopperDelay" min="0" step="0.1"></div>
-    <div><label>Blower delay (sec)</label><input type="number" id="s_blowerDelay" min="0" step="0.1"></div>
-    <div><label>Rotator delay (sec)</label><input type="number" id="s_rotatorDelay" min="0" step="0.1"></div>
+<section class="card" id="weather">
+  <div><h2>Weather Watcher</h2><p class="desc">Lets the separately wired Weather Watcher board start the siren when the National Weather Service issues a qualifying warning. It never overrides TEST MODE. See docs/weather-watcher.md.</p></div>
+  <div id="wwStatus" class="ws">Checking&hellip;</div>
+  <div class="trow"><label for="wxAutoTrig"><b>Automatic weather-triggered activation</b><br><span class="hint">Saves as soon as you flip it.</span></label><input type="checkbox" id="wxAutoTrig" onchange="saveWeatherAutoTrigger()"></div>
+  <div class="msg" id="wxm"></div>
+</section>
+
+<section class="card" id="mesh">
+  <div><h2><svg width="24" height="24" viewBox="0 0 512 512" aria-hidden="true" style="flex-shrink:0"><rect width="512" height="512" rx="64" fill="#67EA94"/><g transform="matrix(1.79 0 0 1.79 313.74 258.36)"><path fill="#2C2D3C" fill-rule="evenodd" transform="translate(-250.97,-362.41)" d="M250.908 330.267L193.126 415.005L180.938 406.694L244.802 313.037C246.174 311.024 248.453 309.819 250.889 309.816C253.326 309.814 255.606 311.015 256.982 313.026L320.994 406.536L308.821 414.869L250.908 330.267Z"/></g><g transform="matrix(1.81 0 0 1.81 145 256.15)"><path fill="#2C2D3C" fill-rule="evenodd" transform="translate(-115.14,-528.06)" d="M87.642 581.398L154.757 482.977L142.638 474.713L75.523 573.134L87.642 581.398Z"/></g></svg>Meshtastic</h2>
+    <p class="desc">Who may send siren commands over the mesh, and which events this controller announces on its own.</p></div>
+  <div class="g2">
+    <div><label for="meshWL">Allowed sender IDs</label><input type="text" id="meshWL" class="mono" placeholder="e.g. 3A3C, 1B93"><p class="hint" style="margin-top:6px">Comma-separated. Leave empty to block everyone.</p></div>
+    <div><label for="meshPW">Command password (optional)</label><input type="text" id="meshPW" placeholder="No password"><p class="hint" style="margin-top:6px">Sent in plain text over the mesh.</p></div>
   </div>
-  <button class="btn save" onclick="saveTiming()">Save Startup Sequence</button>
+  <div>
+    <span class="eyebrow">Broadcast over mesh</span>
+    <div class="trow" style="margin-top:8px"><label for="meshNotifyActivation">Activations and stops</label><input type="checkbox" id="meshNotifyActivation"></div>
+    <div class="trow"><label for="meshNotifySystemEvents">Lockout or weather trigger toggled, locked button pressed</label><input type="checkbox" id="meshNotifySystemEvents"></div>
+    <div class="trow"><label for="meshNotifyWwHealth">Weather Watcher health (lost, recovered, error)</label><input type="checkbox" id="meshNotifyWwHealth"></div>
+    <div class="trow"><label for="meshNotifyStatus">Boot announcement and periodic status</label><input type="checkbox" id="meshNotifyStatus"></div>
+    <p class="hint">A direct <code>SIREN PING</code> always gets a reply &mdash; these only control unprompted broadcasts.</p>
+  </div>
+  <div class="actions"><button class="btn save" onclick="saveMeshWL()">Save mesh settings</button></div>
+  <div class="msg" id="mwlm"></div>
+</section>
+
+<section class="card" id="sequence">
+  <div><h2>Start &amp; stop sequence</h2><p class="desc">How long after a start or stop command each component switches. Seconds.</p></div>
+  <div class="tblw"><div class="tbl seq">
+    <span class="th">Component</span><span class="th r">Start delay</span><span class="th r">Stop delay</span>
+    <span class="mn">Chopper</span><input type="number" id="s_chopperDelay" min="0" step="0.1" aria-label="Chopper start delay"><input type="number" id="s_stopChopperDelay" min="0" step="0.1" aria-label="Chopper stop delay">
+    <span class="mn">Blower</span><input type="number" id="s_blowerDelay" min="0" step="0.1" aria-label="Blower start delay"><input type="number" id="s_stopBlowerDelay" min="0" step="0.1" aria-label="Blower stop delay">
+    <span class="mn">Rotator</span><input type="number" id="s_rotatorDelay" min="0" step="0.1" aria-label="Rotator start delay"><input type="number" id="s_stopRotDelay" min="0" step="0.1" aria-label="Rotator stop delay">
+  </div></div>
+  <div class="actions"><button class="btn save" onclick="saveTiming()">Save sequence</button></div>
   <div class="msg" id="tmStart"></div>
-  </div>
-</div>
+</section>
 
-<!-- Shutdown Sequence -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Shutdown Sequence</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="grid2">
-    <div><label>Chopper delay (sec)</label><input type="number" id="s_stopChopperDelay" min="0" step="0.1"></div>
-    <div><label>Blower delay (sec)</label><input type="number" id="s_stopBlowerDelay" min="0" step="0.1"></div>
-    <div><label>Rotator delay (sec)</label><input type="number" id="s_stopRotDelay" min="0" step="0.1"></div>
+<section class="card" id="modes">
+  <div><h2>Mode timing</h2><p class="desc">Run length for each mode, and the chopper on/off cycle for the pulsing modes. Seconds.</p></div>
+  <div class="tblw"><div class="tbl modes">
+    <span class="th">Mode</span><span class="th r">Duration</span><span class="th r">Chopper on</span><span class="th r">Chopper off</span>
+    <span class="mn"><span class="sw" style="background:#1D4ED8"></span>Wail</span><input type="number" id="s_wailDuration" min="1" step="1" aria-label="Wail duration"><span class="na">&mdash;</span><span class="na">&mdash;</span>
+    <span class="mn"><span class="sw" style="background:#B91C1C"></span>Attack</span><input type="number" id="s_attackDuration" min="1" step="1" aria-label="Attack duration"><input type="number" id="s_attackOnTime" min="0.5" step="0.1" aria-label="Attack on time"><input type="number" id="s_attackOffTime" min="0.5" step="0.1" aria-label="Attack off time">
+    <span class="mn"><span class="sw" style="background:#A84A0A"></span>Fast Wail</span><input type="number" id="s_fastWailDuration" min="1" step="1" aria-label="Fast Wail duration"><input type="number" id="s_fastWailOnTime" min="0.5" step="0.1" aria-label="Fast Wail on time"><input type="number" id="s_fastWailOffTime" min="0.5" step="0.1" aria-label="Fast Wail off time">
+  </div></div>
+  <div class="sub">
+    <div><span class="eyebrow">Growl test</span><p class="hint" style="margin-top:4px">Each component runs alone, in this order, for these times.</p></div>
+    <div class="g3">
+      <div><label for="s_growlBlowerTime">1 &middot; Blower</label><input type="number" id="s_growlBlowerTime" min="0.5" step="0.1"></div>
+      <div><label for="s_growlRotatorTime">2 &middot; Rotator</label><input type="number" id="s_growlRotatorTime" min="0.5" step="0.1"></div>
+      <div><label for="s_growlChopperTime">3 &middot; Chopper</label><input type="number" id="s_growlChopperTime" min="0.5" step="0.1"></div>
+    </div>
   </div>
-  <button class="btn save" onclick="saveTiming()">Save Shutdown Sequence</button>
-  <div class="msg" id="tmStop"></div>
-  </div>
-</div>
-
-<!-- General Timing -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Timing</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="grid2">
-    <div><label class="strong">Wail duration (sec)</label><input type="number" id="s_wailDuration" min="1" step="1"></div>
-    <div><label>Long-press threshold (sec)</label><input type="number" id="s_longPressMs" min="0.1" step="0.1"></div>
-    <div><label>Button debounce (sec)</label><input type="number" id="s_buttonDebounceMs" min="0" step="0.01"></div>
-  </div>
-  <button class="btn save" onclick="saveTiming()">Save Timing</button>
-  <div class="msg" id="tm"></div>
-  </div>
-</div>
-
-<!-- Attack Mode -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Attack Mode</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="grid2">
-    <div><label>Attack duration (sec)</label><input type="number" id="s_attackDuration" min="1" step="1"></div>
-    <div><label>Attack ON time (sec)</label><input type="number" id="s_attackOnTime" min="0.5" step="0.1"></div>
-    <div><label>Attack OFF time (sec)</label><input type="number" id="s_attackOffTime" min="0.5" step="0.1"></div>
-  </div>
-  <button class="btn save" onclick="saveTiming()">Save Attack Settings</button>
+  <div class="actions"><button class="btn save" onclick="saveTiming()">Save mode timing</button></div>
   <div class="msg" id="tm2"></div>
-  </div>
-</div>
+</section>
 
-<!-- Fast Wail Mode -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Fast Wail Mode</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="grid2">
-    <div><label>Fast Wail duration (sec)</label><input type="number" id="s_fastWailDuration" min="1" step="1"></div>
-    <div><label>Fast Wail ON time (sec)</label><input type="number" id="s_fastWailOnTime" min="0.5" step="0.1"></div>
-    <div><label>Fast Wail OFF time (sec)</label><input type="number" id="s_fastWailOffTime" min="0.5" step="0.1"></div>
+<section class="card" id="buttons">
+  <div><h2>Physical buttons</h2><p class="desc">How the panel buttons on the controller respond. A long press turns Wail into Manual and Attack into Fast Wail.</p></div>
+  <div class="g2">
+    <div><label for="s_longPressMs">Long-press threshold (sec)</label><input type="number" id="s_longPressMs" min="0.1" step="0.1"></div>
+    <div><label for="s_buttonDebounceMs">Debounce (sec)</label><input type="number" id="s_buttonDebounceMs" min="0" step="0.01"></div>
   </div>
-  <button class="btn save" onclick="saveTiming()">Save Fast Wail Settings</button>
-  <div class="msg" id="tm3"></div>
-  </div>
-</div>
+  <div class="actions"><button class="btn save" onclick="saveTiming()">Save button timing</button></div>
+  <div class="msg" id="tm"></div>
+</section>
 
-<!-- Growl Test -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Growl Test</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="grid2">
-    <div><label>Blower time (sec)</label><input type="number" id="s_growlBlowerTime" min="0.5" step="0.1"></div>
-    <div><label>Rotator time (sec)</label><input type="number" id="s_growlRotatorTime" min="0.5" step="0.1"></div>
-    <div><label>Chopper time (sec)</label><input type="number" id="s_growlChopperTime" min="0.5" step="0.1"></div>
+<section class="card" id="usage">
+  <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <div><h2>Usage log</h2><p class="desc">The last 20 runs. Totals and the full history survive a restart.</p></div>
+    <a class="btn logout" href="/log.csv" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</a>
   </div>
-  <button class="btn save" onclick="saveTiming()">Save Growl Settings</button>
-  <div class="msg" id="tm4"></div>
+  <div class="stats">
+    <div class="stat"><span class="eyebrow">Total runs</span><b id="usageRuns">&mdash;</b></div>
+    <div class="stat"><span class="eyebrow">Motor hours</span><b id="usageHours">&mdash;</b></div>
   </div>
-</div>
+  <div class="tblw" id="usageList"><p class="hint">Loading&hellip;</p></div>
+</section>
 
-<!-- Usage -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Usage</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div id="usageTot" class="ws">Loading&hellip;</div>
-  <div id="usageList"></div>
-  <p class="hint" style="margin-top:10px">The last 20 runs are shown here; the full persisted history (and the totals) survive a restart. <a href="/log.csv" style="color:var(--cyan)">Export full log (CSV)</a></p>
+<section class="card" id="firmware">
+  <div><h2>Firmware</h2><p class="desc">Upload a new <code>firmware.bin</code> from <code>.pio/build/esp32dev/</code>. Only allowed while the siren is idle and TEST MODE is off. The controller restarts when it finishes.</p></div>
+  <div class="fw">
+    <label for="fwFile" class="btn logout">Choose .bin file</label>
+    <input type="file" id="fwFile" accept=".bin" onchange="document.getElementById('fwName').textContent=this.files[0]?this.files[0].name:'No file chosen'">
+    <span id="fwName">No file chosen</span>
+    <button class="btn save" onclick="uploadFw()">Upload firmware</button>
   </div>
-</div>
-
-<!-- Firmware Update -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Firmware Update</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Upload a new <code>firmware.bin</code> (from <code>.pio/build/esp32dev/</code> after a build). Only allowed while the siren is idle and TEST MODE is off; the controller restarts when it finishes.</p>
-  <input type="file" id="fwFile" accept=".bin">
-  <button class="btn save" onclick="uploadFw()">Upload Firmware</button>
   <div class="msg" id="fwm"></div>
-  </div>
+</section>
+
+<footer class="foot">
+  <a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Hurricane Controls &middot; v<span id="verNum">&mdash;</span></a>
+  <span>Last restart: <span id="rstReason">&mdash;</span></span>
+  <a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a>
+</footer>
+</main>
 </div>
 
-<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Hurricane Controls &middot; v<span id="verNum">—</span></a></div>
-<div class="ver mono">Last restart: <span id="rstReason">—</span></div>
-<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
-
-</div>
-
-<div class="stopbar" onclick="claxon();cmd('stop')">&#9632; STOP</div>
+<button class="stopbar" onclick="claxon();cmd('stop')">
+  <svg width="20" height="20" viewBox="0 0 22 22" aria-hidden="true"><rect x="2" y="2" width="18" height="18" rx="3" fill="#B91C1C"/></svg><b>STOP</b>
+</button>
 
 <script>
 // All timing fields stored as ms, displayed as seconds
@@ -833,6 +948,7 @@ function refreshLockIcon(){
     document.getElementById('lockShackle').setAttribute('d', lk ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2');
     bl.classList.toggle('locked',lk);
     bl.title=lk?'Physical buttons LOCKED — click to unlock':'Lock physical buttons';
+    bl.setAttribute('aria-label',bl.title);
   });
 }
 refreshLockIcon();
@@ -847,8 +963,9 @@ function doRestart(){
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
   const el=document.getElementById('ws');
-  const wifiIcon='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>';
-  if(d.connected){el.innerHTML=wifiIcon+'Connected: '+d.ssid+' ('+d.ip+')';el.className='ws ok';}
+  const wifiIcon='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>';
+  if(d.connected){el.innerHTML=wifiIcon+'<span>Connected to <b></b> <span class="mono"></span></span>';
+    el.querySelector('b').textContent=d.ssid;el.querySelector('.mono').textContent='('+d.ip+')';el.className='ws ok';}
   else if(d.ssid){el.textContent='Not connected — last: '+d.ssid;el.className='ws';}
   else{el.textContent='AP mode — '+d.ip;el.className='ws';}
   if(d.ssid)document.getElementById('wSSID').value=d.ssid;
@@ -856,10 +973,6 @@ fetch('/wifi-data').then(r=>r.json()).then(d=>{
   if(!d.apSecured)document.getElementById('apHint').textContent+=' The access point is currently OPEN (no password).';
 });
 loadLog();
-
-function toggleCard(headEl){
-  headEl.parentElement.classList.toggle('expanded');
-}
 
 function msg(id,txt,ok){
   const e=document.getElementById(id);e.textContent=txt;e.className='msg '+(ok?'ok':'er');
@@ -948,7 +1061,7 @@ function saveTiming(){
   // Blank fields are skipped (left unchanged) rather than sent as 0.
   TS.forEach(f=>{const e=document.getElementById('s_'+f);
     if(e&&e.value.trim()!==''&&!isNaN(parseFloat(e.value)))b[f]=Math.round(parseFloat(e.value)*1000);});
-  // report to whichever save-msg div is visible in the submitting card
+  // report to the save-msg div in the submitting card
   const id=document.activeElement.closest('.card')?.querySelector('.msg')?.id||'tm';
   post('/settings-data',b).then(d=>{
     msg(id,d.ok?'Saved!':'Error',d.ok);
@@ -968,27 +1081,21 @@ function fmtAgo(s){if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+' 
   if(s<86400)return Math.floor(s/3600)+' h ago';return Math.floor(s/86400)+' d ago';}
 function loadLog(){
   fetch('/log').then(r=>r.json()).then(d=>{
-    document.getElementById('usageTot').textContent=
-      d.runs+' total run'+(d.runs===1?'':'s')+' · '+(d.secs/3600).toFixed(1)+' motor hours';
+    document.getElementById('usageRuns').textContent=d.runs;
+    document.getElementById('usageHours').textContent=(d.secs/3600).toFixed(1);
     const L=document.getElementById('usageList');L.innerHTML='';
-    if(!d.entries.length){L.className='hint';L.textContent='No runs since the last restart.';return;}
-    L.className='';
+    if(!d.entries.length){const p=document.createElement('p');p.className='hint';p.textContent='No runs since the last restart.';L.appendChild(p);return;}
+    const g=document.createElement('div');g.className='ulog';
+    const cell=(txt,cls)=>{const s=document.createElement('span');if(cls)s.className=cls;s.textContent=txt;g.appendChild(s);return s;};
+    ['When','Mode','Source','Length','Ended'].forEach(h=>cell(h,'th'));
     d.entries.forEach(e=>{
       const when=e.e?new Date(e.e*1000).toLocaleString():fmtAgo(d.uptime-e.u);
-      const end=e.x===0?'completed':e.x===2?'failsafe stop':e.x===3?'INTERRUPTED (power loss)':'stopped ('+LS[e.ss]+')';
-      const r=document.createElement('div');r.className='lrow';
-      if(e.x===3) r.style.color='#f87171';
-      const a=document.createElement('span'),b=document.createElement('span');
-      a.textContent=(LM[e.m]||'?')+' · '+(LS[e.s]||'?')+' · '+fmtDur(e.d);
-      b.textContent=when+' · '+end;
-      r.appendChild(a);r.appendChild(b);L.appendChild(r);
-      if(e.at){
-        const alertRow=document.createElement('div');
-        alertRow.style.cssText='font-size:.68rem;color:#8892a0;padding:0 0 7px;word-break:break-word';
-        alertRow.textContent=e.at+(e.ai?' (ID: '+e.ai+')':'');
-        L.appendChild(alertRow);
-      }
+      const end=e.x===0?'completed':e.x===2?'failsafe stop':e.x===3?'interrupted (power loss)':'stopped ('+LS[e.ss]+')';
+      cell(when,'when');cell(LM[e.m]||'?');cell(LS[e.s]||'?');cell(fmtDur(e.d),'len');
+      cell(end,e.x===0?'ok':e.x===3?'bad':'');
+      if(e.at)cell(e.at+(e.ai?' (ID: '+e.ai+')':''),'ua');
     });
+    L.appendChild(g);
   });
 }
 function uploadFw(){
@@ -1016,94 +1123,143 @@ static const char TEST_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
 :root{
-  --bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;
-  --wail:#1e3a8a;--attack:#7f1d1d;--fastwail:#78350f;--manual:#4c1d95;
-  --stop-bg:#fca5a5;--stop-text:#000;--radius:4px;
+  --bg:#0A0E13;--bar:#0D1219;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;
+  --text:#E7ECF3;--soft:#C9D4E3;--muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--green:#4ADE80;--red:#F87171;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+  --disp:"Barlow Condensed","Arial Narrow",Inter,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg)}
-body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-     min-height:100vh}
-.navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
-        border-bottom:1px solid #1b2438;display:flex;align-items:center;gap:12px;
-        padding:0 16px;z-index:20}
-.navbar h1{font-size:1.05rem;color:var(--cyan)}
-.brandrow{display:flex;align-items:center;gap:8px;overflow:hidden}
-.brand-icon{width:26px;height:26px;flex-shrink:0}
-.ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
-.content{max-width:480px;margin:0 auto;padding:76px 16px 100px}
-.card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
-      box-shadow:0 1px 3px rgba(0,0,0,.35)}
-h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;margin-bottom:14px}
-.hint{font-size:.78rem;color:#9aa3af;margin-bottom:16px}
-/* Relay dots */
-.dots{display:flex;gap:24px;justify-content:center;margin-bottom:18px}
-.dw{display:flex;flex-direction:column;align-items:center;gap:3px}
-.dot{width:13px;height:13px;border-radius:50%;background:#2a2f3a;transition:background .3s}
-.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
-.dl{font-size:.65rem;color:#9aa3af;letter-spacing:.5px}
-.ttest{width:100%;padding:22px;margin-bottom:10px;border:none;border-radius:var(--radius);
-       font-size:1.02rem;font-weight:700;letter-spacing:1px;cursor:pointer;user-select:none;
-       background:#1b2438;color:#eaeaea;transition:background .15s,color .15s,transform .1s;
-       box-shadow:0 1px 3px rgba(0,0,0,.35);font-family:inherit}
-.ttest:active{transform:scale(.98)}
-.ttest.on{background:var(--green);color:#04220f}
-.ttest:disabled{opacity:.4;cursor:not-allowed}
-.ttoggle{width:100%;padding:16px;margin-bottom:16px;border:1px solid var(--cyan);border-radius:var(--radius);
-         background:transparent;color:var(--cyan);font-size:.95rem;font-weight:700;letter-spacing:1px;
-         cursor:pointer;font-family:inherit;transition:background .15s,color .15s}
-.ttoggle.on{background:var(--attack);color:#fff;border-color:var(--attack)}
-.msg{font-size:.8rem;margin-top:6px;min-height:1.1em;text-align:center;display:flex;
-     align-items:center;justify-content:center;gap:6px}
-.ok{color:var(--green)}.er{color:#f87171}
-.stopbar{position:fixed;bottom:0;left:0;right:0;background:var(--stop-bg);color:var(--stop-text);
-         display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;letter-spacing:1px;
-         padding:18px;cursor:pointer;border-top:2px solid rgba(0,0,0,.15);z-index:20;font-size:1.1rem}
-.stopbar:active{opacity:.85}
+body{color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column}
+.mono{font-family:var(--mono)}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.top{position:sticky;top:0;z-index:20;background:var(--bar);border-bottom:1px solid var(--line)}
+.topin{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+.bt{display:flex;flex-direction:column;gap:2px}.bt b{font-size:17px}
+.ibtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;
+      border:1px solid #222D3D;background:var(--panel);color:var(--soft);text-decoration:none}
+.ibtn:hover{background:#172030;color:#fff}
+main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.hint{font-size:14px;color:var(--muted);line-height:1.5}
+/* Test-mode banner */
+.tm{padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;transition:background .3s,border-color .3s}
+.tm.on{background:#22111A;border-color:#7A2531}
+.tmtext{display:flex;gap:16px;align-items:flex-start;flex:1 1 420px;min-width:0}
+.tmtext svg{flex-shrink:0;margin-top:2px;color:var(--muted)}
+.tm.on .tmtext svg{color:var(--red)}
+.tmtext b{font-size:18px;display:block;margin-bottom:6px}
+.tmtext p{font-size:14px;color:#B6C2D3;line-height:1.55}
+.cd{display:none;flex-direction:column;align-items:center;gap:6px;padding:12px 22px;border-radius:12px;background:#160B10;border:1px solid #7A2531;min-width:170px}
+.cd.show{display:flex}
+.cd .eyebrow{color:#FCA5A5}
+#tmLeft{font-family:var(--mono);font-size:52px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:#fff}
+.bar{width:100%;height:6px;border-radius:999px;background:#3A1820;overflow:hidden}
+#tmBar{display:block;height:100%;border-radius:999px;background:#EF4444;width:100%;transition:width 1s linear}
+.ttoggle{min-height:52px;min-width:200px;padding:0 22px;border-radius:12px;font-family:var(--sans);font-weight:700;font-size:15px;
+         letter-spacing:.04em;cursor:pointer;border:1px solid var(--line2);background:#172030;color:var(--text)}
+.ttoggle.on{border:0;background:#B91C1C;color:#fff}
+.cols{display:flex;flex-wrap:wrap;gap:20px;align-items:stretch}
+.relaycard{flex:3 1 560px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:18px}
+.growlcard{flex:2 1 380px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:18px}
+.rgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ttest{border-radius:14px;min-height:150px;padding:18px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:16px;
+       cursor:pointer;font-family:var(--sans);color:var(--text);text-align:left;background:var(--inset);border:1px solid var(--line);
+       user-select:none;-webkit-user-select:none;touch-action:none;transition:background .15s,border-color .15s}
+.ttest:hover:not(:disabled){filter:brightness(1.15)}
+.ttest.on{background:#10261B;border-color:#2F7A4D}
+.ttest:disabled{opacity:.45;cursor:not-allowed}
+.lrow{display:flex;align-items:center;gap:10px}
+.dot{width:16px;height:16px;border-radius:50%;background:#263142;transition:background .3s,box-shadow .3s}
+.dot.on{background:var(--green);box-shadow:0 0 12px rgba(74,222,128,.75)}
+.st{font-family:var(--mono);font-size:13px;color:var(--faint)}
+.dot.on+.st{color:#86EFAC}
+.tl{font-family:var(--disp);font-size:32px;font-weight:700;letter-spacing:.05em;line-height:1}
+.tc{font-size:13px;color:var(--muted)}
+.msg{font-size:13px;min-height:18px;display:flex;align-items:center;gap:6px;color:var(--faint)}
+.msg.ok{color:#86EFAC}.msg.er{color:var(--red)}
+ol{list-style:none;display:flex;flex-direction:column;gap:8px}
+li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--inset);border:1px solid var(--line)}
+.num{width:26px;height:26px;border-radius:50%;background:#0F3B33;color:#6EE7C8;display:inline-flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700}
+li b{flex:1}
+.gbtn{min-height:56px;border:0;border-radius:12px;background:#0F766E;color:#fff;font-family:var(--disp);font-size:24px;font-weight:700;letter-spacing:.08em;cursor:pointer}
+.gbtn:hover{background:#13887F}
+.stopbar{position:sticky;bottom:0;z-index:20;width:100%;border:0;background:#FECACA;color:#3B0A0A;cursor:pointer;
+         display:flex;align-items:center;justify-content:center;gap:14px;min-height:76px}
+.stopbar:hover{background:#FDB4B4}
+.stopbar b{font-family:var(--disp);font-size:30px;letter-spacing:.12em;line-height:1}
+@media (max-width:560px){.rgrid{gap:8px}.ttest{min-height:120px;padding:12px}.tl{font-size:24px}.tm,.relaycard,.growlcard{padding:18px}}
 </style></head><body>
-<div class="navbar">
-  <a href="/settings" class="ibtn" title="Back">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+<header class="top"><div class="topin">
+  <a href="/settings" class="ibtn" title="Back" aria-label="Back to settings">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
-  <div class="brandrow"><img class="brand-icon" src="/brand-icon.png" alt=""><h1>Component Test</h1></div>
-</div>
+  <div class="bt"><span class="eyebrow" style="font-size:10px">Hurricane Controls</span><b>Component Test</b></div>
+</div></header>
 
-<div class="content">
-<div class="card">
-  <h2>Relay Test — Hold to Activate</h2>
-  <button class="ttoggle" id="testModeBtn" onclick="toggleTestMode()">TEST MODE: OFF</button>
-  <p class="hint">Bypasses all startup/shutdown delays. Only works while the siren is idle.</p>
-  <div class="dots">
-    <div class="dw"><div id="d0" class="dot"></div><span class="dl">CHOPPER</span></div>
-    <div class="dw"><div id="d1" class="dot"></div><span class="dl">BLOWER</span></div>
-    <div class="dw"><div id="d2" class="dot"></div><span class="dl">ROTATOR</span></div>
+<main>
+<section class="panel tm" id="tmPanel" aria-label="Test mode">
+  <div class="tmtext">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <div><b id="tmWord">Test mode is OFF</b>
+      <p>Skips every startup and shutdown delay so each relay can be checked on its own. Only works while the siren is idle. While it is on, the software STOP is disabled &mdash; rely on the hardware emergency stop.</p></div>
   </div>
-  <button class="ttest" id="tChopper"
-    onmousedown="testDown(event,'chopper')" onmouseup="testUp(event,'chopper')" onmouseleave="testUp(event,'chopper')"
-    ontouchstart="testDown(event,'chopper')" ontouchend="testUp(event,'chopper')" ontouchcancel="testUp(event,'chopper')">CHOPPER</button>
-  <button class="ttest" id="tBlower"
-    onmousedown="testDown(event,'blower')" onmouseup="testUp(event,'blower')" onmouseleave="testUp(event,'blower')"
-    ontouchstart="testDown(event,'blower')" ontouchend="testUp(event,'blower')" ontouchcancel="testUp(event,'blower')">BLOWER</button>
-  <button class="ttest" id="tRotator"
-    onmousedown="testDown(event,'rotator')" onmouseup="testUp(event,'rotator')" onmouseleave="testUp(event,'rotator')"
-    ontouchstart="testDown(event,'rotator')" ontouchend="testUp(event,'rotator')" ontouchcancel="testUp(event,'rotator')">ROTATOR</button>
-  <div class="msg" id="tmsg"></div>
-</div>
+  <div class="cd" id="cd" role="timer" aria-live="off">
+    <span class="eyebrow">Auto-off in</span>
+    <span id="tmLeft">3:00</span>
+    <span class="bar"><span id="tmBar"></span></span>
+  </div>
+  <button class="ttoggle" id="testModeBtn" onclick="toggleTestMode()" aria-pressed="false">TURN TEST MODE ON</button>
+</section>
 
-<div class="card">
-  <h2>Growl Test</h2>
-  <p class="hint">Activates blower, then rotator, then chopper — one at a time, for their configured durations (Settings → Growl Test). Requires the siren to be idle and TEST MODE off.</p>
-  <button class="ttest" onclick="claxon();cmd('growl')">START GROWL TEST</button>
-</div>
-</div>
+<div class="cols">
+  <section class="panel relaycard" aria-label="Relay test">
+    <div><span class="eyebrow">Relay test</span><p class="hint" style="margin-top:6px">Press and hold a relay to energize it. It switches off the moment you let go.</p></div>
+    <div class="rgrid">
+      <button class="ttest" id="tChopper" disabled
+        onmousedown="testDown(event,'chopper')" onmouseup="testUp(event,'chopper')" onmouseleave="testUp(event,'chopper')"
+        ontouchstart="testDown(event,'chopper')" ontouchend="testUp(event,'chopper')" ontouchcancel="testUp(event,'chopper')">
+        <span class="lrow"><span class="dot" id="d0"></span><span class="st" id="s0">OFF</span></span>
+        <span><span class="tl">CHOPPER</span><br><span class="tc">Hold to energize</span></span></button>
+      <button class="ttest" id="tBlower" disabled
+        onmousedown="testDown(event,'blower')" onmouseup="testUp(event,'blower')" onmouseleave="testUp(event,'blower')"
+        ontouchstart="testDown(event,'blower')" ontouchend="testUp(event,'blower')" ontouchcancel="testUp(event,'blower')">
+        <span class="lrow"><span class="dot" id="d1"></span><span class="st" id="s1">OFF</span></span>
+        <span><span class="tl">BLOWER</span><br><span class="tc">Hold to energize</span></span></button>
+      <button class="ttest" id="tRotator" disabled
+        onmousedown="testDown(event,'rotator')" onmouseup="testUp(event,'rotator')" onmouseleave="testUp(event,'rotator')"
+        ontouchstart="testDown(event,'rotator')" ontouchend="testUp(event,'rotator')" ontouchcancel="testUp(event,'rotator')">
+        <span class="lrow"><span class="dot" id="d2"></span><span class="st" id="s2">OFF</span></span>
+        <span><span class="tl">ROTATOR</span><br><span class="tc">Hold to energize</span></span></button>
+    </div>
+    <div class="msg" id="tmsg"></div>
+  </section>
 
-<div class="stopbar" onclick="claxon();cmd('stop')">&#9632; STOP</div>
+  <section class="panel growlcard" aria-label="Growl test">
+    <div><span class="eyebrow">Growl test</span><p class="hint" style="margin-top:6px">Runs each component by itself, one after another, for the times set under Settings &rsaquo; Mode timing. Needs the siren idle and TEST MODE off.</p></div>
+    <ol>
+      <li><span class="num">1</span><b>Blower</b><span class="mono" id="g1" style="font-size:13px;color:var(--muted)">&mdash;</span></li>
+      <li><span class="num">2</span><b>Rotator</b><span class="mono" id="g2" style="font-size:13px;color:var(--muted)">&mdash;</span></li>
+      <li><span class="num">3</span><b>Chopper</b><span class="mono" id="g3" style="font-size:13px;color:var(--muted)">&mdash;</span></li>
+    </ol>
+    <button class="gbtn" onclick="claxon();cmd('growl')">START GROWL TEST</button>
+  </section>
+</div>
+</main>
+
+<button class="stopbar" onclick="claxon();cmd('stop')">
+  <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="2" y="2" width="18" height="18" rx="3" fill="#B91C1C"/></svg><b>STOP</b>
+</button>
 
 <script>
 let held={chopper:false,blower:false,rotator:false}, kaT={};
-const warnIcon='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const warnIcon='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+// Matches TEST_LOCK_TIMEOUT_MS in buttons.h — only used to scale the bar.
+const TEST_TIMEOUT_SEC=180;
 
 function connect(){
   const ws=new WebSocket('ws://'+location.hostname+'/ws');
@@ -1118,19 +1274,35 @@ function connect(){
 }
 connect();
 
+fetch('/settings-data').then(r=>r.json()).then(d=>{
+  const s=v=>(v/1000).toFixed(1)+' s';
+  document.getElementById('g1').textContent=s(d.growlBlowerTime);
+  document.getElementById('g2').textContent=s(d.growlRotatorTime);
+  document.getElementById('g3').textContent=s(d.growlChopperTime);
+}).catch(()=>{});
+
 function drawDots(d){
   const r=d.relays||[0,0,0];
-  [0,1,2].forEach(i=>document.getElementById('d'+i).classList.toggle('on',!!r[i]));
+  [0,1,2].forEach(i=>{
+    document.getElementById('d'+i).classList.toggle('on',!!r[i]);
+    document.getElementById('s'+i).textContent=r[i]?'ENERGIZED':'OFF';
+  });
   const btn=document.getElementById('testModeBtn');
   const on=!!d.testMode;
   btn.classList.toggle('on',on);
+  btn.setAttribute('aria-pressed',on?'true':'false');
+  btn.textContent=on?'TURN TEST MODE OFF':'TURN TEST MODE ON';
+  document.getElementById('tmPanel').classList.toggle('on',on);
+  document.getElementById('tmWord').textContent='Test mode is '+(on?'ON':'OFF');
+  const cd=document.getElementById('cd');
   if(on && d.lockAutoExpire){
     const rem=d.lockRemaining||0, m=Math.floor(rem/60), sec=rem%60;
-    btn.textContent='TEST MODE: ON (auto-off in '+m+':'+String(sec).padStart(2,'0')+')';
-  } else if(on){
-    btn.textContent='TEST MODE: ON';
+    document.getElementById('tmLeft').textContent=m+':'+String(sec).padStart(2,'0');
+    document.getElementById('tmBar').style.width=Math.min(100,rem/TEST_TIMEOUT_SEC*100)+'%';
+    cd.setAttribute('aria-label','Test mode turns off automatically in '+m+' minutes '+sec+' seconds');
+    cd.classList.add('show');
   } else {
-    btn.textContent='TEST MODE: OFF';
+    cd.classList.remove('show');
   }
   ['chopper','blower','rotator'].forEach(c=>btnEl(c).disabled=!on);
 }
@@ -1962,6 +2134,29 @@ private:
         }
     }
 
+    // Damage-threat pill text for the Control Panel. TORNADO_CONFIRMED covers
+    // both "observed" and a sub-catastrophic damage tag, so it reads CONFIRMED.
+    static const char* alertCategoryTag(uint8_t c) {
+        switch (c) {
+        case 7: return "CATASTROPHIC";  // TORNADO_EMERGENCY
+        case 6: return "CONFIRMED";     // TORNADO_CONFIRMED
+        case 5: return "DESTRUCTIVE";   // THUNDERSTORM_DESTRUCTIVE
+        case 3: return "CONSIDERABLE";  // THUNDERSTORM_CONSIDERABLE
+        default: return "";
+        }
+    }
+
+    static const char* runModeName(RunMode m) {
+        switch (m) {
+        case RunMode::WAIL:      return "WAIL";
+        case RunMode::ATTACK:    return "ATTACK";
+        case RunMode::FAST_WAIL: return "FAST WAIL";
+        case RunMode::MANUAL:    return "MANUAL";
+        case RunMode::GROWL:     return "GROWL TEST";
+        default:                 return "";
+        }
+    }
+
     static String buildAlertsJson() {
         CtrlLock lock;
         JsonDocument doc;
@@ -1977,8 +2172,19 @@ private:
             o["event"]   = a.event;
             o["color"]   = alertCategoryColor(a.category);
             o["exp"]     = a.expEpoch;
-            o["activatedThis"] = (sm.lastTriggerSource == TriggerSource::NWS_ALERT) &&
-                                  a.vtecKey[0] && !strcmp(weatherLink.lastAlertId(), a.vtecKey);
+            o["tag"]     = alertCategoryTag(a.category);
+            bool activated = (sm.lastTriggerSource == TriggerSource::NWS_ALERT) &&
+                              a.vtecKey[0] && !strcmp(weatherLink.lastAlertId(), a.vtecKey);
+            o["activatedThis"] = activated;
+            if (activated) {
+                o["actMode"] = runModeName(sm.lastTriggerMode());
+                time_t at = (time_t)sm.lastTriggerEpoch();
+                if (at) {
+                    char buf[12];
+                    strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&at));
+                    o["actTime"] = buf;
+                }
+            }
         }
         String out;
         serializeJson(doc, out);

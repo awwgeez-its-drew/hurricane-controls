@@ -70,39 +70,50 @@ static const char LOGIN_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
-:root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
+:root{--bg:#0A0E13;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;--text:#E7ECF3;--soft:#C9D4E3;
+      --muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--green:#4ADE80;--red:#F87171;
+      --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:#eaeaea;
-     font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-     display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
-.card{position:relative;background:var(--surface);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:340px;
-      text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-.back-btn{position:absolute;top:14px;left:14px;color:var(--cyan);display:inline-flex;text-decoration:none}
-h1{font-size:1.4rem;color:var(--cyan);letter-spacing:1px;margin-bottom:4px}
-.sub{color:#9aa3af;font-size:.85rem;margin-bottom:28px}
-input{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
-      border-radius:var(--radius);padding:13px 16px;font-size:1rem;margin-bottom:12px;font-family:inherit}
-input:focus{outline:none;border-color:var(--cyan)}
-button{width:100%;padding:14px;background:var(--green);color:#04220f;border:none;
-       border-radius:var(--radius);font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:1px;
-       font-family:inherit}
-button:active{opacity:.8}
-.err{color:#f87171;font-size:.85rem;margin-top:10px;min-height:1.1em}
-.login-hero{width:120px;height:auto;display:block;margin:0 auto 12px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);
+     display:flex;align-items:center;justify-content:center;min-height:100vh;padding:32px 16px}
+.wrap{width:100%;max-width:380px;display:flex;flex-direction:column;gap:20px}
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:36px 28px 30px;
+      display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
+.back-btn{position:absolute;top:14px;left:14px;width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
+          border-radius:10px;border:1px solid #222D3D;background:var(--inset);color:var(--soft);text-decoration:none}
+.back-btn:hover{background:#172030;color:#fff}
+.login-hero{width:130px;height:auto;display:block;margin-bottom:-6px}
+h1{font-size:24px;font-weight:700;letter-spacing:.01em}
+.sub{color:var(--muted);font-size:14px;margin-top:6px}
+form{width:100%;display:flex;flex-direction:column;gap:12px;text-align:left}
+label{font-size:13px;font-weight:600;color:var(--soft)}
+input{width:100%;min-height:50px;padding:0 16px;border-radius:12px;border:1px solid var(--line2);background:var(--inset);
+      color:var(--text);font-family:var(--sans);font-size:16px}
+input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.2)}
+input::placeholder{color:var(--faint)}
+button{min-height:52px;border:0;border-radius:12px;background:var(--green);color:#052E16;font-family:var(--sans);
+       font-size:15px;font-weight:700;letter-spacing:.1em;cursor:pointer;margin-top:4px}
+button:active{opacity:.85}
+.err{color:var(--red);font-size:13px;min-height:18px;text-align:center}
+.foot{text-align:center;font-size:12px;color:var(--faint)}
 </style></head><body>
+<div class="wrap">
 <div class="card">
-  <a href="/" class="back-btn" title="Back to Dashboard">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  <a href="/" class="back-btn" title="Back to Dashboard" aria-label="Back to dashboard">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
   </a>
   <img class="login-hero" src="/dashboard-hero.png" alt="">
-  <h1>Weather Watcher</h1>
-  <p class="sub">NWS Alert Monitor</p>
+  <div><h1>Weather Watcher</h1><p class="sub">NWS alert monitor</p></div>
   <form onsubmit="login(event)">
-    <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus>
+    <label for="pw">Password</label>
+    <input type="password" id="pw" placeholder="Enter the device password" autocomplete="current-password" autofocus>
     <button type="submit">UNLOCK</button>
+    <div class="err" id="err"></div>
   </form>
-  <div class="err" id="err"></div>
+</div>
+<p class="foot">The dashboard is public. Log in to change settings.</p>
 </div>
 <script>
 function login(e){
@@ -127,114 +138,137 @@ static const char DASHBOARD_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
-:root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
+:root{
+  --bg:#0A0E13;--bar:#0D1219;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;
+  --text:#E7ECF3;--soft:#C9D4E3;--muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--green:#4ADE80;--red:#F87171;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg)}
-body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh}
-.mono{font-family:ui-monospace,"SF Mono","Cascadia Code","Courier New",monospace}
-.navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
-        border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
-        padding:0 16px;z-index:20}
-.navicons{display:flex;gap:14px;align-items:center}
-.ww-hero{display:block;width:180px;max-width:60%;height:auto;margin:6px auto 0}
-.ww-hero-title{text-align:center;margin-bottom:18px}
-.ww-hero-title a{color:var(--cyan);text-decoration:none;font-size:1.3rem;font-weight:700;letter-spacing:.5px}
-.ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
-.content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
-.card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
-      box-shadow:0 1px 3px rgba(0,0,0,.35)}
-h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af;margin-bottom:12px}
-.hint{font-size:.78rem;color:#9aa3af}
-.status-row{display:flex;align-items:center;cursor:pointer;padding:8px 0}
-.dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:10px;background:#3a3f4a;flex-shrink:0}
-.dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
-.dot.red{background:#f87171;box-shadow:0 0 6px #f87171}
-.status-label{font-size:.92rem}
-.status-detail{display:none;font-size:.8rem;color:#9aa3af;padding:2px 0 10px 22px;line-height:1.4}
-.status-detail.show{display:block}
-.statline{text-align:center;font-size:.78rem;color:#9aa3af;padding-top:10px;border-top:1px solid #1a2a3a;margin-top:6px}
-.clock{text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:2px;margin:6px 0 2px;
-       font-family:'Roboto',Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
-.ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
-     background:var(--surface);border-radius:var(--radius)}
-.ver a{color:inherit;text-decoration:none}
-.no-alerts{display:flex;align-items:center;justify-content:center;gap:8px;border:2px solid var(--green);
-    border-radius:4px;padding:16px;color:var(--green);font-weight:700;font-size:.9rem}
-.alert-item{display:block;padding:12px 14px;border-radius:4px;margin-bottom:8px;text-decoration:none;color:#fff}
-.alert-purple{background:#6b21a8}
-.alert-red{background:#7f1d1d}
-.alert-orange{background:#92400e}
-.alert-head{font-weight:700;font-size:.9rem;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
-.alert-tag{background:rgba(0,0,0,.35);padding:2px 7px;border-radius:3px;font-size:.65rem;letter-spacing:.5px}
-.alert-sub{font-size:.78rem;opacity:.9;margin-top:4px}
-.alert-actions{display:flex;align-items:center;gap:10px;margin-top:8px}
-.alert-link{color:#fff;opacity:.85;font-size:.72rem;text-decoration:underline}
-.alert-mapbtn{background:rgba(0,0,0,.3);color:#fff;border:none;border-radius:3px;padding:4px 10px;
-              font-size:.72rem;cursor:pointer;font-family:inherit}
-.alert-map{display:none;margin-top:10px}
+body{color:var(--text);font-family:var(--sans);min-height:100vh}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);line-height:1.5}
+.top{position:sticky;top:0;z-index:20;background:var(--bar);border-bottom:1px solid var(--line)}
+.topin{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;color:var(--text);text-decoration:none;min-width:0}
+.tile{width:40px;height:40px;border-radius:10px;background:#172030;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.tile img{width:34px;height:34px;display:block}
+.bt{display:flex;flex-direction:column;gap:2px}.bt b{font-size:17px}
+.ibtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;
+      border:1px solid #222D3D;background:var(--panel);color:var(--soft);text-decoration:none;flex-shrink:0}
+.ibtn:hover{background:#172030;color:#fff}
+main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.colL{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.colR{flex:2 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+.clockp{padding:24px;display:flex;flex-direction:column;gap:8px;text-align:center}
+.clock{font-family:var(--mono);font-size:56px;font-weight:500;letter-spacing:.03em;line-height:1.05;font-variant-numeric:tabular-nums}
+.clockmeta{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.statusp{padding:8px 22px 12px}
+.shead{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+.srow{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0;background:#3A4554}
+.dot.green{background:var(--green);box-shadow:0 0 0 4px rgba(74,222,128,.14)}
+.dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(248,113,113,.16)}
+.sbody{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.slabel{font-weight:600}
+.status-detail{font-size:13px;color:var(--muted);line-height:1.45;word-break:break-word}
+.sbtn{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--line2);background:#172030;color:var(--text);
+      font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
+.sbtn:hover{background:#1D2838}
+.statline{padding:14px 0 4px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--muted)}
+.card{padding:22px;display:flex;flex-direction:column;gap:14px}
+.chead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.no-alerts{display:flex;align-items:center;gap:14px;padding:22px;border-radius:12px;background:#0F2418;border:1px solid #1F5236}
+.no-alerts b{color:#BBF7D0;display:block}
+.no-alerts span{font-size:14px;color:#86C9A0}
+.alert-item{border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;color:#fff;margin-bottom:10px}
+.alert-item:last-child{margin-bottom:0}
+.alert-purple{background:#5B1F8F}.alert-red{background:#7F1D1D}.alert-orange{background:#8A3B0B}
+.alert-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.alert-title{flex:1;min-width:160px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.alert-title b{font-size:18px}
+.alert-dmg{font-size:11px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.75)}
+.alert-tag{font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.35);white-space:nowrap}
+.alert-sub{font-size:14px;line-height:1.5;opacity:.92}
+.alert-actions{display:flex;gap:8px;flex-wrap:wrap}
+.abtn{min-height:36px;padding:0 12px;border-radius:8px;border:0;background:rgba(0,0,0,.32);color:#fff;font-family:var(--sans);
+      font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.abtn:hover{background:rgba(0,0,0,.45);color:#fff}
+.alert-map{display:none}
 .alert-map.show{display:block}
-.recent-item{padding:8px 0;border-top:1px solid #1a2a3a;font-size:.85rem}
-.recent-item:first-child{border-top:none}
-.recent-time{color:#9aa3af;font-size:.75rem}
+.alert-map .hint{color:#FFE4E4}
+.rtw{overflow-x:auto}
+.rt{display:grid;grid-template-columns:minmax(200px,2fr) minmax(90px,.8fr) minmax(150px,1.2fr) minmax(150px,1fr);min-width:600px;font-size:14px}
+.rt>span{padding:12px 8px 12px 0;border-top:1px solid var(--line)}
+.rt>.eyebrow{border-top:0;padding:6px 0 10px}
+.rt .ev{display:flex;flex-direction:column;gap:2px}
+.rt .vk{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.rt .tm{font-family:var(--mono);font-size:13px;color:var(--soft)}
+.disp{font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.d-ok{background:#14301F;color:#86EFAC}.d-info{background:#1C2430;color:var(--soft)}
+.d-warn{background:#2E2A0C;color:#FDE68A}.d-bad{background:#34131A;color:#FCA5A5}
+.foot{width:100%;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;padding:4px 4px 24px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.foot a{color:var(--muted)}
+@media (max-width:560px){.clock{font-size:44px}.card,.clockp{padding:18px}.statusp{padding:6px 18px 10px}}
 </style></head>
 <body>
-<div class="navbar" style="justify-content:flex-end">
-  <div class="navicons">
-    <a href="/settings" class="ibtn" title="Settings">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </a>
-  </div>
+<header class="top"><div class="topin">
+  <a class="brand" href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">
+    <span class="tile"><img src="/icon-192.png" alt=""></span>
+    <span class="bt"><b>Weather Watcher</b><span class="eyebrow" style="font-size:10px">NWS alert monitor</span></span>
+  </a>
+  <a href="/settings" class="ibtn" title="Settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </a>
+</div></header>
+
+<main>
+<div class="colL">
+  <section class="panel clockp" aria-label="Clock">
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="clockmeta">Watcher <span id="tempF">&mdash;</span>&deg;F &middot; Uptime <span id="uptime">&mdash;</span></span>
+  </section>
+
+  <section class="panel statusp" aria-label="System status">
+    <div class="shead"><span class="eyebrow">System status</span><span class="hint" style="font-size:12px">Live</span></div>
+    <div class="srow"><span class="dot" id="wifiDot"></span><div class="sbody"><span class="slabel">Wi-Fi</span><span class="status-detail" id="wifiDetail"></span></div></div>
+    <div class="srow"><span class="dot" id="apiDot"></span><div class="sbody"><span class="slabel">NWS API</span><span class="status-detail" id="apiDetail"></span></div></div>
+    <div class="srow"><span class="dot" id="linkDot"></span><div class="sbody"><span class="slabel">Controller link</span><span class="status-detail" id="linkDetail"></span></div>
+      <button class="sbtn" onclick="testLink()">Test link</button></div>
+    <div class="srow"><span class="dot" id="staleDot"></span><div class="sbody"><span class="slabel">Alert data freshness</span><span class="status-detail" id="staleDetail"></span></div></div>
+    <div class="statline" id="lastPoll">Last polling attempt: &mdash;</div>
+  </section>
 </div>
 
-<div class="content">
+<div class="colR">
+  <section class="panel card" aria-label="Current alerts">
+    <div class="chead"><span class="eyebrow">Current alerts</span><span class="hint" style="font-size:12px" id="alertCount"></span></div>
+    <div id="currentAlerts"><p class="hint">Loading&hellip;</p></div>
+  </section>
 
-<img class="ww-hero" src="/dashboard-hero.png" alt="Weather Watcher">
-<div class="ww-hero-title"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher</a></div>
-
-<div class="card">
-  <div class="status-row" onclick="toggleDetail('wifiDetail')">
-    <span class="dot" id="wifiDot"></span><span class="status-label">Wi-Fi</span>
-  </div>
-  <div class="status-detail" id="wifiDetail"></div>
-  <div class="status-row" onclick="toggleDetail('apiDetail')">
-    <span class="dot" id="apiDot"></span><span class="status-label">NWS API</span>
-  </div>
-  <div class="status-detail" id="apiDetail"></div>
-  <div class="status-row" onclick="testLink()">
-    <span class="dot" id="linkDot"></span><span class="status-label">Controller Link</span>
-  </div>
-  <div class="status-detail" id="linkDetail"></div>
-  <div class="status-row" onclick="toggleDetail('staleDetail')">
-    <span class="dot" id="staleDot"></span><span class="status-label">Alert Data Freshness</span>
-  </div>
-  <div class="status-detail" id="staleDetail"></div>
-  <div class="clock mono" id="clock">--:--:--</div>
-  <div class="mono" style="font-size:.72rem;color:#8892a0;text-align:center;margin-bottom:8px">Watcher <span id="tempF">—</span>&deg;F &nbsp;&bull;&nbsp; Uptime <span id="uptime">—</span></div>
-  <div class="statline" id="lastPoll">Last polling attempt: —</div>
+  <section class="panel card" aria-label="Recent alerts">
+    <div class="chead">
+      <div><span class="eyebrow">Recent alerts</span><p class="hint" style="margin-top:6px">The last 20 trigger attempts &mdash; activations, skips and failures alike.</p></div>
+      <a class="sbtn" href="/alertlog.csv">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</a>
+    </div>
+    <div class="rtw" id="recentAlerts"><p class="hint">None yet.</p></div>
+  </section>
 </div>
 
-<div class="card">
-  <h2>Current Alerts</h2>
-  <div id="currentAlerts"><p class="hint">Loading&hellip;</p></div>
-</div>
-
-<div class="card">
-  <h2>Recent Alerts</h2>
-  <p class="hint" style="margin-bottom:10px">Last 20 trigger-queue outcomes (siren activations and skipped/failed attempts alike). <a href="/alertlog.csv" style="color:var(--cyan)">Export full log (CSV)</a></p>
-  <div id="recentAlerts"><p class="hint">None yet.</p></div>
-</div>
-
-<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a></div>
-<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
-
-</div>
+<footer class="foot">
+  <a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a>
+  <a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a>
+</footer>
+</main>
 
 <script>
-function toggleDetail(id){document.getElementById(id).classList.toggle('show');}
-
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 
 let lastCurrentAlertsSig=null;
@@ -243,21 +277,24 @@ function renderCurrentAlerts(list){
   // rebuilding its innerHTML on every tick would collapse any expanded
   // polygon map (WP8) and re-trigger its fetch — skip the rebuild unless
   // the list actually changed.
-  const sig=JSON.stringify((list||[]).map(a=>[a.id,a.triggered]));
+  const sig=JSON.stringify((list||[]).map(a=>[a.id,a.triggered,a.tag,a.mode]));
   if(sig===lastCurrentAlertsSig)return;
   lastCurrentAlertsSig=sig;
   const el=document.getElementById('currentAlerts');
+  document.getElementById('alertCount').textContent=(list&&list.length)?list.length+' active':'None';
   if(!list||!list.length){
-    el.innerHTML='<div class="no-alerts"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> No active alerts for your location</div>';
+    el.innerHTML='<div class="no-alerts"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#4ADE80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><b>All clear</b><span>No active alerts for your location.</span></div></div>';
     return;
   }
   el.innerHTML=list.map((a,i)=>
-    '<div class="alert-item alert-'+a.color+'">'+
-      '<div class="alert-head">'+esc(a.event)+(a.triggered?' <span class="alert-tag">SIREN ACTIVATED</span>':'')+'</div>'+
+    '<div class="alert-item alert-'+esc(a.color)+'">'+
+      '<div class="alert-head"><span class="alert-title"><b>'+esc(a.event)+'</b>'+
+        (a.tag?'<span class="alert-dmg">'+esc(a.tag)+'</span>':'')+'</span>'+
+        (a.triggered?'<span class="alert-tag">SIREN ACTIVATED'+(a.mode?' &mdash; '+esc(a.mode):'')+'</span>':'')+'</div>'+
       '<div class="alert-sub">'+esc(a.headline)+'</div>'+
       '<div class="alert-actions">'+
-        '<a href="'+esc(a.id)+'" target="_blank" rel="noopener" class="alert-link">View on NWS &#8599;</a>'+
-        '<button class="alert-mapbtn" onclick="toggleAlertMap(this,'+i+')">Show map</button>'+
+        '<a href="'+esc(a.id)+'" target="_blank" rel="noopener" class="abtn">View on NWS &#8599;</a>'+
+        '<button class="abtn" onclick="toggleAlertMap(this,'+i+')" aria-expanded="false">Show map</button>'+
       '</div>'+
       '<div class="alert-map" id="amap'+i+'" data-url="'+esc(a.id)+'"></div>'+
     '</div>'
@@ -272,8 +309,8 @@ function renderCurrentAlerts(list){
 // separately and only rendered for logged-in sessions (Decision C).
 async function toggleAlertMap(btn,i){
   const box=document.getElementById('amap'+i);
-  if(box.classList.contains('show')){box.classList.remove('show');btn.textContent='Show map';return;}
-  box.classList.add('show');btn.textContent='Hide map';
+  if(box.classList.contains('show')){box.classList.remove('show');btn.textContent='Show map';btn.setAttribute('aria-expanded','false');return;}
+  box.classList.add('show');btn.textContent='Hide map';btn.setAttribute('aria-expanded','true');
   if(box.dataset.loaded)return;
   box.dataset.loaded='1';
   box.innerHTML='<p class="hint">Loading map&hellip;</p>';
@@ -309,7 +346,7 @@ function renderPolygonSvg(geom,loc){
   const cosLat=Math.max(0.15,Math.cos(refLat*Math.PI/180));
   const padLon=(maxLon-minLon)*0.12||0.05, padLat=(maxLat-minLat)*0.12||0.05;
   minLon-=padLon;maxLon+=padLon;minLat-=padLat;maxLat+=padLat;
-  const W=320,H=220;
+  const W=320,H=180;
   const sx=lon=>((lon-minLon)*cosLat)/((maxLon-minLon)*cosLat||1)*W;
   const sy=lat=>H-((lat-minLat)/((maxLat-minLat)||1))*H;
   const paths=polys.map(rings=>rings.map(ring=>
@@ -317,28 +354,31 @@ function renderPolygonSvg(geom,loc){
   ).join(' ')).join(' ');
   let dot='';
   if(loc&&loc.lat){
-    dot='<circle cx="'+sx(loc.lon).toFixed(1)+'" cy="'+sy(loc.lat).toFixed(1)+'" r="5" fill="#00d4ff" stroke="#fff" stroke-width="1.5"/>';
+    dot='<circle cx="'+sx(loc.lon).toFixed(1)+'" cy="'+sy(loc.lat).toFixed(1)+'" r="6" fill="#38BDF8" stroke="#fff" stroke-width="2"/>';
   }
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="display:block;width:100%;height:auto;background:#0a0e18;border-radius:4px">'+
-    '<path d="'+paths+'" fill="rgba(239,68,68,.35)" stroke="#f87171" stroke-width="1.5"/>'+
+  return '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Warning area map" style="display:block;width:100%;height:auto;background:#0A0E18;border-radius:10px">'+
+    '<path d="M0 45h320M0 90h320M0 135h320M80 0v180M160 0v180M240 0v180" stroke="#1A2433" stroke-width="1"/>'+
+    '<path d="'+paths+'" fill="rgba(239,68,68,.32)" stroke="#F87171" stroke-width="2"/>'+
     dot+
-    '</svg>'+(loc&&loc.lat?'':'<p class="hint" style="margin-top:4px">Log in to see your exact location on the map.</p>');
+    '</svg>'+(loc&&loc.lat?'<p class="hint" style="margin-top:6px">Shaded: warning area &middot; Blue dot: this device</p>':'<p class="hint" style="margin-top:6px">Log in to see your exact location on the map.</p>');
 }
 
-function dispColor(d){
-  if(d==='TRIGGERED'||d==='RETRIED_TRIGGERED') return '#4ade80';
-  if(d==='NOTIFY_ONLY'||d==='ALREADY_ACTIVE') return '#9aa3af';
-  if(d==='AUTO_OFF'||d==='BADCMD') return '#facc15';
-  return '#f87171'; // NO_RESPONSE / GAVE_UP_* / anything else — a real miss
+function dispClass(d){
+  if(d==='TRIGGERED'||d==='RETRIED_TRIGGERED') return 'd-ok';
+  if(d==='NOTIFY_ONLY'||d==='ALREADY_ACTIVE') return 'd-info';
+  if(d==='AUTO_OFF'||d==='BADCMD') return 'd-warn';
+  return 'd-bad'; // NO_RESPONSE / GAVE_UP_* / anything else — a real miss
 }
 function renderRecentAlerts(list){
   const el=document.getElementById('recentAlerts');
   if(!list||!list.length){el.innerHTML='<p class="hint">None yet.</p>';return;}
-  el.innerHTML=list.map(r=>
-    '<div class="recent-item"><b>'+esc(r.event)+'</b> &rarr; '+esc(r.mode)+
-    ' <span style="color:'+dispColor(r.disposition)+';font-weight:600">'+esc(r.disposition)+'</span>'+
-    '<div class="recent-time">'+esc(r.time)+(r.vtecKey?' &middot; '+esc(r.vtecKey):'')+'</div></div>'
-  ).join('');
+  el.innerHTML='<div class="rt"><span class="eyebrow">Alert</span><span class="eyebrow">Mode</span><span class="eyebrow">Outcome</span><span class="eyebrow">Time</span>'+
+    list.map(r=>
+      '<span class="ev"><b>'+esc(r.event)+'</b>'+(r.vtecKey?'<span class="vk">'+esc(r.vtecKey)+'</span>':'')+'</span>'+
+      '<span>'+esc(r.mode)+'</span>'+
+      '<span><span class="disp '+dispClass(r.disposition)+'">'+esc(r.disposition)+'</span></span>'+
+      '<span class="tm">'+esc(r.time)+'</span>'
+    ).join('')+'</div>';
 }
 
 function fmtUp(s){
@@ -348,10 +388,10 @@ function fmtUp(s){
 }
 
 function testLink(){
-  toggleDetail('linkDetail');
   fetch('/test-link',{method:'POST'});
 }
 
+let lastRecentSig=null;
 function refresh(){
   fetch('/status-data').then(r=>r.json()).then(d=>{
     document.getElementById('wifiDot').className='dot '+(d.wifiConnected?'green':'red');
@@ -369,7 +409,8 @@ function refresh(){
     if(d.uptime!=null)document.getElementById('uptime').textContent=fmtUp(d.uptime);
     document.getElementById('lastPoll').textContent='Last polling attempt: '+d.lastPoll;
     renderCurrentAlerts(d.currentAlerts);
-    renderRecentAlerts(d.recentAlerts);
+    const rs=JSON.stringify(d.recentAlerts||[]);
+    if(rs!==lastRecentSig){lastRecentSig=rs;renderRecentAlerts(d.recentAlerts);}
     if(d.fwVersion)document.getElementById('verNum').textContent=d.fwVersion;
   }).catch(()=>{});
 }
@@ -387,268 +428,309 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawliteral(
 <link rel="icon" href="/favicon.ico">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
-:root{--bg:#848482;--surface:#0e1320;--cyan:#00d4ff;--green:#4ade80;--radius:4px}
+:root{
+  --bg:#0A0E13;--bar:#0D1219;--panel:#111821;--inset:#0B1017;--line:#1E2836;--line2:#2A3646;
+  --text:#E7ECF3;--soft:#C9D4E3;--muted:#93A1B5;--faint:#7D8BA0;--accent:#38BDF8;--accent2:#0EA5E9;--green:#4ADE80;--red:#F87171;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg)}
-body{color:#eaeaea;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh}
-.mono{font-family:ui-monospace,"SF Mono","Cascadia Code","Courier New",monospace}
-.navbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--surface);
-        border-bottom:1px solid #1b2438;display:flex;align-items:center;justify-content:space-between;
-        padding:0 16px;z-index:20}
-.navbar h1{font-size:1.05rem;color:var(--cyan)}
-.navbar .brand{display:flex;flex-direction:column;justify-content:center;overflow:hidden}
-.navbar .subtitle{font-size:.62rem;color:#8892a0;letter-spacing:1px}
-.ibtn{background:none;border:none;cursor:pointer;color:var(--cyan);padding:2px;line-height:0;display:inline-flex}
-.content{max-width:480px;margin:0 auto;padding:76px 16px 40px}
-.card{background:var(--surface);border-radius:var(--radius);padding:20px;margin-bottom:14px;
-      box-shadow:0 1px 3px rgba(0,0,0,.35)}
-h2{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#9aa3af}
-.card-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:12px}
-.card-head h2{margin-bottom:0}
-.chevron{color:#9aa3af;flex-shrink:0;transition:transform .15s}
-.card.expanded .chevron{transform:rotate(180deg)}
-.card-body{display:none;margin-top:14px}
-.card.expanded .card-body{display:block}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
-.row{margin-bottom:10px}
-.hint{font-size:.78rem;color:#9aa3af;margin-bottom:12px}
-.hint code{font-family:ui-monospace,"SF Mono","Cascadia Code","Courier New",monospace;background:#0a0e18;padding:1px 4px;border-radius:3px}
-label{font-size:.78rem;color:#9aa3af;display:block;margin-bottom:3px}
-input,select{width:100%;background:#0a0e18;color:#eaeaea;border:1px solid #2d2d4e;
-      border-radius:var(--radius);padding:9px 11px;font-size:.9rem;font-family:inherit}
-input:focus,select:focus{outline:none;border-color:var(--cyan)}
-input[type=checkbox]{width:20px;height:20px;accent-color:var(--cyan);cursor:pointer;flex-shrink:0}
-.trow{display:flex;align-items:center;justify-content:space-between;padding:8px 0;
-      border-top:1px solid #1a2a3a;margin-top:10px}
-.trow label:first-child{font-size:.85rem;color:#eaeaea}
-.btn{width:100%;margin-top:12px;padding:12px;font-weight:700;border:none;
-     border-radius:var(--radius);cursor:pointer;font-size:.95rem;letter-spacing:.5px;font-family:inherit}
-.btn:active{opacity:.8}
-.save{background:var(--green);color:#04220f}
-.danger{background:#7f1d1d;color:#fff;margin-top:6px}
-.logout{background:#1b2438;color:#9aa3af;margin-top:6px}
-.msg{font-size:.8rem;margin-top:6px;min-height:1.1em;text-align:center}
-.ok{color:var(--green)}.er{color:#f87171}
-.ws{font-size:.8rem;padding:9px 12px;background:#0a0e18;border-radius:var(--radius);
-    margin-bottom:12px;color:#9aa3af;border-left:3px solid transparent}
-.ws.ok{color:var(--green);border-left-color:var(--green)}
-.ver{text-align:center;color:#c9cdd3;font-size:.72rem;margin:6px 0 4px;padding:8px;
-     background:var(--surface);border-radius:var(--radius)}
-.ver a{color:inherit;text-decoration:none}
-.overlay{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:50}
-.mbox{background:var(--surface);border-radius:var(--radius);padding:28px 24px;text-align:center;
-      max-width:280px;width:calc(100% - 32px)}
-.mbox p{margin-bottom:20px;font-size:1rem}
+body{color:var(--text);font-family:var(--sans);min-height:100vh}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.top{position:sticky;top:0;z-index:20;background:var(--bar);border-bottom:1px solid var(--line)}
+.topin{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:14px}
+.bt{display:flex;flex-direction:column;gap:2px}.bt b{font-size:17px}
+.ibtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;
+      border:1px solid #222D3D;background:var(--panel);color:var(--soft);cursor:pointer;text-decoration:none;padding:0}
+.ibtn:hover{background:#172030;color:#fff}
+.layout{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.side{flex:1 1 200px;max-width:240px;display:flex;flex-direction:column;gap:2px;position:sticky;top:88px}
+.side .eyebrow{padding:16px 12px 8px}.side .eyebrow:first-child{padding-top:0}
+.side a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:8px;color:var(--soft);text-decoration:none;font-size:14px}
+.side a:hover{background:#151D29;color:#fff}
+.content{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:18px;scroll-margin-top:88px}
+h2{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.desc{margin-top:4px;font-size:14px;color:var(--muted);line-height:1.55}
+.hint{font-size:13px;color:var(--muted);line-height:1.5}
+label{display:block;font-size:13px;font-weight:600;color:var(--soft);margin-bottom:6px}
+input,select{width:100%;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line2);background:var(--inset);
+      color:var(--text);font-family:var(--sans);font-size:15px}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.2)}
+input::placeholder{color:var(--faint)}
+input[type=number]{font-family:var(--mono)}
+code{font-family:var(--mono);font-size:.92em;background:var(--inset);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.inl{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}.inl>div{flex:1 1 260px}
+.sub{padding-top:18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{min-height:44px;padding:0 18px;border-radius:10px;border:0;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer}
+.save{background:var(--accent2);color:#04131D}.save:hover{background:var(--accent)}
+.logout{background:#172030;color:var(--text);border:1px solid var(--line2);font-weight:600}.logout:hover{background:#1D2838}
+.danger{background:transparent;color:#FCA5A5;border:1px solid #7A2531;font-weight:600}.danger:hover{background:#22111A}
+.msg{font-size:13px;min-height:1.1em}
+.ok{color:var(--green)}.er{color:var(--red)}
+.ws{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;background:var(--inset);border:1px solid var(--line);font-size:14px;color:var(--muted)}
+.ws.ok{color:#86EFAC;border-color:#1F5236}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.trow label{margin:0;font-size:14px;font-weight:400;color:var(--text);line-height:1.45}
+/* Switches */
+.trow input[type=checkbox],.mx input[type=checkbox]{appearance:none;-webkit-appearance:none;width:46px;min-height:0;height:28px;padding:0;border:0;
+      border-radius:999px;background:#263142;position:relative;cursor:pointer;flex-shrink:0;transition:background .15s}
+.trow input[type=checkbox]::after,.mx input[type=checkbox]::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:left .15s}
+.trow input[type=checkbox]:checked,.mx input[type=checkbox]:checked{background:var(--accent2)}
+.trow input[type=checkbox]:checked::after,.mx input[type=checkbox]:checked::after{left:22px;background:#fff}
+input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
+/* Alert-response matrix */
+.mxw{overflow-x:auto}
+.mx{min-width:640px;display:flex;flex-direction:column}
+.mrow{display:grid;grid-template-columns:minmax(200px,1fr) auto 76px;gap:16px;padding:14px 0;border-top:1px solid var(--line);align-items:center}
+.mrow.h{border-top:0;padding:0 0 10px;align-items:end}
+.mname{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.mname .sw{width:10px;height:10px;border-radius:3px;margin-top:5px;flex-shrink:0}
+.mname b{display:block;font-size:14px}.mname span{font-size:12px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:var(--inset)}
+.seg input{position:absolute;opacity:0;width:1px;height:1px;min-height:0;padding:0}
+.seg label{margin:0;min-height:38px;min-width:64px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;
+           font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted);cursor:pointer}
+.seg label:hover{color:#fff}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
+.seg input:checked+label{color:#fff;background:#263142}
+.seg input:checked+label[data-v=WAIL]{background:#1D4ED8}
+.seg input:checked+label[data-v=ATTACK]{background:#B91C1C}
+.seg input:checked+label[data-v=FASTWAIL]{background:#A84A0A}
+.mpush{display:flex;justify-content:center}
+/* Other-extreme chips */
+.chklist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.chkrow{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:10px;border:1px solid #222D3D;background:var(--inset)}
+.chkrow input{width:18px;height:18px;min-height:0;padding:0;accent-color:var(--accent2);flex-shrink:0;cursor:pointer}
+.chkrow label{margin:0;font-size:14px;font-weight:400;color:var(--text);cursor:pointer;flex:1;line-height:44px}
+.fw{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:18px;border:1px dashed #2F3D52;border-radius:12px;background:var(--inset)}
+.fw input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.fw label{margin:0;display:inline-flex;align-items:center}
+#fwName{flex:1;min-width:160px;font-size:14px;color:var(--muted)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;padding:8px 4px 24px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.foot a{color:var(--muted)}
+.overlay{position:fixed;inset:0;background:rgba(4,6,10,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.mbox{width:100%;max-width:360px;padding:24px;display:flex;flex-direction:column;gap:18px;background:#131B26;border:1px solid var(--line);border-radius:16px}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.mok{padding:12px;background:#7f1d1d;color:#fff;border:none;border-radius:var(--radius);
-     font-weight:700;cursor:pointer;font-family:inherit}
-.mcancel{padding:12px;background:#1b2438;color:#9aa3af;border:none;border-radius:var(--radius);
-         font-weight:700;cursor:pointer;font-family:inherit}
-.chklist{max-height:260px;overflow-y:auto;margin:10px 0;border:1px solid #1a2a3a;border-radius:var(--radius);padding:4px 10px}
-.chkrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #1a2a3a}
-.chkrow:first-child{border-top:none}
-.chkrow label{font-size:.85rem;color:#eaeaea;margin:0}
-.chkrow input[type=checkbox]{width:18px;height:18px}
+.mok,.mcancel{min-height:46px;border-radius:10px;font-weight:700;font-family:var(--sans);cursor:pointer;font-size:14px}
+.mok{border:0;background:#B91C1C;color:#fff}
+.mcancel{border:1px solid var(--line2);background:#172030;color:var(--text)}
+@media (max-width:800px){
+  .side{position:static;max-width:none;flex-basis:100%;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px}
+  .side .eyebrow{display:none}
+  .side a{white-space:nowrap;border:1px solid var(--line);background:var(--panel);min-height:36px;font-size:13px}
+}
+@media (max-width:560px){.g2,.g3{grid-template-columns:1fr}.card{padding:18px}}
 </style></head>
 <body>
-<div class="navbar">
-  <a href="/" class="ibtn" title="Back">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-  </a>
-  <div class="brand"><span class="subtitle">WEATHER WATCHER</span><h1>Settings</h1></div>
-  <button class="ibtn" onclick="showRestart()" title="Restart">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+<header class="top"><div class="topin">
+  <div class="brand">
+    <a href="/" class="ibtn" title="Back" aria-label="Back to dashboard">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    </a>
+    <div class="bt"><span class="eyebrow" style="font-size:10px">Weather Watcher</span><b>Settings</b></div>
+  </div>
+  <button class="ibtn" onclick="showRestart()" title="Restart" aria-label="Restart Weather Watcher">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
   </button>
-</div>
+</div></header>
 
-<div class="content">
+<div class="layout">
+<nav class="side" aria-label="Settings sections">
+  <span class="eyebrow">Alerts</span>
+  <a href="#location">Location &amp; polling</a>
+  <a href="#response">Alert response</a>
+  <a href="#extreme">Other extreme types</a>
+  <a href="#ntfy">Push notifications</a>
+  <span class="eyebrow">Device</span>
+  <a href="#network">Wi-Fi &amp; network</a>
+  <a href="#security">Security</a>
+  <a href="#time">Time</a>
+  <a href="#firmware">Firmware</a>
+</nav>
 
-<!-- WiFi -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Wi-Fi</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div id="ws" class="ws">Checking&hellip;</div>
-  <div class="row"><label>Device Hostname</label><input type="text" id="wHost" placeholder="weather-watcher" maxlength="32"></div>
-  <p class="hint">Letters, numbers, and hyphens only. Sets both the name your router shows for this device and its <code>http://&lt;hostname&gt;.local</code> address. Takes effect after a restart.</p>
-  <button class="btn save" onclick="saveHostname()">Save Hostname</button>
-  <div class="msg" id="hm"></div>
-  <div class="row" style="margin-top:14px"><label>Access Point Password</label><input type="password" id="apPw" placeholder="New AP password (8-63 characters)" autocomplete="new-password"></div>
-  <p class="hint" id="apHint">Needed to join the &quot;WeatherWatcher&quot; network this board broadcasts when it isn't on your home Wi-Fi. Takes effect after a restart.</p>
-  <button class="btn save" onclick="saveApPw()">Save AP Password</button>
-  <div class="msg" id="apm"></div>
-  <div class="row" style="margin-top:14px"><label>Network SSID</label><input type="text" id="wSSID" placeholder="Your WiFi name"></div>
-  <div class="row"><label>Password</label><input type="password" id="wPass" placeholder="WiFi password"></div>
-  <button class="btn save" onclick="saveWifi()">Connect to Network</button>
-  <button class="btn danger" onclick="clearWifi()">Use AP Mode Only</button>
-  <div class="msg" id="wm"></div>
+<main class="content">
+
+<section class="card" id="location">
+  <div><h2>Location &amp; polling</h2><p class="desc">Point coordinates, not a county or ZIP &mdash; so a storm-based warning polygon is matched against your exact spot instead of the whole county.</p></div>
+  <div class="g2">
+    <div><label for="lat">Latitude</label><input type="text" id="lat" class="mono" placeholder="e.g. 35.4676"></div>
+    <div><label for="lon">Longitude</label><input type="text" id="lon" class="mono" placeholder="e.g. -97.5164"></div>
+    <div><label for="pollSec">Poll every (seconds)</label><input type="number" id="pollSec" min="30" step="1"></div>
+    <div><label for="uaContact">Contact for the NWS User-Agent</label><input type="text" id="uaContact" placeholder="e.g. you@example.com"><p class="hint" style="margin-top:6px">Required by api.weather.gov.</p></div>
   </div>
-</div>
-
-<!-- Security -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Security</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <div class="row"><label>New Password</label><input type="password" id="p1" placeholder="New password"></div>
-  <div class="row"><label>Confirm Password</label><input type="password" id="p2" placeholder="Confirm"></div>
-  <button class="btn save" onclick="savePw()">Change Password</button>
-  <button class="btn logout" onclick="logout()">Log Out</button>
-  <div class="msg" id="pm"></div>
-  </div>
-</div>
-
-<!-- Alert Location -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Alert Location</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Point coordinates, not a county/zip — this is what lets a storm-based warning polygon be matched precisely instead of your whole county.</p>
-  <div class="grid2">
-    <div><label>Latitude</label><input type="text" id="lat" placeholder="e.g. 35.4676"></div>
-    <div><label>Longitude</label><input type="text" id="lon" placeholder="e.g. -97.5164"></div>
-  </div>
-  <div class="row"><label>Poll interval (seconds)</label><input type="number" id="pollSec" min="30" step="1"></div>
-  <div class="row"><label>User-Agent contact (required by the NWS API)</label>
-    <input type="text" id="uaContact" placeholder="e.g. you@example.com"></div>
-  <button class="btn save" onclick="saveLocation()">Save Alert Settings</button>
+  <div class="actions"><button class="btn save" onclick="saveLocation()">Save location</button></div>
   <div class="msg" id="xm"></div>
-  </div>
-</div>
+</section>
 
-<!-- Trigger Modes -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Trigger Modes</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Which Hurricane Controls run mode to request for each qualifying alert category. Sent as "WX &lt;MODE&gt;" over the dedicated UART link. OFF means the alert still shows on the Dashboard but never triggers the siren.</p>
-  <div class="row"><label>Tornado Warning — unconfirmed</label>
-    <select id="torUcMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="row"><label>Tornado Warning — confirmed (observed or damage-tagged)</label>
-    <select id="torCfMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="row"><label>Tornado Emergency (catastrophic damage threat)</label>
-    <select id="torEmMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="row"><label>Severe T-storm Warning — base (no damage tag)</label>
-    <select id="svrBaMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="row"><label>Severe T-storm Warning — considerable damage threat</label>
-    <select id="svrCoMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="row"><label>Severe T-storm Warning — destructive damage threat</label>
-    <select id="svrDeMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
-  <div class="trow">
-    <label for="repeatUpg">Re-trigger if an already-triggered alert escalates further</label>
-    <input type="checkbox" id="repeatUpg" onchange="saveModes()">
-  </div>
-  <button class="btn save" onclick="saveModes()">Save Trigger Modes</button>
+<section class="card" id="response">
+  <div><h2>Alert response</h2><p class="desc">For each kind of warning: which Hurricane Controls run mode to request (sent as <code>WX &lt;MODE&gt;</code> over the UART link), and whether to send a push notification. OFF still shows the alert on the dashboard &mdash; it just never sounds the siren.</p></div>
+  <div class="mxw"><div class="mx" id="matrix">
+    <div class="mrow h"><span class="eyebrow">Warning</span><span class="eyebrow">Siren mode</span><span class="eyebrow" style="text-align:center">Push</span></div>
+  </div></div>
+  <div class="trow"><label for="repeatUpg">Re-trigger if an alert that already sounded the siren escalates further</label><input type="checkbox" id="repeatUpg" onchange="saveModes()"></div>
+  <div class="actions"><button class="btn save" onclick="saveResponse()">Save alert response</button></div>
   <div class="msg" id="mm"></div>
+</section>
 
-  <p class="hint" style="margin-top:18px;border-top:1px solid #1a2a3a;padding-top:14px">
-    <b style="color:#eaeaea">Other Extreme Emergency</b> &mdash; any alert marked Extreme severity, Immediate urgency, and Observed certainty (NWS's own "this is happening right now, as serious as it gets" markers) that isn't a Tornado or Severe T-storm Warning. These don't carry a dedicated damage tag, so each specific warning type below must be checked on to ever trigger — unchecked types never will, no matter how severe, so e.g. a Flood Warning can stay off if it's not a risk for your location.
-  </p>
-  <div class="row"><label>Siren mode for any checked type below</label>
-    <select id="otherMode"><option>OFF</option><option>WAIL</option><option>ATTACK</option><option>FASTWAIL</option></select></div>
+<section class="card" id="extreme">
+  <div><h2>Other extreme types</h2><p class="desc">Which non-tornado, non-thunderstorm warnings may count as an Other Extreme Emergency &mdash; only when NWS marks one Extreme severity, Immediate urgency and Observed certainty. Unchecked types never trigger, however severe. The siren mode and push setting come from the Other Extreme row above.</p></div>
   <div class="chklist" id="otherList"></div>
-  <button class="btn save" onclick="saveModes()">Save Other Extreme Emergency</button>
-  </div>
-</div>
+  <div class="actions"><button class="btn save" onclick="saveModes('mm2')">Save extreme types</button></div>
+  <div class="msg" id="mm2"></div>
+</section>
 
-<!-- Time / NTP -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Time (NTP)</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Used for the dashboard's clock and alert timestamps. Requires an internet connection to sync.</p>
-  <div class="row"><label>NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
-  <div class="row"><label>Update frequency (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
-  <div class="row"><label>Time zone</label>
-    <select id="timeZone">
-      <option value="EASTERN">Eastern</option>
-      <option value="CENTRAL">Central</option>
-      <option value="MOUNTAIN">Mountain</option>
-      <option value="ARIZONA">Arizona (no DST)</option>
-      <option value="PACIFIC">Pacific</option>
-      <option value="ALASKA">Alaska</option>
-      <option value="HAWAII">Hawaii (no DST)</option>
-    </select></div>
-  <div class="trow">
-    <label for="autoDst">Automatically adjust for Daylight Saving Time</label>
-    <input type="checkbox" id="autoDst">
+<section class="card" id="ntfy">
+  <div><h2><svg width="24" height="24" viewBox="0 0 50 50" aria-hidden="true" style="flex-shrink:0;border-radius:5px"><defs><linearGradient id="ntfyBg" x1="0" y1="0" x2="50" y2="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#348878"/><stop offset="1" stop-color="#52bca6"/></linearGradient><linearGradient id="ntfyBub" x1="160.722" x2="168.412" y1="128.533" y2="134.326" gradientTransform="matrix(3.74959 0 0 3.74959 -541.79 -387.599)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#348878"/><stop offset="1" stop-color="#56bda8"/></linearGradient></defs><path d="M0 0h50v50H0z" fill="url(#ntfyBg)"/><path d="M88.2 95.309H64.92c-1.601 0-2.91 1.236-2.91 2.746l.022 18.602-.435 2.506 6.231-1.881H88.2c1.6 0 2.91-1.236 2.91-2.747v-16.48c0-1.51-1.31-2.746-2.91-2.746z" fill="url(#ntfyBub)" transform="translate(-51.147 -81.516)"/><path d="M50.4 46.883c-9.168 0-17.023 7.214-17.023 16.387v.007l.09 71.37-2.303 16.992 31.313-8.319h77.841c9.17 0 17.024-7.224 17.024-16.396V63.27c0-9.17-7.85-16.383-17.016-16.387h-.008zm0 11.566h89.926c3.222.004 5.45 2.347 5.45 4.82v63.655c0 2.475-2.232 4.82-5.457 4.82h-79.54l-15.908 4.807.162-.938-.088-72.343c0-2.476 2.23-4.82 5.455-4.82z" fill="#fff" transform="scale(.26458)"/><path d="M62.57 116.77v-1.312l3.28-1.459q.159-.068.306-.102.158-.045.283-.068l.271-.022v-.09q-.136-.012-.271-.046-.125-.023-.283-.057-.147-.045-.306-.113l-3.28-1.459v-1.323l5.068 2.319v1.413z" fill="#fff" transform="matrix(1.45366 0 0 1.72815 -75.122 -171.953)"/><path d="M69.171 117.754h5.43v1.278h-5.43Z" fill="#fff" transform="matrix(1.44935 0 0 1.66414 -74.104 -166.906)"/></svg>Push notifications</h2>
+    <p class="desc">Sent through <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>, self-hosted or ntfy.sh. A <b>supplement</b>, never a replacement: a dead battery, no Wi-Fi or a crashed app can all silently stop them. Which warnings notify is set in the Alert response table.</p></div>
+  <div class="trow" style="border-top:0;padding-top:0"><label for="ntfyEnabled"><b>Enable ntfy notifications</b></label><input type="checkbox" id="ntfyEnabled"></div>
+  <div class="g2">
+    <div><label for="ntfyServer">Server</label><input type="text" id="ntfyServer" placeholder="https://ntfy.sh"></div>
+    <div><label for="ntfyTopic">Topic</label><input type="text" id="ntfyTopic" class="mono" placeholder="my-private-topic-name"><p class="hint" style="margin-top:6px">Anyone who knows the topic can read your notifications &mdash; make it long and random.</p></div>
+    <div><label for="ntfyToken">Access token</label><input type="password" id="ntfyToken" placeholder="Leave blank to keep existing" autocomplete="new-password"><p class="hint" id="ntfyTokenHint" style="margin-top:6px">No token saved.</p></div>
+    <div style="display:flex;align-items:center"><div class="trow" style="border-top:0;width:100%"><label for="ntfyVerifyCert">Verify server certificate (recommended)</label><input type="checkbox" id="ntfyVerifyCert"></div></div>
   </div>
-  <button class="btn save" onclick="saveTime()">Save Time Settings</button>
-  <div class="msg" id="tmz"></div>
+  <div class="sub" style="gap:0">
+    <span class="eyebrow" style="margin-bottom:4px">Also notify for</span>
+    <div class="trow"><label for="ntfyNotifyErrors">Faults &mdash; NWS poll errors, siren not responding</label><input type="checkbox" id="ntfyNotifyErrors"></div>
+    <div class="trow"><label for="ntfyNotifySrcLocal">Siren started from its physical buttons</label><input type="checkbox" id="ntfyNotifySrcLocal"></div>
+    <div class="trow"><label for="ntfyNotifySrcWeb">Siren started from the web panel</label><input type="checkbox" id="ntfyNotifySrcWeb"></div>
+    <div class="trow"><label for="ntfyNotifySrcMesh">Siren started over Meshtastic</label><input type="checkbox" id="ntfyNotifySrcMesh"></div>
+    <div class="trow"><label for="ntfyNotifyStop">Siren stopped or cycle completed</label><input type="checkbox" id="ntfyNotifyStop"></div>
+    <div class="trow"><label for="ntfyNotifySystemEvents">Lockout or weather trigger toggled, locked button pressed</label><input type="checkbox" id="ntfyNotifySystemEvents"></div>
+    <div class="trow"><label for="ntfyNotifyStatus">Boot announcement and 12-hour status</label><input type="checkbox" id="ntfyNotifyStatus"></div>
   </div>
-</div>
-
-<!-- Notifications (ntfy) -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Notifications (ntfy)</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Push notifications via <a href="https://ntfy.sh" target="_blank" rel="noopener" style="color:var(--cyan)">ntfy</a> — self-hosted or ntfy.sh. These are a <b>supplement</b>, not a replacement, for the siren and the Settings page itself: a dead battery, no Wi-Fi, or a crashed app can all silently stop them.</p>
-  <div class="trow">
-    <label for="ntfyEnabled">Enable ntfy notifications</label>
-    <input type="checkbox" id="ntfyEnabled">
-  </div>
-  <div class="row"><label>Server</label><input type="text" id="ntfyServer" placeholder="https://ntfy.sh"></div>
-  <div class="row"><label>Topic</label><input type="text" id="ntfyTopic" placeholder="my-private-topic-name"></div>
-  <p class="hint" style="margin:-4px 0 10px">A topic is a shared secret — anyone who knows it can read your notifications. Use a long, random one, not something guessable.</p>
-  <div class="row"><label>Access token</label><input type="password" id="ntfyToken" placeholder="Leave blank to keep existing" autocomplete="new-password"></div>
-  <p class="hint" id="ntfyTokenHint" style="margin:-4px 0 10px">No token saved.</p>
-  <div class="trow">
-    <label for="ntfyVerifyCert">Verify server certificate (recommended)</label>
-    <input type="checkbox" id="ntfyVerifyCert">
-  </div>
-  <h3 style="font-size:.75rem;color:#9aa3af;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Notify for these alert categories</h3>
-  <div class="trow"><label for="ntfyCatTornadoEmergency">Tornado Emergency</label><input type="checkbox" id="ntfyCatTornadoEmergency"></div>
-  <div class="trow"><label for="ntfyCatTornadoConfirmed">Tornado Warning (confirmed/damage tag)</label><input type="checkbox" id="ntfyCatTornadoConfirmed"></div>
-  <div class="trow"><label for="ntfyCatTornadoUnconfirmed">Tornado Warning (unconfirmed/base)</label><input type="checkbox" id="ntfyCatTornadoUnconfirmed"></div>
-  <div class="trow"><label for="ntfyCatThunderstormDestructive">Severe T-storm — DESTRUCTIVE</label><input type="checkbox" id="ntfyCatThunderstormDestructive"></div>
-  <div class="trow"><label for="ntfyCatThunderstormConsiderable">Severe T-storm — CONSIDERABLE</label><input type="checkbox" id="ntfyCatThunderstormConsiderable"></div>
-  <div class="trow"><label for="ntfyCatThunderstormBase">Severe T-storm — base (no damage tag)</label><input type="checkbox" id="ntfyCatThunderstormBase"></div>
-  <div class="trow"><label for="ntfyCatOtherExtreme">Other Extreme Emergency</label><input type="checkbox" id="ntfyCatOtherExtreme"></div>
-  <h3 style="font-size:.75rem;color:#9aa3af;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Also notify for</h3>
-  <div class="trow"><label for="ntfyNotifyErrors">Faults (NWS poll errors, siren not responding)</label><input type="checkbox" id="ntfyNotifyErrors"></div>
-  <div class="trow"><label for="ntfyNotifySrcLocal">Siren activated — physical button</label><input type="checkbox" id="ntfyNotifySrcLocal"></div>
-  <div class="trow"><label for="ntfyNotifySrcWeb">Siren activated — web UI</label><input type="checkbox" id="ntfyNotifySrcWeb"></div>
-  <div class="trow"><label for="ntfyNotifySrcMesh">Siren activated — Meshtastic</label><input type="checkbox" id="ntfyNotifySrcMesh"></div>
-  <div class="trow"><label for="ntfyNotifyStop">Siren stopped / cycle completed</label><input type="checkbox" id="ntfyNotifyStop"></div>
-  <div class="trow"><label for="ntfyNotifySystemEvents">Lockout toggled, weather-trigger toggled, locked button pressed</label><input type="checkbox" id="ntfyNotifySystemEvents"></div>
-  <div class="trow"><label for="ntfyNotifyStatus">Boot announcement + 12-hour status</label><input type="checkbox" id="ntfyNotifyStatus"></div>
-  <button class="btn save" onclick="saveNtfy()">Save Notification Settings</button>
-  <button class="btn logout" onclick="testNtfy()">Send Test Notification</button>
+  <div class="actions"><button class="btn save" onclick="saveNtfy()">Save notification settings</button><button class="btn logout" onclick="testNtfy()">Send test notification</button></div>
   <div class="msg" id="ntfyMsg"></div>
-  </div>
-</div>
+</section>
 
-<!-- Firmware Update -->
-<div class="card">
-  <div class="card-head" onclick="toggleCard(this)"><h2>Firmware Update</h2><svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
-  <div class="card-body">
-  <p class="hint">Upload a new <code>firmware.bin</code> (from <code>weather-watcher/.pio/build/esp32dev/</code> after a build). The board restarts when it finishes.</p>
-  <input type="file" id="fwFile" accept=".bin">
-  <button class="btn save" onclick="uploadFw()">Upload Firmware</button>
+<section class="card" id="network">
+  <div><h2>Wi-Fi &amp; network</h2><p class="desc">How this board joins your network, and the fallback access point it broadcasts when it can't.</p></div>
+  <div id="ws" class="ws">Checking&hellip;</div>
+  <div class="inl">
+    <div><label for="wHost">Device hostname</label><input type="text" id="wHost" placeholder="weather-watcher" maxlength="32"></div>
+    <button class="btn save" onclick="saveHostname()">Save hostname</button>
+  </div>
+  <p class="hint" style="margin-top:-8px">Letters, numbers and hyphens. Also sets the <code>http://&lt;hostname&gt;.local</code> address. Applies after a restart.</p>
+  <div class="msg" id="hm"></div>
+  <div class="sub">
+    <span class="eyebrow">Join a network</span>
+    <div class="g2">
+      <div><label for="wSSID">Network name (SSID)</label><input type="text" id="wSSID" placeholder="Your Wi-Fi name"></div>
+      <div><label for="wPass">Password</label><input type="password" id="wPass" placeholder="Wi-Fi password"></div>
+    </div>
+    <div class="actions"><button class="btn save" onclick="saveWifi()">Connect to network</button><button class="btn danger" onclick="clearWifi()">Use access point only</button></div>
+    <div class="msg" id="wm"></div>
+  </div>
+  <div class="sub">
+    <span class="eyebrow">Fallback access point</span>
+    <div class="inl">
+      <div><label for="apPw">Access point password</label><input type="password" id="apPw" placeholder="8&ndash;63 characters" autocomplete="new-password"></div>
+      <button class="btn save" onclick="saveApPw()">Save AP password</button>
+    </div>
+    <p class="hint" id="apHint" style="margin-top:-8px">Used to join the &quot;WeatherWatcher&quot; network this board broadcasts when it isn't on your home Wi-Fi. Applies after a restart.</p>
+    <div class="msg" id="apm"></div>
+  </div>
+</section>
+
+<section class="card" id="security">
+  <div><h2>Security</h2><p class="desc">The password that unlocks these settings. The dashboard stays public.</p></div>
+  <div class="g2">
+    <div><label for="p1">New password</label><input type="password" id="p1" autocomplete="new-password"></div>
+    <div><label for="p2">Confirm password</label><input type="password" id="p2" autocomplete="new-password"></div>
+  </div>
+  <div class="actions"><button class="btn save" onclick="savePw()">Change password</button><button class="btn logout" onclick="logout()">Log out</button></div>
+  <div class="msg" id="pm"></div>
+</section>
+
+<section class="card" id="time">
+  <div><h2>Time</h2><p class="desc">Drives the dashboard clock and alert timestamps, and is passed on to Hurricane Controls. Needs internet to sync.</p></div>
+  <div class="g3">
+    <div><label for="ntpServer">NTP server</label><input type="text" id="ntpServer" placeholder="pool.ntp.org"></div>
+    <div><label for="ntpUpdateHours">Sync every (hours)</label><input type="number" id="ntpUpdateHours" min="1" step="1"></div>
+    <div><label for="timeZone">Time zone</label>
+      <select id="timeZone">
+        <option value="EASTERN">Eastern</option>
+        <option value="CENTRAL">Central</option>
+        <option value="MOUNTAIN">Mountain</option>
+        <option value="ARIZONA">Arizona (no DST)</option>
+        <option value="PACIFIC">Pacific</option>
+        <option value="ALASKA">Alaska</option>
+        <option value="HAWAII">Hawaii (no DST)</option>
+      </select></div>
+  </div>
+  <div class="trow"><label for="autoDst">Adjust for daylight saving time automatically</label><input type="checkbox" id="autoDst"></div>
+  <div class="actions"><button class="btn save" onclick="saveTime()">Save time settings</button></div>
+  <div class="msg" id="tmz"></div>
+</section>
+
+<section class="card" id="firmware">
+  <div><h2>Firmware</h2><p class="desc">Upload a new <code>firmware.bin</code> from <code>weather-watcher/.pio/build/esp32dev/</code>. The board restarts when it finishes.</p></div>
+  <div class="fw">
+    <label for="fwFile" class="btn logout">Choose .bin file</label>
+    <input type="file" id="fwFile" accept=".bin" onchange="document.getElementById('fwName').textContent=this.files[0]?this.files[0].name:'No file chosen'">
+    <span id="fwName">No file chosen</span>
+    <button class="btn save" onclick="uploadFw()">Upload firmware</button>
+  </div>
   <div class="msg" id="fwm"></div>
-  </div>
-</div>
+</section>
 
-<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a></div>
-<div class="ver mono"><a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a></div>
-<div class="ver mono">Last restart: <span id="rstReason">&mdash;</span></div>
-
+<footer class="foot">
+  <a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Weather Watcher &middot; v<span id="verNum">&mdash;</span></a>
+  <span>Last restart: <span id="rstReason">&mdash;</span></span>
+  <a href="https://github.com/awwgeez-its-drew/hurricane-controls" target="_blank" rel="noopener">Created by awwgeez.its.drew &middot; Coded by Claude</a>
+</footer>
+</main>
 </div>
 
 <div class="overlay" id="rmModal">
-  <div class="mbox">
-    <p>Restart the Weather Watcher?</p>
+  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
+    <b id="rmTitle" style="font-size:18px">Restart the Weather Watcher?</b>
     <div class="mgrid">
-      <button class="mok"     onclick="doRestart()">Restart</button>
       <button class="mcancel" onclick="closeModal()">Cancel</button>
+      <button class="mok"     onclick="doRestart()">Restart</button>
     </div>
   </div>
 </div>
 <script>
-function toggleCard(headEl){ headEl.parentElement.classList.toggle('expanded'); }
-
 function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify(body)}).then(r=>r.json());}
 function msg(id,txt,ok){
   const e=document.getElementById(id);e.textContent=txt;e.className='msg '+(ok?'ok':'er');
   setTimeout(()=>{e.textContent='';e.className='msg';},3500);
 }
+
+// One row per alert category: its siren-mode setting (radio group named
+// after the old <select> id) and its ntfy category switch.
+const RESPONSE_ROWS=[
+  ['torEmMode','ntfyCatTornadoEmergency','Tornado Emergency','Catastrophic damage threat','#A855F7'],
+  ['torCfMode','ntfyCatTornadoConfirmed','Tornado Warning — confirmed','Observed, or carries a damage tag','#A855F7'],
+  ['torUcMode','ntfyCatTornadoUnconfirmed','Tornado Warning — unconfirmed','Radar-indicated, no damage tag','#EF4444'],
+  ['svrDeMode','ntfyCatThunderstormDestructive','Severe T-storm — destructive','Destructive damage threat','#EF4444'],
+  ['svrCoMode','ntfyCatThunderstormConsiderable','Severe T-storm — considerable','Considerable damage threat','#EF4444'],
+  ['svrBaMode','ntfyCatThunderstormBase','Severe T-storm — base','No damage tag','#F97316'],
+  ['otherMode','ntfyCatOtherExtreme','Other Extreme Emergency','Only the types checked below','#A855F7'],
+];
+const MODES=['OFF','WAIL','ATTACK','FASTWAIL'];
+(function renderMatrix(){
+  document.getElementById('matrix').insertAdjacentHTML('beforeend',RESPONSE_ROWS.map(([sel,cat,name,detail,col])=>
+    '<div class="mrow"><div class="mname"><span class="sw" style="background:'+col+'"></span><div><b>'+name+'</b><span>'+detail+'</span></div></div>'+
+    '<div class="seg" role="radiogroup" aria-label="'+name+' siren mode">'+
+      MODES.map(m=>'<input type="radio" name="'+sel+'" id="'+sel+'_'+m+'" value="'+m+'"><label for="'+sel+'_'+m+'" data-v="'+m+'">'+(m==='FASTWAIL'?'FAST WAIL':m)+'</label>').join('')+
+    '</div><div class="mpush"><input type="checkbox" id="'+cat+'" aria-label="Push notification for '+name+'"></div></div>'
+  ).join(''));
+})();
+function setMode(sel,v){const el=document.getElementById(sel+'_'+(v||'OFF'))||document.getElementById(sel+'_OFF');el.checked=true;}
+function getMode(sel){const el=document.querySelector('input[name="'+sel+'"]:checked');return el?el.value:'OFF';}
 
 // Mirrors weather-watcher/src/other_extreme_types.h — keep in sync if that table changes.
 const OTHER_EXTREME_CANDIDATES=[
@@ -678,13 +760,13 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('lon').value=d.longitude||'';
   document.getElementById('pollSec').value=d.pollIntervalSec||120;
   document.getElementById('uaContact').value=d.userAgentContact||'';
-  document.getElementById('torUcMode').value=d.tornadoUnconfirmedMode||'OFF';
-  document.getElementById('torCfMode').value=d.tornadoConfirmedMode||'WAIL';
-  document.getElementById('torEmMode').value=d.tornadoEmergencyMode||'WAIL';
-  document.getElementById('svrBaMode').value=d.thunderstormBaseMode||'OFF';
-  document.getElementById('svrCoMode').value=d.thunderstormConsiderableMode||'WAIL';
-  document.getElementById('svrDeMode').value=d.thunderstormDestructiveMode||'WAIL';
-  document.getElementById('otherMode').value=d.otherExtremeMode||'OFF';
+  setMode('torUcMode',d.tornadoUnconfirmedMode||'OFF');
+  setMode('torCfMode',d.tornadoConfirmedMode||'WAIL');
+  setMode('torEmMode',d.tornadoEmergencyMode||'WAIL');
+  setMode('svrBaMode',d.thunderstormBaseMode||'OFF');
+  setMode('svrCoMode',d.thunderstormConsiderableMode||'WAIL');
+  setMode('svrDeMode',d.thunderstormDestructiveMode||'WAIL');
+  setMode('otherMode',d.otherExtremeMode||'OFF');
   renderOtherList(d.otherExtremeIncluded);
   document.getElementById('repeatUpg').checked=!!d.repeatOnUpgrade;
   document.getElementById('ntpServer').value=d.ntpServer||'pool.ntp.org';
@@ -699,13 +781,7 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('ntfyTopic').value=d.ntfyTopic||'';
   document.getElementById('ntfyTokenHint').textContent=d.ntfyHasToken?'A token is saved (leave blank to keep it).':'No token saved.';
   document.getElementById('ntfyVerifyCert').checked=d.ntfyVerifyCert!==false;
-  document.getElementById('ntfyCatThunderstormBase').checked=!!d.ntfyCatThunderstormBase;
-  document.getElementById('ntfyCatOtherExtreme').checked=!!d.ntfyCatOtherExtreme;
-  document.getElementById('ntfyCatThunderstormConsiderable').checked=!!d.ntfyCatThunderstormConsiderable;
-  document.getElementById('ntfyCatTornadoUnconfirmed').checked=!!d.ntfyCatTornadoUnconfirmed;
-  document.getElementById('ntfyCatThunderstormDestructive').checked=!!d.ntfyCatThunderstormDestructive;
-  document.getElementById('ntfyCatTornadoConfirmed').checked=!!d.ntfyCatTornadoConfirmed;
-  document.getElementById('ntfyCatTornadoEmergency').checked=!!d.ntfyCatTornadoEmergency;
+  RESPONSE_ROWS.forEach(r=>{document.getElementById(r[1]).checked=!!d[r[1]];});
   document.getElementById('ntfyNotifyErrors').checked=!!d.ntfyNotifyErrors;
   document.getElementById('ntfyNotifySrcLocal').checked=!!d.ntfyNotifySrcLocal;
   document.getElementById('ntfyNotifySrcWeb').checked=!!d.ntfyNotifySrcWeb;
@@ -760,18 +836,27 @@ function saveLocation(){
   };
   post('/settings-data',b).then(d=>msg('xm',d.ok?'Saved!':'Error',d.ok));
 }
-function saveModes(){
-  const b={
-    tornadoUnconfirmedMode: document.getElementById('torUcMode').value,
-    tornadoConfirmedMode: document.getElementById('torCfMode').value,
-    tornadoEmergencyMode: document.getElementById('torEmMode').value,
-    thunderstormBaseMode: document.getElementById('svrBaMode').value,
-    thunderstormConsiderableMode: document.getElementById('svrCoMode').value,
-    thunderstormDestructiveMode: document.getElementById('svrDeMode').value,
-    otherExtremeMode: document.getElementById('otherMode').value,
+function modesBody(){
+  return {
+    tornadoUnconfirmedMode: getMode('torUcMode'),
+    tornadoConfirmedMode: getMode('torCfMode'),
+    tornadoEmergencyMode: getMode('torEmMode'),
+    thunderstormBaseMode: getMode('svrBaMode'),
+    thunderstormConsiderableMode: getMode('svrCoMode'),
+    thunderstormDestructiveMode: getMode('svrDeMode'),
+    otherExtremeMode: getMode('otherMode'),
     otherExtremeIncluded: collectOtherIncluded(),
     repeatOnUpgrade: document.getElementById('repeatUpg').checked,
   };
+}
+function saveModes(msgId){
+  post('/settings-data',modesBody()).then(d=>msg(msgId||'mm',d.ok?'Saved!':'Error',d.ok));
+}
+// The Alert response table saves the siren modes and the per-category
+// ntfy switches together — /settings-data applies whichever keys it gets.
+function saveResponse(){
+  const b=modesBody();
+  RESPONSE_ROWS.forEach(r=>{b[r[1]]=document.getElementById(r[1]).checked;});
   post('/settings-data',b).then(d=>msg('mm',d.ok?'Saved!':'Error',d.ok));
 }
 function saveTime(){
@@ -790,13 +875,6 @@ function saveNtfy(){
     ntfyServer: document.getElementById('ntfyServer').value.trim(),
     ntfyTopic: document.getElementById('ntfyTopic').value.trim(),
     ntfyVerifyCert: document.getElementById('ntfyVerifyCert').checked,
-    ntfyCatThunderstormBase: document.getElementById('ntfyCatThunderstormBase').checked,
-    ntfyCatOtherExtreme: document.getElementById('ntfyCatOtherExtreme').checked,
-    ntfyCatThunderstormConsiderable: document.getElementById('ntfyCatThunderstormConsiderable').checked,
-    ntfyCatTornadoUnconfirmed: document.getElementById('ntfyCatTornadoUnconfirmed').checked,
-    ntfyCatThunderstormDestructive: document.getElementById('ntfyCatThunderstormDestructive').checked,
-    ntfyCatTornadoConfirmed: document.getElementById('ntfyCatTornadoConfirmed').checked,
-    ntfyCatTornadoEmergency: document.getElementById('ntfyCatTornadoEmergency').checked,
     ntfyNotifyErrors: document.getElementById('ntfyNotifyErrors').checked,
     ntfyNotifySrcLocal: document.getElementById('ntfyNotifySrcLocal').checked,
     ntfyNotifySrcWeb: document.getElementById('ntfyNotifySrcWeb').checked,
@@ -805,6 +883,7 @@ function saveNtfy(){
     ntfyNotifySystemEvents: document.getElementById('ntfyNotifySystemEvents').checked,
     ntfyNotifyStatus: document.getElementById('ntfyNotifyStatus').checked,
   };
+  RESPONSE_ROWS.forEach(r=>{b[r[1]]=document.getElementById(r[1]).checked;});
   const tok=document.getElementById('ntfyToken').value;
   const saveMain=()=>post('/settings-data',b);
   const saveTok=tok.length?post('/ntfy-token',{token:tok}):Promise.resolve({ok:true});
@@ -1512,6 +1591,18 @@ private:
 
     // Public, polled every second — reads the alert lists poll() rewrites on
     // the loop task, so it holds the same lock.
+    // Damage-threat pill text for the dashboard. TORNADO_CONFIRMED covers both
+    // "observed" and a sub-catastrophic damage tag, so it reads CONFIRMED.
+    static const char* categoryTag(AlertCategory c) {
+        switch (c) {
+        case AlertCategory::TORNADO_EMERGENCY:         return "CATASTROPHIC";
+        case AlertCategory::TORNADO_CONFIRMED:         return "CONFIRMED";
+        case AlertCategory::THUNDERSTORM_DESTRUCTIVE:  return "DESTRUCTIVE";
+        case AlertCategory::THUNDERSTORM_CONSIDERABLE: return "CONSIDERABLE";
+        default:                                       return "";
+        }
+    }
+
     static String buildStatusJson() {
         CtrlLock lock;
         JsonDocument doc;
@@ -1572,7 +1663,19 @@ private:
             o["headline"]  = a.headline;
             o["areaDesc"]  = a.areaDesc;
             o["color"]     = categoryColor(a.category);
+            o["tag"]       = categoryTag(a.category);
             o["triggered"] = a.triggeredSiren;
+            if (a.triggeredSiren) {
+                // The mode actually sent, from the most recent successful
+                // trigger logged for this warning (recent(0) is newest).
+                for (uint8_t j = 0; j < alertLog.count(); j++) {
+                    const AlertLogEntry& r = alertLog.recent(j);
+                    if (strcmp(r.vtecKey, a.vtecKey) == 0 && strstr(r.disposition, "TRIGGERED")) {
+                        o["mode"] = r.sirenMode;
+                        break;
+                    }
+                }
+            }
         }
 
         // Full persisted disposition history (WP3's alertlog.h) — up to the
