@@ -5,6 +5,21 @@ as a set. Main-board and Weather Watcher versions are independent
 (different `FW_VERSION` in each board's `config.h`), listed together here
 by the release they shipped in.
 
+## 2.0.1 / Weather Watcher 2.0.1
+
+Phone-layout follow-up to the 2.0.0 redesign; nothing changes on wide
+screens.
+
+- **System status** on both dashboards is now a collapsible card with a
+  single status light in its title. It starts collapsed on screens
+  narrower than the two-column layout (phones, small tablets) and
+  expanded on wider ones, and follows if the screen crosses that width
+  later (rotating a tablet, resizing a window).
+- **Phone card order**: Weather Watcher shows Current alerts, System
+  status, Time, Recent alerts; Hurricane Controls shows Siren status,
+  System status, Run modes — so the mode buttons sit near the top of the
+  screen.
+
 ## 2.0.0 / Weather Watcher 2.0.0
 
 Web UI redesign for both boards. Both version numbers jump to 2.0.0 to

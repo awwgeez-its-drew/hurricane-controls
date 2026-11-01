@@ -18,4 +18,4 @@ constexpr char WIFI_SSID[] = "WeatherWatcher";
 constexpr char AP_PASS_DEFAULT[] = "Weather123!"; // WPA2 AP password until changed in Settings (8-63 chars)
 constexpr char MDNS_NAME[] = "weather-watcher";
 
-constexpr char FW_VERSION[] = "2.0.0";
+constexpr char FW_VERSION[] = "2.0.1";
