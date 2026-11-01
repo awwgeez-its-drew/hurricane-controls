@@ -6,6 +6,7 @@
 #include "statemachine.h"
 #include "buttons.h"
 #include "weather_link.h"
+#include "mesh_health.h"
 
 // Bridges a Meshtastic node (wired via UART2, running its Serial Module in
 // Text Message mode) to the state machine, so the siren can be triggered/
@@ -207,8 +208,8 @@ private:
     bool     wasWwError_       = false;
     uint32_t lastWwErrorTs_    = 0;
 
-    void reply(const char* msg) { Serial2.println(msg); }
-    void reply(const String& msg) { Serial2.println(msg); }
+    void reply(const char* msg) { Serial2.println(msg); meshHealth.lastTxMs = millis(); }
+    void reply(const String& msg) { Serial2.println(msg); meshHealth.lastTxMs = millis(); }
 
     static const char* modeWord(RunMode m) {
         switch (m) {
@@ -356,6 +357,12 @@ private:
             }
         }
 
+        // Any line at all proves the node is powered and its serial link to
+        // this board works — recorded before the addressing checks below,
+        // since unrelated channel chatter counts just as much.
+        meshHealth.lastRxMs = millis();
+        strlcpy(meshHealth.lastSender, senderId, sizeof(meshHealth.lastSender));
+
         // Trim, uppercase in place.
         for (char* p = body; *p; p++) *p = toupper((unsigned char)*p);
         size_t len = strlen(body);
@@ -442,6 +449,7 @@ private:
             reply("OK: weather watcher reboot requested");
         } else if (!strcmp(cmd, "PING")) {
             reply(buildPingReply());
+            meshHealth.lastPingMs = millis();
         } else {
             reply("ERR: unknown command");
         }

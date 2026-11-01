@@ -22,6 +22,7 @@ ButtonHandler   buttons;
 WiFiManager     wifiMgr;
 WebUI           webUI;
 MeshBridge      meshBridge;
+MeshHealth      meshHealth;
 WeatherLink     weatherLink;
 
 // Loop stalls longer than this reboot the board. setup() drives every relay

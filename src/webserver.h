@@ -15,6 +15,7 @@
 #include "wifi_manager.h"
 #include "buttons.h"
 #include "weather_link.h"
+#include "mesh_health.h"
 #include "assets.h"
 
 // Enforces the public-facing password policy: 8+ chars with at least one
@@ -410,6 +411,13 @@ function fmt(sec){
   return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
 }
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+const MESH_FRESH_SEC=6*3600; // heard within this long = green dot
+function ago(s){
+  if(s<60)return s+'s ago';
+  if(s<3600)return Math.floor(s/60)+'m ago';
+  if(s<86400)return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
 
 function drawHealth(h){
   if(!h)return;
@@ -418,9 +426,15 @@ function drawHealth(h){
   document.getElementById('hdot').className='dot '+h.overall;
   document.getElementById('hsum').textContent=h.overall==='ok'?'All systems normal':h.overall==='warn'?'Check system status':'Attention needed';
   const chip=(cls,txt)=>'<span class="chip"><span class="dot '+cls+'"></span>'+txt+'</span>';
+  // Meshtastic: passive only (Text Message mode can't query the node), so a
+  // quiet channel stays grey rather than red — it isn't proof of a fault.
+  const m=h.mesh||{rx:-1};
+  const meshChip=m.rx<0?chip('','Meshtastic: nothing heard yet')
+    :chip(m.rx<MESH_FRESH_SEC?'ok':'','Meshtastic heard '+ago(m.rx));
   document.getElementById('hchips').innerHTML=
     chip(h.wifi?'ok':'error','Wi-Fi '+(h.wifi?'connected':'disconnected'))+
     chip(wwCls,'Weather Watcher '+wwWord)+
+    meshChip+
     chip('','Free memory '+h.freeHeapKB+' KB')+
     (h.otaActive?chip('warn','Firmware update in progress'):'');
 }
@@ -682,6 +696,13 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
 .ulog .len{font-family:var(--mono)}
 .ulog .ok{color:#86EFAC}.ulog .bad{color:var(--red);font-weight:600}
 .ulog .ua{grid-column:1/-1;border-top:0;padding:0 0 10px;font-size:12px;color:var(--muted);word-break:break-word}
+.mstat{display:flex;flex-direction:column;border-radius:10px;background:var(--inset);border:1px solid var(--line)}
+.mstat>div{display:flex;align-items:center;gap:10px;padding:11px 14px;font-size:14px;color:var(--soft)}
+.mstat>div+div{border-top:1px solid var(--line)}
+.mstat span:nth-child(2){flex:1}
+.mstat b{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--text);text-align:right}
+.mstat .dot{width:8px;height:8px;border-radius:50%;background:#64748B;flex-shrink:0}
+.mstat .dot.ok{background:var(--green)}
 .fw{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:18px;border:1px dashed #2F3D52;border-radius:12px;background:var(--inset)}
 .fw input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
 .fw label{margin:0;display:inline-flex;align-items:center}
@@ -812,6 +833,12 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
 <section class="card" id="mesh">
   <div><h2><svg width="24" height="24" viewBox="0 0 512 512" aria-hidden="true" style="flex-shrink:0"><rect width="512" height="512" rx="64" fill="#67EA94"/><g transform="matrix(1.79 0 0 1.79 313.74 258.36)"><path fill="#2C2D3C" fill-rule="evenodd" transform="translate(-250.97,-362.41)" d="M250.908 330.267L193.126 415.005L180.938 406.694L244.802 313.037C246.174 311.024 248.453 309.819 250.889 309.816C253.326 309.814 255.606 311.015 256.982 313.026L320.994 406.536L308.821 414.869L250.908 330.267Z"/></g><g transform="matrix(1.81 0 0 1.81 145 256.15)"><path fill="#2C2D3C" fill-rule="evenodd" transform="translate(-115.14,-528.06)" d="M87.642 581.398L154.757 482.977L142.638 474.713L75.523 573.134L87.642 581.398Z"/></g></svg>Meshtastic</h2>
     <p class="desc">Who may send siren commands over the mesh, and which events this controller announces on its own.</p></div>
+  <div class="mstat">
+    <div><span class="dot" id="meshDot"></span><span>Last heard from node</span><b id="meshRx">&mdash;</b></div>
+    <div><span class="dot" id="pingDot"></span><span>Last <code>SIREN PING</code> answered</span><b id="meshPing">&mdash;</b></div>
+    <div><span class="dot" id="txDot"></span><span>Last message sent</span><b id="meshTx">&mdash;</b></div>
+  </div>
+  <p class="hint" style="margin-top:-8px">The node can't be queried directly, so these only update when something passes through it. A quiet channel isn't a fault &mdash; send <code>SIREN PING</code> from another node to confirm the whole path.</p>
   <div class="g2">
     <div><label for="meshWL">Allowed sender IDs</label><input type="text" id="meshWL" class="mono" placeholder="e.g. 3A3C, 1B93"><p class="hint" style="margin-top:6px">Comma-separated. Leave empty to block everyone.</p></div>
     <div><label for="meshPW">Command password (optional)</label><input type="text" id="meshPW" placeholder="No password"><p class="hint" style="margin-top:6px">Sent in plain text over the mesh.</p></div>
@@ -941,8 +968,26 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   else{wwEl.textContent='Error — '+d.wwDetail+' (last heard '+d.wwLastHeardSec+'s ago)';wwEl.className='ws er';}
 });
 
+const MESH_FRESH_SEC=6*3600; // heard within this long = green dot
+function ago(s){
+  if(s<60)return s+'s ago';
+  if(s<3600)return Math.floor(s/60)+'m ago';
+  if(s<86400)return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+function drawMesh(m){
+  if(!m)return;
+  const set=(id,dot,s,extra)=>{
+    document.getElementById(id).textContent=s<0?'not since restart':ago(s)+(extra||'');
+    document.getElementById(dot).className='dot'+(s>=0&&s<MESH_FRESH_SEC?' ok':'');
+  };
+  set('meshRx','meshDot',m.rx,m.from?' ('+m.from+')':'');
+  set('meshPing','pingDot',m.ping);
+  set('meshTx','txDot',m.tx);
+}
 function refreshLockIcon(){
   fetch('/status').then(r=>r.json()).then(d=>{
+    drawMesh(d.health&&d.health.mesh);
     const bl=document.getElementById('btnLock');
     const lk=!!d.btnLocked;
     document.getElementById('lockShackle').setAttribute('d', lk ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2');
@@ -952,6 +997,7 @@ function refreshLockIcon(){
   });
 }
 refreshLockIcon();
+setInterval(refreshLockIcon,10000);
 function toggleLock(){
   fetch('/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'btn-lock'})})
     .then(refreshLockIcon);
@@ -1406,7 +1452,7 @@ public:
     }
 
 private:
-    static constexpr size_t   STATUS_JSON_MAX = 512; // grown for the health{} object (WP5)
+    static constexpr size_t   STATUS_JSON_MAX = 640; // grown for the health{} object (WP5) and its mesh{} timestamps
     static constexpr size_t   MAX_BODY        = 1024;   // largest JSON POST body accepted
     static constexpr uint8_t  MAX_SESSIONS    = 4;      // oldest login is evicted beyond this
     static constexpr uint32_t TEST_KEEPALIVE_TIMEOUT_MS = 2000;
@@ -2071,6 +2117,9 @@ private:
 
     static const char* tf(bool b) { return b ? "true" : "false"; }
 
+    // Seconds since a millis() timestamp, or -1 for "never" (0).
+    static long secsSince(uint32_t ms) { return ms ? (long)((millis() - ms) / 1000) : -1L; }
+
     // Pushed to every WebSocket client twice a second — formatted on the
     // stack rather than via JsonDocument/String to avoid that heap churn.
     // Every value is a fixed token or a number, so nothing needs escaping.
@@ -2110,14 +2159,17 @@ private:
             "\"elapsed\":%lu,\"remaining\":%lu,\"hasRemaining\":%s,\"btnLocked\":%s,"
             "\"testMode\":%s,\"lockAutoExpire\":%s,\"lockRemaining\":%lu,\"tempF\":%d,"
             "\"currentTime\":\"%s\","
-            "\"health\":{\"overall\":\"%s\",\"wifi\":%s,\"ww\":\"%s\",\"freeHeapKB\":%u,\"otaActive\":%s}}",
+            "\"health\":{\"overall\":\"%s\",\"wifi\":%s,\"ww\":\"%s\",\"freeHeapKB\":%u,\"otaActive\":%s,"
+            "\"mesh\":{\"rx\":%ld,\"ping\":%ld,\"tx\":%ld,\"from\":\"%s\"}}}",
             sm.stateName(), sm.modeName(), (unsigned long)(millis() / 1000),
             (unsigned)(rs & 1), (unsigned)((rs >> 1) & 1), (unsigned)((rs >> 2) & 1),
             (unsigned long)(ti.totalElapsedMs / 1000), (unsigned long)(ti.totalRemainingMs / 1000),
             tf(ti.hasRemaining), tf(buttons.locked), tf(buttons.testModeActive),
             tf(buttons.lockAutoExpiring()), (unsigned long)buttons.lockRemainingSec(),
             (int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f), clockBuf,
-            overallHealth(wifiOk, ww), tf(wifiOk), ww, (unsigned)(ESP.getFreeHeap() / 1024), tf(sm.otaActive));
+            overallHealth(wifiOk, ww), tf(wifiOk), ww, (unsigned)(ESP.getFreeHeap() / 1024), tf(sm.otaActive),
+            secsSince(meshHealth.lastRxMs), secsSince(meshHealth.lastPingMs), secsSince(meshHealth.lastTxMs),
+            meshHealth.lastSender);  // sender id is hex-only (mesh.h validates it), so safe unescaped
         if (n < 0) { buf[0] = '\0'; return 0; }
         return ((size_t)n >= size) ? size - 1 : (size_t)n;
     }
