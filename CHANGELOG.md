@@ -24,6 +24,15 @@ mark it; every endpoint, element ID and control behaves as before.
   alert started the siren, "SIREN ACTIVATED — MODE" (plus the start time
   on the main board). `/alerts` gains `tag`, `actMode` and `actTime`;
   the Weather Watcher's `/status-data` alerts gain `tag` and `mode`.
+- **Meshtastic link status** (main board): since Text Message mode can't
+  query the node, the board records what it passively sees — the last
+  line received from the node (with its sender id), the last
+  `SIREN PING` answered, and the last line sent. Shown as a chip in the
+  control panel's health row and a status block on the Settings
+  Meshtastic card, and sent as `health.mesh` in `/status` and the
+  WebSocket push (seconds ago, -1 = not since restart). A quiet channel
+  stays grey rather than red and doesn't affect the overall health
+  summary.
 - **Component Test** shows a large auto-off countdown and draining bar
   while TEST MODE is on, and the Growl Test durations from Settings.
 - **Settings** pages get a section menu; the main board's timing cards
