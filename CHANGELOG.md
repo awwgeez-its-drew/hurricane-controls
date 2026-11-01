@@ -5,6 +5,33 @@ as a set. Main-board and Weather Watcher versions are independent
 (different `FW_VERSION` in each board's `config.h`), listed together here
 by the release they shipped in.
 
+## 2.0.0 / Weather Watcher 2.0.0
+
+Web UI redesign for both boards. Both version numbers jump to 2.0.0 to
+mark it; every endpoint, element ID and control behaves as before.
+
+- **New look** on every page of both boards: a dark control-room theme
+  with a wider two-column layout on desktop that stacks on phones, the
+  boards' own siren/Weather Watcher artwork, and Meshtastic and ntfy
+  logos on their settings cards.
+- **Control panel**: time remaining is the main readout (elapsed for
+  Manual), a strobing status light while running, relay lamps, health
+  chips shown without tapping, and a push-button icon with a green open /
+  red closed padlock for the physical-button lock. The hold-to-confirm
+  fill now spans the whole button.
+- **Warnings** on both dashboards show a damage-threat pill
+  (CATASTROPHIC / CONFIRMED / DESTRUCTIVE / CONSIDERABLE) and, when an
+  alert started the siren, "SIREN ACTIVATED — MODE" (plus the start time
+  on the main board). `/alerts` gains `tag`, `actMode` and `actTime`;
+  the Weather Watcher's `/status-data` alerts gain `tag` and `mode`.
+- **Component Test** shows a large auto-off countdown and draining bar
+  while TEST MODE is on, and the Growl Test durations from Settings.
+- **Settings** pages get a section menu; the main board's timing cards
+  are merged into a start/stop sequence table and a mode timing table,
+  and the Weather Watcher's trigger modes and ntfy categories are merged
+  into one Alert response table with a siren-mode selector and push
+  switch per warning type.
+
 ## 1.10.0 / Weather Watcher 1.6.0
 
 Reliability- and visibility-focused release across both boards: a
