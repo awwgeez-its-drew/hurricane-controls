@@ -135,6 +135,20 @@ for a correctly-prefixed, recognized command.
   Text Message mode is the one confirmed to actually work (see below), this
   isn't expected to matter in practice — but it's why the whitelist and the
   mode choice are coupled, not independent settings.
+- **The whitelist can be turned off entirely** via the "Enforce sender
+  whitelist" toggle next to it (`meshWhitelistEnabled` in `src/settings.h`
+  / the `/settings-data` API). Off, every properly-addressed (`SIREN`-
+  prefixed), correctly-passworded command is accepted from **any** sender
+  on the channel, regardless of `meshWhitelist`'s contents — the
+  equivalent of every short name being allowed. **This is a deliberate
+  reduction in security**, intended only for scenarios where the full set
+  of short names that may ever need to command this siren isn't known
+  ahead of time (e.g. temporary/guest nodes during an event); the
+  Settings page shows a persistent warning while it's off. Defaults
+  **on** (whitelist enforced) — this never silently changes behavior for
+  an existing install. The command password (if configured) and the
+  `SIREN` addressing prefix still apply either way; this toggle only
+  controls the sender check.
 
 ### Command password
 

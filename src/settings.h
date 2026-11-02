@@ -24,6 +24,7 @@ struct Settings {
     uint32_t growlChopperTime = 5000;   // Growl Test: chopper-alone duration
     char     webPassword[33] = "Siren123!";
     char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic short names (case-insensitive) allowed to issue mesh commands; empty = block all. Text Message mode prefixes each line with the sender's short name, not a hex node ID -- "3A3C" is this test node's short name, which just happens to look hex.
+    bool     meshWhitelistEnabled = true;  // master on/off for the sender whitelist above. Default true (enforced) -- a deliberate opt-in weakening when turned off: any sender transmitting a properly-addressed, password-correct command is accepted, bypassing meshWhitelist entirely.
     char     meshPassword[64] = "";        // plaintext, optional trailing token on mesh commands ("SIREN WAIL <password>"); empty = not required. PING is exempt.
     bool     weatherAutoTriggerEnabled = true;  // dedicated kill-switch for the Weather Watcher link, independent of buttons.locked
 
@@ -78,6 +79,7 @@ public:
         strlcpy(s.webPassword, pw.c_str(), sizeof(s.webPassword));
         String wl = prefs.getString("meshWL", s.meshWhitelist);
         strlcpy(s.meshWhitelist, wl.c_str(), sizeof(s.meshWhitelist));
+        s.meshWhitelistEnabled = prefs.getBool("meshWLOn", s.meshWhitelistEnabled);
         String mpw = prefs.getString("meshPW", s.meshPassword);
         strlcpy(s.meshPassword, mpw.c_str(), sizeof(s.meshPassword));
         s.weatherAutoTriggerEnabled = prefs.getBool("wxAutoTrig", s.weatherAutoTriggerEnabled);
@@ -117,6 +119,7 @@ public:
         prefs.putUInt("growlChpTime", s.growlChopperTime);
         prefs.putString("webPwd",       s.webPassword);
         prefs.putString("meshWL",       s.meshWhitelist);
+        prefs.putBool("meshWLOn",       s.meshWhitelistEnabled);
         prefs.putString("meshPW",       s.meshPassword);
         prefs.putBool("wxAutoTrig",     s.weatherAutoTriggerEnabled);
         prefs.putBool("meshNtfAct",     s.meshNotifyActivation);

@@ -296,7 +296,17 @@ private:
     // (the sender's 1-4 character display label, whatever it's set to),
     // not hex node IDs. An empty whitelist blocks everything (fail-safe
     // default) rather than allowing everything.
+    //
+    // settingsMgr.s.meshWhitelistEnabled is the master on/off for this
+    // check — when false, every properly-addressed (SIREN-prefixed),
+    // password-correct command is accepted regardless of sender, same as
+    // if every short name were whitelisted. This is a deliberate, opt-in
+    // reduction in security (anyone transmitting on the Meshtastic channel
+    // can control the siren), surfaced with a warning on the Settings
+    // page; defaults true (whitelist enforced) so existing installs are
+    // unaffected.
     static bool isSenderAllowed(const char* id) {
+        if (!settingsMgr.s.meshWhitelistEnabled) return true;
         if (!id || !*id) return false;
         const char* p = settingsMgr.s.meshWhitelist;
         while (*p) {

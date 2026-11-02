@@ -869,6 +869,8 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
     <div><label for="meshWL">Allowed sender short names</label><input type="text" id="meshWL" class="mono" placeholder="e.g. 3A3C, VSR"><p class="hint" style="margin-top:6px">Comma-separated, matching each node's Meshtastic short name (not its node ID). Leave empty to block everyone.</p></div>
     <div><label for="meshPW">Command password (optional)</label><input type="text" id="meshPW" placeholder="No password"><p class="hint" style="margin-top:6px">Sent in plain text over the mesh.</p></div>
   </div>
+  <div class="trow" style="margin-top:8px"><label for="meshWhitelistEnabled">Enforce sender whitelist</label><input type="checkbox" id="meshWhitelistEnabled" onchange="refreshMeshWLWarn()"></div>
+  <p class="hint" id="meshWLWarn" style="display:none;color:var(--red)">&#9888; Whitelist disabled &mdash; <b>any</b> node on this Meshtastic channel can control the siren with a correctly-addressed, correctly-passworded command, regardless of the sender list above. This is less secure; turn it back on unless you specifically mean to accept commands from any node.</p>
   <div>
     <span class="eyebrow">Broadcast over mesh</span>
     <div class="trow" style="margin-top:8px"><label for="meshNotifyActivation">Activations and stops</label><input type="checkbox" id="meshNotifyActivation"></div>
@@ -976,6 +978,8 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('rstReason').textContent=d.resetReason||'—';
   document.getElementById('meshWL').value=d.meshWhitelist||'';
   document.getElementById('meshPW').value=d.meshPassword||'';
+  document.getElementById('meshWhitelistEnabled').checked=d.meshWhitelistEnabled!==false;
+  refreshMeshWLWarn();
   document.getElementById('meshNotifyActivation').checked=d.meshNotifyActivation!==false;
   document.getElementById('meshNotifySystemEvents').checked=d.meshNotifySystemEvents!==false;
   document.getElementById('meshNotifyWwHealth').checked=d.meshNotifyWwHealth!==false;
@@ -1112,11 +1116,16 @@ function saveTime(){
   };
   post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
 }
+function refreshMeshWLWarn(){
+  document.getElementById('meshWLWarn').style.display=
+    document.getElementById('meshWhitelistEnabled').checked?'none':'block';
+}
 function saveMeshWL(){
   const wl=document.getElementById('meshWL').value.trim();
   const pw=document.getElementById('meshPW').value.trim();
   post('/settings-data',{
     meshWhitelist:wl,
+    meshWhitelistEnabled: document.getElementById('meshWhitelistEnabled').checked,
     meshPassword:pw,
     meshNotifyActivation: document.getElementById('meshNotifyActivation').checked,
     meshNotifySystemEvents: document.getElementById('meshNotifySystemEvents').checked,
@@ -1914,6 +1923,7 @@ private:
                     applyUInt(doc, "longPressMs",      s.longPressMs,      200, 5000);
                     applyUInt(doc, "buttonDebounceMs", s.buttonDebounceMs, 0, 1000);
                     applyString(doc, "meshWhitelist", s.meshWhitelist, sizeof(s.meshWhitelist));
+                    applyBool(doc, "meshWhitelistEnabled", s.meshWhitelistEnabled);
                     applyString(doc, "meshPassword", s.meshPassword, sizeof(s.meshPassword));
                     applyBool(doc, "weatherAutoTriggerEnabled", s.weatherAutoTriggerEnabled);
                     applyBool(doc, "meshNotifyActivation", s.meshNotifyActivation);
@@ -2292,6 +2302,7 @@ private:
         doc["longPressMs"]         = s.longPressMs;
         doc["buttonDebounceMs"]    = s.buttonDebounceMs;
         doc["meshWhitelist"]       = s.meshWhitelist;
+        doc["meshWhitelistEnabled"] = s.meshWhitelistEnabled;
         doc["meshPassword"]        = s.meshPassword;
         doc["weatherAutoTriggerEnabled"] = s.weatherAutoTriggerEnabled;
         doc["meshNotifyActivation"]   = s.meshNotifyActivation;
