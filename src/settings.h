@@ -23,7 +23,7 @@ struct Settings {
     uint32_t growlRotatorTime = 5000;   // Growl Test: rotator-alone duration
     uint32_t growlChopperTime = 5000;   // Growl Test: chopper-alone duration
     char     webPassword[33] = "Siren123!";
-    char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic sender IDs (hex, case-insensitive) allowed to issue mesh commands; empty = block all
+    char     meshWhitelist[128] = "3A3C";  // comma-separated Meshtastic short names (case-insensitive) allowed to issue mesh commands; empty = block all. Text Message mode prefixes each line with the sender's short name, not a hex node ID -- "3A3C" is this test node's short name, which just happens to look hex.
     char     meshPassword[64] = "";        // plaintext, optional trailing token on mesh commands ("SIREN WAIL <password>"); empty = not required. PING is exempt.
     bool     weatherAutoTriggerEnabled = true;  // dedicated kill-switch for the Weather Watcher link, independent of buttons.locked
 

@@ -16,9 +16,11 @@
 // MODE exclusivity apply here automatically with no separate safety logic.
 //
 // Text Message mode prefixes every incoming line with the sender's short
-// node id, e.g. "3a3c: SIREN WAIL" — handleCommand() strips that prefix
-// before parsing the command, and also uses it as the whitelist check
-// against settingsMgr.s.meshWhitelist. Commands also take an optional
+// name — the node's user-configurable 1-4 character display label (NOT a
+// hex node ID; see SerialModule.cpp in the Meshtastic firmware), e.g.
+// "VSR: SIREN WAIL" — handleCommand() strips that prefix before parsing
+// the command, and also uses it as the whitelist check against
+// settingsMgr.s.meshWhitelist. Commands also take an optional
 // trailing password token ("SIREN WAIL PASS123"), checked against
 // settingsMgr.s.meshPassword when one is configured; PING is exempt.
 //
@@ -290,8 +292,10 @@ private:
     }
 
     // Comma-separated, case-insensitive, whitespace-trimmed match against
-    // settingsMgr.s.meshWhitelist. An empty whitelist blocks everything
-    // (fail-safe default) rather than allowing everything.
+    // settingsMgr.s.meshWhitelist — entries are Meshtastic short names
+    // (the sender's 1-4 character display label, whatever it's set to),
+    // not hex node IDs. An empty whitelist blocks everything (fail-safe
+    // default) rather than allowing everything.
     static bool isSenderAllowed(const char* id) {
         if (!id || !*id) return false;
         const char* p = settingsMgr.s.meshWhitelist;
@@ -335,26 +339,24 @@ private:
         while (*line == ' ') line++;
 
         // Text Message mode prefixes every incoming line with the sender's
-        // short node id, e.g. "3a3c: SIREN WAIL" — pull that out before
-        // parsing the command, both to feed the whitelist check below and so
-        // the SIREN prefix match isn't thrown off by a leading "3a3c: ".
-        // If no such pattern is found (e.g. a bare line with no id prefix),
-        // senderId stays empty and the whitelist check below will reject it.
+        // short name (an arbitrary 1-4 character label set on that node,
+        // NOT a hex node ID — Meshtastic's default auto-generated short
+        // names just happen to often look hex, which is what led to that
+        // wrong assumption here originally), e.g. "VSR: SIREN WAIL" — pull
+        // that out before parsing the command, both to feed the whitelist
+        // check below and so the SIREN prefix match isn't thrown off by a
+        // leading "VSR: ". If no such pattern is found (e.g. a bare line
+        // with no prefix at all), senderId stays empty and the whitelist
+        // check below will reject it.
         char senderId[9] = {0};
         char* body = line;
         char* colon = strchr(line, ':');
         if (colon && colon > line && (size_t)(colon - line) < sizeof(senderId)) {
-            bool allHex = true;
-            for (char* p = line; p < colon; p++) {
-                if (!isxdigit((unsigned char)*p)) { allHex = false; break; }
-            }
-            if (allHex) {
-                size_t idLen = (size_t)(colon - line);
-                memcpy(senderId, line, idLen);
-                senderId[idLen] = '\0';
-                body = colon + 1;
-                while (*body == ' ') body++;
-            }
+            size_t idLen = (size_t)(colon - line);
+            memcpy(senderId, line, idLen);
+            senderId[idLen] = '\0';
+            body = colon + 1;
+            while (*body == ' ') body++;
         }
 
         // Any line at all proves the node is powered and its serial link to

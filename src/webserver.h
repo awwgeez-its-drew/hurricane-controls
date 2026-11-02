@@ -866,7 +866,7 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
   </div>
   <p class="hint" style="margin-top:-8px">The node can't be queried directly, so these only update when something passes through it. A quiet channel isn't a fault &mdash; send <code>SIREN PING</code> from another node to confirm the whole path.</p>
   <div class="g2">
-    <div><label for="meshWL">Allowed sender IDs</label><input type="text" id="meshWL" class="mono" placeholder="e.g. 3A3C, 1B93"><p class="hint" style="margin-top:6px">Comma-separated. Leave empty to block everyone.</p></div>
+    <div><label for="meshWL">Allowed sender short names</label><input type="text" id="meshWL" class="mono" placeholder="e.g. 3A3C, VSR"><p class="hint" style="margin-top:6px">Comma-separated, matching each node's Meshtastic short name (not its node ID). Leave empty to block everyone.</p></div>
     <div><label for="meshPW">Command password (optional)</label><input type="text" id="meshPW" placeholder="No password"><p class="hint" style="margin-top:6px">Sent in plain text over the mesh.</p></div>
   </div>
   <div>

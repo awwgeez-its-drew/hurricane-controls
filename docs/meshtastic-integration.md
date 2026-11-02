@@ -20,15 +20,24 @@ real hardware, see below), and not Meshtastic's protobuf/StreamAPI protocol
 non-functional for this purpose).
 
 Text Message mode has one behavior that matters a lot for parsing: **it
-prefixes every incoming mesh message with the sender's short node ID**
-before writing it to serial, e.g. a message typed as `SIREN PING` on another
-node arrives at the controller as:
+prefixes every incoming mesh message with the sender's short name** — that
+node's own user-configurable 1-4 character display label (set in the
+Meshtastic app's node settings), **not a hex node ID** — before writing it
+to serial, e.g. a message typed as `SIREN PING` on another node whose short
+name is set to `VSR` arrives at the controller as:
 
 ```
-3a3c: SIREN PING
+VSR: SIREN PING
 ```
 
-`mesh.h` strips this `<sender-id>: ` prefix before matching the command, and
+A node that was left on its default auto-generated short name will often
+show something that *looks* hex (e.g. `3a3c: SIREN PING`), which is exactly
+why earlier revisions of this doc and `mesh.h` mistakenly assumed the
+prefix was a hex node ID and rejected anything else. It isn't — it's
+whatever that node's short name field is currently set to, hex-looking or
+not.
+
+`mesh.h` strips this `<short-name>: ` prefix before matching the command, and
 also uses the extracted ID for the whitelist check (see below). The
 controller does **not** speak Meshtastic's binary API — no protobufs, just
 this one line-oriented text format.
@@ -94,21 +103,32 @@ trailing whitespace.
 ### Sender whitelist
 
 Beyond the `SIREN` addressing prefix, the controller also checks the
-sender's node ID (the part Text Message mode prepends, e.g. `3a3c`) against
-an allow-list before doing anything — even for a correctly-prefixed,
-recognized command.
+sender's **short name** (the part Text Message mode prepends, e.g. `VSR`
+— not a hex node ID) against an allow-list before doing anything — even
+for a correctly-prefixed, recognized command.
 
 - Configured via the **Settings page → Mesh Settings** card, or the
   `meshWhitelist` field in `src/settings.h` / the `/settings-data` API.
-- Comma-separated list of short hex node IDs, case-insensitive, whitespace
-  around entries is trimmed (e.g. `3A3C, 1B93`).
+- Comma-separated list of sender short names, exactly as that node's
+  Meshtastic short-name field is set, case-insensitive, whitespace around
+  entries is trimmed (e.g. `3A3C, VSR`). A short name can be any 1-4
+  character label — it does not need to look hex, and most won't unless
+  a node was left on its default auto-generated one.
 - **An empty whitelist blocks every command** — this is a fail-safe
   default, not "allow everyone."
 - A sender not on the list is treated exactly like a non-addressed line:
   **silently ignored, no reply.** No `ERR: unauthorized` or similar, both to
   avoid leaking that the whitelist exists/behaves a certain way, and to
   avoid giving an unwanted sender a reason to keep retrying.
-- Default whitelist ships with one confirmed-good test node: `3A3C`.
+- Default whitelist ships with one confirmed-good test node's short name:
+  `3A3C` (hex-looking only because that node was left on its default
+  auto-generated short name — it is not a node ID).
+- **Short names are not guaranteed unique or stable.** Anyone can set
+  their own node's short name to match an entry already on your
+  whitelist, and a node's owner can change it at any time. This is a
+  convenience allow-list, not a cryptographic identity check — the
+  Meshtastic channel's own encryption/PSK is the real access control
+  boundary; see "Security model" below.
 - **This only works under Text Message mode.** The whitelist check is keyed
   off the sender-ID prefix that mode adds; under Simple mode (no ID prefix)
   every sender ID would be empty and every command would be rejected. Since
@@ -292,16 +312,18 @@ passphrase, nothing beyond the `SIREN` addressing prefix (which is for
 routing/noise-filtering on a shared channel, not security) and the sender
 whitelist above (which only recognizes senders you've explicitly added).
 Anyone who can transmit on the Meshtastic channel this node is bridging, and
-whose node ID you've whitelisted, can control the siren. The whitelist
-narrows this from "anyone on the channel" to "anyone on the channel whose ID
-you've added," but the channel's own pre-shared key is still the first line
-of defense — **use a dedicated private channel**, not a public or default
-one, when setting this up.
+whose short name you've whitelisted, can control the siren. The whitelist
+narrows this from "anyone on the channel" to "anyone on the channel whose
+short name you've added" — but since a short name is a self-reported,
+changeable label (see "Sender whitelist" above), not a hard identity, the
+channel's own pre-shared key is still the first line of defense — **use a
+dedicated private channel**, not a public or default one, when setting this
+up.
 
 ## Lessons from bring-up
 
-Two real issues turned up getting this working end-to-end on a Heltec V3 +
-NodeMCU-32S pair, both resolved and reflected in the design above:
+Three real issues turned up getting this working end-to-end on a Heltec V3 +
+NodeMCU-32S pair, all resolved and reflected in the design above:
 
 1. **Heltec V3's GPIO1 is not a free pin — it's `VBAT_Read`, the board's
    battery-voltage ADC sense line.** The Serial Module was initially
@@ -326,6 +348,20 @@ NodeMCU-32S pair, both resolved and reflected in the design above:
    passthrough); that assumption was wrong for this firmware version, and
    Text Message mode's sender-ID-prefixed format is what `mesh.h` now
    parses for.
+3. **The sender-ID prefix is the sender's short name, not a hex node ID
+   — confirmed against the Meshtastic firmware's own `SerialModule.cpp`
+   source** (`node->user.short_name`, printed as `"%s: %s"`, falling back
+   to the literal string `???` for an unresolved sender). This repo's
+   original bring-up test node happened to be left on its default
+   auto-generated short name, which looked hex (`3a3c`), and that
+   coincidence led `mesh.h`'s sender-ID parsing (and this doc) to wrongly
+   require every character before the `:` to be a hex digit. A node with
+   a custom short name — anything not made entirely of `0-9A-Fa-f`
+   characters, e.g. `VSR` — was silently and unconditionally rejected by
+   that gate, with no error reply (by design, see "Sender whitelist"), so
+   it looked identical to an unwhitelisted sender. Fixed by dropping the
+   hex requirement entirely; the whitelist now matches whatever string
+   actually precedes the colon, exactly as Meshtastic sends it.
 
 One diagnostic note worth preserving: **Meshtastic's own debug console
 (over the node's native USB) is a different interface from the GPIO Serial
