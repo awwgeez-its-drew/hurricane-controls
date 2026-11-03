@@ -5,6 +5,50 @@ as a set. Main-board and Weather Watcher versions are independent
 (different `FW_VERSION` in each board's `config.h`), listed together here
 by the release they shipped in.
 
+## 2.0.2 / Weather Watcher 2.0.2
+
+Granular notification priorities, a configurable Status Broadcast, and
+two new display-only alert categories.
+
+- **Granular ntfy priorities** (Weather Watcher): the "Also notify for"
+  list and every weather category in the Alert response table are now
+  a priority select (Off / 1-5, ntfy's own scale) instead of a plain
+  on/off toggle — Faults, Activations (the three old per-source toggles
+  collapse into one, since the message itself names the source), Siren
+  stopped/cycle completed, Locked button pressed, Boot announcement,
+  Scheduled status updates, plus each of the 7 weather categories.
+  Faults always sends a non-responding siren at the max priority
+  regardless of the configured value. Lock/unlock and weather-trigger
+  toggle notifications are dropped. Existing installs migrate their old
+  on/off choices into a starting priority the first boot after
+  updating — nothing changes silently.
+- **Status Broadcast** (main board, new Settings card, just under
+  Time): replaces the fixed 12-hour interval with up to 3 configurable
+  daily local times, and makes every data point in the periodic status
+  line individually toggleable — mode, lock state, uptime, CPU temp and
+  Weather Watcher health (on by default, matching the old fixed
+  message), plus new optional fields: Wi-Fi status, current time, last
+  activation, and current alerts (off by default). `SIREN PING`'s reply
+  now mirrors these same fields on demand, instead of its own
+  hardcoded set. Both the Meshtastic line and the push to the Weather
+  Watcher report on this one shared schedule.
+- **Tornado Watch / Severe Thunderstorm Watch**: new display-only alert
+  categories (never trigger the siren) on both boards' Current Alerts,
+  sorted below real Warnings, red/yellow colored, with their own ntfy
+  priority and a one-time Meshtastic "WATCH ISSUED" ping (deduped per
+  alert, on by default). The main board's warning banner is renamed
+  "Active alerts" now that it can show Watches too.
+- **Alert expiry**: the Weather Watcher's Current Alerts cards show a
+  live countdown next to each event name ("Tornado Watch (5h 13min
+  remaining)"); the main board shows a static "Tornado Watch until
+  11pm" in the viewer's own local time instead.
+- **Fix**: SPC-issued Watch alerts' "View on NWS" link and polygon map
+  both failed — their `properties.id` comes back from the NWS API as a
+  bare `urn:oid:...` instead of the full URL the rest of the API uses.
+  Normalized once where every alert is first read. Also fixes a related
+  dedup-key collision risk for any VTEC-less alert (which watches
+  always are).
+
 ## 2.0.1 / Weather Watcher 2.0.1
 
 Phone-layout follow-up to the 2.0.0 redesign; nothing changes on wide
