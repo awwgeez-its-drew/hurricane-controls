@@ -642,7 +642,7 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
   <div class="sub" style="gap:0">
     <span class="eyebrow" style="margin-bottom:4px">Also notify for</span>
     <div id="ntfyPriRows"></div>
-    <p class="hint" style="margin-top:4px">Weather alert types (Tornado Emergency, Severe T-storm, etc.) are set individually in the Alert response table below.</p>
+    <p class="hint" style="margin-top:4px">Weather alert types (Tornado Emergency, Severe T-storm, etc.) are set individually in the Alert response table above.</p>
   </div>
   <div class="actions"><button class="btn save" onclick="saveNtfy()">Save notification settings</button><button class="btn logout" onclick="testNtfy()">Send test notification</button></div>
   <div class="msg" id="ntfyMsg"></div>
