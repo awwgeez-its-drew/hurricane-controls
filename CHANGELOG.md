@@ -48,6 +48,15 @@ two new display-only alert categories.
   Normalized once where every alert is first read. Also fixes a related
   dedup-key collision risk for any VTEC-less alert (which watches
   always are).
+- **Mesh whitelist fixes** (main board): sender matching was gated on
+  every character before the `:` being hex, which only worked by
+  coincidence for the one test node whose default short name happened
+  to look hex — any node with a custom short name (letters, not just
+  hex digits) was silently rejected. The whitelist now matches
+  Meshtastic's actual short name, whatever it's set to. Also added a
+  master "Enforce sender whitelist" toggle for sites that need to
+  accept commands from any node on the channel, with a visible warning
+  while it's off.
 
 ## 2.0.1 / Weather Watcher 2.0.1
 
