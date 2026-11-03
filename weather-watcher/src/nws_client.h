@@ -645,7 +645,22 @@ private:
         JsonArray features = doc["features"].as<JsonArray>();
         for (JsonObject feature : features) {
             JsonObject props = feature["properties"];
-            const char* id     = props["id"]          | "";
+            // Almost always already the full "https://api.weather.gov/
+            // alerts/urn:oid:..." URL, but SPC-issued products (Tornado/
+            // Severe Thunderstorm Watch — SPC, not the local forecast
+            // office, issues these) have been observed coming back as just
+            // the bare "urn:oid:..." identifier with no URL prefix. Without
+            // this, the dashboard's "View on NWS" link and its polygon map
+            // fetch both silently fail (an unprefixed href/fetch target is
+            // treated as relative to this board's own address). Normalize
+            // once here so every downstream use of `id` can assume a real URL.
+            const char* rawId = props["id"] | "";
+            char idBuf[160];
+            if (*rawId && strncmp(rawId, "http", 4) != 0)
+                snprintf(idBuf, sizeof(idBuf), "https://api.weather.gov/alerts/%s", rawId);
+            else
+                strlcpy(idBuf, rawId, sizeof(idBuf));
+            const char* id = idBuf;
             const char* event  = props["event"]       | "";
             const char* status = props["status"]      | "";
             const char* msgType = props["messageType"] | "";
@@ -664,8 +679,18 @@ private:
             if (category == AlertCategory::NONE) continue;
 
             char key[20];
-            if (!parseVtecKey(params["VTEC"][0] | "", key, sizeof(key)))
-                strlcpy(key, id, sizeof(key)); // fallback if VTEC is ever missing
+            if (!parseVtecKey(params["VTEC"][0] | "", key, sizeof(key))) {
+                // VTEC-less (SPC-issued Watches never carry one) — dedup
+                // key from the alert's own identifier instead. Take the
+                // TAIL, not the head: these all share a long common prefix
+                // ("https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.")
+                // so truncating from the front would collide between
+                // unrelated alerts — the trailing hash is what's distinct.
+                size_t rawLen = strlen(rawId);
+                size_t keyCap = sizeof(key) - 1;
+                const char* tail = rawLen > keyCap ? rawId + (rawLen - keyCap) : rawId;
+                strlcpy(key, tail, sizeof(key));
+            }
 
             TrackedEvent* te = findOrCreateTracked(key, now);
 
