@@ -38,6 +38,7 @@ struct Settings {
     bool meshNotifySystemEvents = true;  // lockout toggled, weather-trigger toggled, a locked button pressed
     bool meshNotifyWwHealth     = true;  // WEATHER WATCHER LOST/RECOVERED/ERROR
     bool meshNotifyStatus       = true;  // STARTUP COMPLETE + the periodic status broadcast (not the SIREN PING reply, which always answers)
+    bool meshNotifyWatches      = true;  // a new Tornado/Severe T-storm Watch appears in the Weather Watcher's mirrored alert list (display-only — never a trigger)
 
     // NTP fallback — this board normally gets its clock from the Weather
     // Watcher's "WX TIME" push over the UART link; these settings only
@@ -48,6 +49,33 @@ struct Settings {
     char     timeZone[16]  = "EASTERN";   // EASTERN/CENTRAL/MOUNTAIN/ARIZONA/PACIFIC/ALASKA/HAWAII
     bool     autoDst        = true;
     uint32_t ntpUpdateHours = 12;
+
+    // Status Broadcast — replaces the old fixed 12-hour interval for both
+    // the Meshtastic STATUS line (mesh.h's buildStatusMessage()) and the
+    // SX STATUS push to the Weather Watcher (weather_link.h), which now
+    // fire together on this same schedule. Up to 3 daily local times,
+    // "HH:MM" 24h format; an empty slot is unused. Whether either channel
+    // is actually sent at all is still controlled by meshNotifyStatus
+    // (above) and the Weather Watcher's own ntfyPriBoot/
+    // ntfyPriScheduledStatus — this only controls the timing and content.
+    char statusTime1[6] = "08:00";
+    char statusTime2[6] = "20:00";
+    char statusTime3[6] = "";
+
+    // Which data points the status message includes. The first 5 default
+    // true, matching the fixed fields the old unconditional message always
+    // carried — this redesign only makes them optional, it doesn't change
+    // what a default install sends. The last 4 are genuinely new content
+    // this message never carried before, so they default false.
+    bool statusIncludeMode     = true;
+    bool statusIncludeLock     = true;
+    bool statusIncludeUptime   = true;
+    bool statusIncludeCpuTemp  = true;
+    bool statusIncludeWwHealth = true;
+    bool statusIncludeWifi     = false;
+    bool statusIncludeTime     = false;
+    bool statusIncludeLastRun  = false;
+    bool statusIncludeAlerts   = false;
 };
 
 class SettingsManager {
@@ -87,12 +115,28 @@ public:
         s.meshNotifySystemEvents = prefs.getBool("meshNtfSys",  s.meshNotifySystemEvents);
         s.meshNotifyWwHealth     = prefs.getBool("meshNtfWw",   s.meshNotifyWwHealth);
         s.meshNotifyStatus       = prefs.getBool("meshNtfStat", s.meshNotifyStatus);
+        s.meshNotifyWatches      = prefs.getBool("meshNtfWch",  s.meshNotifyWatches);
         String ntpSrv = prefs.getString("ntpServer", s.ntpServer);
         strlcpy(s.ntpServer, ntpSrv.c_str(), sizeof(s.ntpServer));
         String tz = prefs.getString("timeZone", s.timeZone);
         strlcpy(s.timeZone, tz.c_str(), sizeof(s.timeZone));
         s.autoDst        = prefs.getBool("autoDst",  s.autoDst);
         s.ntpUpdateHours = prefs.getUInt("ntpUpdHrs", s.ntpUpdateHours);
+        String st1 = prefs.getString("statusTime1", s.statusTime1);
+        strlcpy(s.statusTime1, st1.c_str(), sizeof(s.statusTime1));
+        String st2 = prefs.getString("statusTime2", s.statusTime2);
+        strlcpy(s.statusTime2, st2.c_str(), sizeof(s.statusTime2));
+        String st3 = prefs.getString("statusTime3", s.statusTime3);
+        strlcpy(s.statusTime3, st3.c_str(), sizeof(s.statusTime3));
+        s.statusIncludeMode     = prefs.getBool("statIncMode", s.statusIncludeMode);
+        s.statusIncludeLock     = prefs.getBool("statIncLock", s.statusIncludeLock);
+        s.statusIncludeUptime   = prefs.getBool("statIncUp",   s.statusIncludeUptime);
+        s.statusIncludeCpuTemp  = prefs.getBool("statIncTemp", s.statusIncludeCpuTemp);
+        s.statusIncludeWwHealth = prefs.getBool("statIncWw",   s.statusIncludeWwHealth);
+        s.statusIncludeWifi     = prefs.getBool("statIncWifi", s.statusIncludeWifi);
+        s.statusIncludeTime     = prefs.getBool("statIncTime", s.statusIncludeTime);
+        s.statusIncludeLastRun  = prefs.getBool("statIncRun",  s.statusIncludeLastRun);
+        s.statusIncludeAlerts   = prefs.getBool("statIncAlrt", s.statusIncludeAlerts);
         prefs.end();
     }
 
@@ -126,10 +170,23 @@ public:
         prefs.putBool("meshNtfSys",     s.meshNotifySystemEvents);
         prefs.putBool("meshNtfWw",      s.meshNotifyWwHealth);
         prefs.putBool("meshNtfStat",    s.meshNotifyStatus);
+        prefs.putBool("meshNtfWch",     s.meshNotifyWatches);
         prefs.putString("ntpServer",    s.ntpServer);
         prefs.putString("timeZone",     s.timeZone);
         prefs.putBool("autoDst",        s.autoDst);
         prefs.putUInt("ntpUpdHrs",      s.ntpUpdateHours);
+        prefs.putString("statusTime1", s.statusTime1);
+        prefs.putString("statusTime2", s.statusTime2);
+        prefs.putString("statusTime3", s.statusTime3);
+        prefs.putBool("statIncMode", s.statusIncludeMode);
+        prefs.putBool("statIncLock", s.statusIncludeLock);
+        prefs.putBool("statIncUp",   s.statusIncludeUptime);
+        prefs.putBool("statIncTemp", s.statusIncludeCpuTemp);
+        prefs.putBool("statIncWw",   s.statusIncludeWwHealth);
+        prefs.putBool("statIncWifi", s.statusIncludeWifi);
+        prefs.putBool("statIncTime", s.statusIncludeTime);
+        prefs.putBool("statIncRun",  s.statusIncludeLastRun);
+        prefs.putBool("statIncAlrt", s.statusIncludeAlerts);
         // Retired in v1.9.0 (the old "Chopper re-on delay" settings) — clear
         // any stale copies; a no-op once they're gone.
         prefs.remove("atkChopDelay");

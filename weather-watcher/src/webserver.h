@@ -195,7 +195,7 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap
 .no-alerts span{font-size:14px;color:#86C9A0}
 .alert-item{border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;color:#fff;margin-bottom:10px}
 .alert-item:last-child{margin-bottom:0}
-.alert-purple{background:#5B1F8F}.alert-red{background:#7F1D1D}.alert-orange{background:#8A3B0B}
+.alert-purple{background:#5B1F8F}.alert-red{background:#7F1D1D}.alert-orange{background:#8A3B0B}.alert-yellow{background:#8A6D0B}
 .alert-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .alert-title{flex:1;min-width:160px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .alert-title b{font-size:18px}
@@ -539,6 +539,10 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
 .seg input:checked+label[data-v=ATTACK]{background:#B91C1C}
 .seg input:checked+label[data-v=FASTWAIL]{background:#A84A0A}
 .mpush{display:flex;justify-content:center}
+.pri{width:auto;min-height:36px;min-width:72px;padding:0 8px;font-size:13px}
+.mpush select.pri{width:72px;min-height:36px}
+.prirow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.prirow label{margin:0;font-size:14px;font-weight:400;color:var(--text);line-height:1.45}
 /* Other-extreme chips */
 .chklist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .chkrow{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:10px;border:1px solid #222D3D;background:var(--inset)}
@@ -609,6 +613,10 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
   <div class="mxw"><div class="mx" id="matrix">
     <div class="mrow h"><span class="eyebrow">Warning</span><span class="eyebrow">Siren mode</span><span class="eyebrow" style="text-align:center">Push</span></div>
   </div></div>
+  <div style="padding-top:6px">
+    <span class="eyebrow">Watches &mdash; display only, never trigger the siren</span>
+    <div id="watchRows" style="margin-top:4px"></div>
+  </div>
   <div class="trow"><label for="repeatUpg">Re-trigger if an alert that already sounded the siren escalates further</label><input type="checkbox" id="repeatUpg" onchange="saveModes()"></div>
   <div class="actions"><button class="btn save" onclick="saveResponse()">Save alert response</button></div>
   <div class="msg" id="mm"></div>
@@ -633,13 +641,8 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
   </div>
   <div class="sub" style="gap:0">
     <span class="eyebrow" style="margin-bottom:4px">Also notify for</span>
-    <div class="trow"><label for="ntfyNotifyErrors">Faults &mdash; NWS poll errors, siren not responding</label><input type="checkbox" id="ntfyNotifyErrors"></div>
-    <div class="trow"><label for="ntfyNotifySrcLocal">Siren started from its physical buttons</label><input type="checkbox" id="ntfyNotifySrcLocal"></div>
-    <div class="trow"><label for="ntfyNotifySrcWeb">Siren started from the web panel</label><input type="checkbox" id="ntfyNotifySrcWeb"></div>
-    <div class="trow"><label for="ntfyNotifySrcMesh">Siren started over Meshtastic</label><input type="checkbox" id="ntfyNotifySrcMesh"></div>
-    <div class="trow"><label for="ntfyNotifyStop">Siren stopped or cycle completed</label><input type="checkbox" id="ntfyNotifyStop"></div>
-    <div class="trow"><label for="ntfyNotifySystemEvents">Lockout or weather trigger toggled, locked button pressed</label><input type="checkbox" id="ntfyNotifySystemEvents"></div>
-    <div class="trow"><label for="ntfyNotifyStatus">Boot announcement and 12-hour status</label><input type="checkbox" id="ntfyNotifyStatus"></div>
+    <div id="ntfyPriRows"></div>
+    <p class="hint" style="margin-top:4px">Weather alert types (Tornado Emergency, Severe T-storm, etc.) are set individually in the Alert response table below.</p>
   </div>
   <div class="actions"><button class="btn save" onclick="saveNtfy()">Save notification settings</button><button class="btn logout" onclick="testNtfy()">Send test notification</button></div>
   <div class="msg" id="ntfyMsg"></div>
@@ -744,25 +747,62 @@ function msg(id,txt,ok){
 // One row per alert category: its siren-mode setting (radio group named
 // after the old <select> id) and its ntfy category switch.
 const RESPONSE_ROWS=[
-  ['torEmMode','ntfyCatTornadoEmergency','Tornado Emergency','Catastrophic damage threat','#A855F7'],
-  ['torCfMode','ntfyCatTornadoConfirmed','Tornado Warning — confirmed','Observed, or carries a damage tag','#A855F7'],
-  ['torUcMode','ntfyCatTornadoUnconfirmed','Tornado Warning — unconfirmed','Radar-indicated, no damage tag','#EF4444'],
-  ['svrDeMode','ntfyCatThunderstormDestructive','Severe T-storm — destructive','Destructive damage threat','#EF4444'],
-  ['svrCoMode','ntfyCatThunderstormConsiderable','Severe T-storm — considerable','Considerable damage threat','#EF4444'],
-  ['svrBaMode','ntfyCatThunderstormBase','Severe T-storm — base','No damage tag','#F97316'],
-  ['otherMode','ntfyCatOtherExtreme','Other Extreme Emergency','Only the types checked below','#A855F7'],
+  ['torEmMode','ntfyPriTornadoEmergency','Tornado Emergency','Catastrophic damage threat','#A855F7'],
+  ['torCfMode','ntfyPriTornadoConfirmed','Tornado Warning — confirmed','Observed, or carries a damage tag','#A855F7'],
+  ['torUcMode','ntfyPriTornadoUnconfirmed','Tornado Warning — unconfirmed','Radar-indicated, no damage tag','#EF4444'],
+  ['svrDeMode','ntfyPriThunderstormDestructive','Severe T-storm — destructive','Destructive damage threat','#EF4444'],
+  ['svrCoMode','ntfyPriThunderstormConsiderable','Severe T-storm — considerable','Considerable damage threat','#EF4444'],
+  ['svrBaMode','ntfyPriThunderstormBase','Severe T-storm — base','No damage tag','#F97316'],
+  ['otherMode','ntfyPriOtherExtreme','Other Extreme Emergency','Only the types checked below','#A855F7'],
 ];
 const MODES=['OFF','WAIL','ATTACK','FASTWAIL'];
+const PRI_OPTS=['Off','1','2','3','4','5'];
+function priSelectHtml(id,label){
+  return '<select class="pri" id="'+id+'" aria-label="'+label+'">'+
+    PRI_OPTS.map(p=>'<option value="'+(p==='Off'?'0':p)+'">'+p+'</option>').join('')+'</select>';
+}
+function getPri(id){return parseInt(document.getElementById(id).value,10)||0;}
+function setPri(id,v){document.getElementById(id).value=String(v|0);}
 (function renderMatrix(){
   document.getElementById('matrix').insertAdjacentHTML('beforeend',RESPONSE_ROWS.map(([sel,cat,name,detail,col])=>
     '<div class="mrow"><div class="mname"><span class="sw" style="background:'+col+'"></span><div><b>'+name+'</b><span>'+detail+'</span></div></div>'+
     '<div class="seg" role="radiogroup" aria-label="'+name+' siren mode">'+
       MODES.map(m=>'<input type="radio" name="'+sel+'" id="'+sel+'_'+m+'" value="'+m+'"><label for="'+sel+'_'+m+'" data-v="'+m+'">'+(m==='FASTWAIL'?'FAST WAIL':m)+'</label>').join('')+
-    '</div><div class="mpush"><input type="checkbox" id="'+cat+'" aria-label="Push notification for '+name+'"></div></div>'
+    '</div><div class="mpush">'+priSelectHtml(cat,'Push priority for '+name)+'</div></div>'
   ).join(''));
 })();
 function setMode(sel,v){const el=document.getElementById(sel+'_'+(v||'OFF'))||document.getElementById(sel+'_OFF');el.checked=true;}
 function getMode(sel){const el=document.querySelector('input[name="'+sel+'"]:checked');return el?el.value:'OFF';}
+
+// Watches — display only (see "Alert response" card's desc above);
+// no siren-mode selector, just a push priority. Saved together with
+// the rest of the Alert response card by saveResponse().
+const WATCH_ROWS=[
+  ['ntfyPriTornadoWatch','Tornado Watch'],
+  ['ntfyPriSevereTstormWatch','Severe Thunderstorm Watch'],
+];
+(function renderWatchRows(){
+  document.getElementById('watchRows').innerHTML=WATCH_ROWS.map(([id,label])=>
+    '<div class="prirow"><label for="'+id+'">'+label+'</label>'+priSelectHtml(id,label)+'</div>'
+  ).join('');
+})();
+
+// Non-weather ntfy categories (Push notifications card's "Also notify
+// for" list) — each one a priority select, same Off/1-5 scale as the
+// Alert response matrix above.
+const NTFY_PRI_ROWS=[
+  ['ntfyPriFaults','Faults — NWS poll errors, siren not responding'],
+  ['ntfyPriActivations','Activations (any source — message names it)'],
+  ['ntfyPriStop','Siren stopped or cycle completed'],
+  ['ntfyPriLockedPress','Locked button pressed'],
+  ['ntfyPriBoot','Boot announcement'],
+  ['ntfyPriScheduledStatus','Scheduled status updates'],
+];
+(function renderNtfyPriRows(){
+  document.getElementById('ntfyPriRows').innerHTML=NTFY_PRI_ROWS.map(([id,label])=>
+    '<div class="prirow"><label for="'+id+'">'+label+'</label>'+priSelectHtml(id,label)+'</div>'
+  ).join('');
+})();
 
 // Mirrors weather-watcher/src/other_extreme_types.h — keep in sync if that table changes.
 const OTHER_EXTREME_CANDIDATES=[
@@ -813,14 +853,9 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('ntfyTopic').value=d.ntfyTopic||'';
   document.getElementById('ntfyTokenHint').textContent=d.ntfyHasToken?'A token is saved (leave blank to keep it).':'No token saved.';
   document.getElementById('ntfyVerifyCert').checked=d.ntfyVerifyCert!==false;
-  RESPONSE_ROWS.forEach(r=>{document.getElementById(r[1]).checked=!!d[r[1]];});
-  document.getElementById('ntfyNotifyErrors').checked=!!d.ntfyNotifyErrors;
-  document.getElementById('ntfyNotifySrcLocal').checked=!!d.ntfyNotifySrcLocal;
-  document.getElementById('ntfyNotifySrcWeb').checked=!!d.ntfyNotifySrcWeb;
-  document.getElementById('ntfyNotifySrcMesh').checked=!!d.ntfyNotifySrcMesh;
-  document.getElementById('ntfyNotifyStop').checked=!!d.ntfyNotifyStop;
-  document.getElementById('ntfyNotifySystemEvents').checked=!!d.ntfyNotifySystemEvents;
-  document.getElementById('ntfyNotifyStatus').checked=!!d.ntfyNotifyStatus;
+  RESPONSE_ROWS.forEach(r=>{setPri(r[1],d[r[1]]);});
+  WATCH_ROWS.forEach(([id])=>{setPri(id,d[id]);});
+  NTFY_PRI_ROWS.forEach(([id])=>{setPri(id,d[id]);});
 });
 
 fetch('/wifi-data').then(r=>r.json()).then(d=>{
@@ -888,7 +923,8 @@ function saveModes(msgId){
 // ntfy switches together — /settings-data applies whichever keys it gets.
 function saveResponse(){
   const b=modesBody();
-  RESPONSE_ROWS.forEach(r=>{b[r[1]]=document.getElementById(r[1]).checked;});
+  RESPONSE_ROWS.forEach(r=>{b[r[1]]=getPri(r[1]);});
+  WATCH_ROWS.forEach(([id])=>{b[id]=getPri(id);});
   post('/settings-data',b).then(d=>msg('mm',d.ok?'Saved!':'Error',d.ok));
 }
 function saveTime(){
@@ -907,15 +943,10 @@ function saveNtfy(){
     ntfyServer: document.getElementById('ntfyServer').value.trim(),
     ntfyTopic: document.getElementById('ntfyTopic').value.trim(),
     ntfyVerifyCert: document.getElementById('ntfyVerifyCert').checked,
-    ntfyNotifyErrors: document.getElementById('ntfyNotifyErrors').checked,
-    ntfyNotifySrcLocal: document.getElementById('ntfyNotifySrcLocal').checked,
-    ntfyNotifySrcWeb: document.getElementById('ntfyNotifySrcWeb').checked,
-    ntfyNotifySrcMesh: document.getElementById('ntfyNotifySrcMesh').checked,
-    ntfyNotifyStop: document.getElementById('ntfyNotifyStop').checked,
-    ntfyNotifySystemEvents: document.getElementById('ntfyNotifySystemEvents').checked,
-    ntfyNotifyStatus: document.getElementById('ntfyNotifyStatus').checked,
   };
-  RESPONSE_ROWS.forEach(r=>{b[r[1]]=document.getElementById(r[1]).checked;});
+  NTFY_PRI_ROWS.forEach(([id])=>{b[id]=getPri(id);});
+  RESPONSE_ROWS.forEach(r=>{b[r[1]]=getPri(r[1]);});
+  WATCH_ROWS.forEach(([id])=>{b[id]=getPri(id);});
   const tok=document.getElementById('ntfyToken').value;
   const saveMain=()=>post('/settings-data',b);
   const saveTok=tok.length?post('/ntfy-token',{token:tok}):Promise.resolve({ok:true});
@@ -1093,6 +1124,13 @@ private:
         const char* m = doc[key].as<const char*>();
         if (!strcmp(m, "OFF") || !strcmp(m, "WAIL") || !strcmp(m, "ATTACK") || !strcmp(m, "FASTWAIL"))
             strlcpy(field, m, size);
+    }
+
+    // An ntfy priority field: 0 (off) or ntfy's own 1-5 scale, clamped.
+    static void applyPri(JsonDocument& doc, const char* key, int8_t& field) {
+        if (!doc[key].is<int>()) return;
+        int v = doc[key].as<int>();
+        field = (int8_t)(v < 0 ? 0 : v > 5 ? 5 : v);
     }
 
     void redirectLogin(AsyncWebServerRequest* req) {
@@ -1350,20 +1388,21 @@ private:
                     if (doc["ntfyTopic"].is<const char*>())
                         strlcpy(s.ntfyTopic, doc["ntfyTopic"].as<const char*>(), sizeof(s.ntfyTopic));
                     if (doc["ntfyVerifyCert"].is<bool>()) s.ntfyVerifyCert = doc["ntfyVerifyCert"].as<bool>();
-                    if (doc["ntfyCatThunderstormBase"].is<bool>()) s.ntfyCatThunderstormBase = doc["ntfyCatThunderstormBase"].as<bool>();
-                    if (doc["ntfyCatOtherExtreme"].is<bool>()) s.ntfyCatOtherExtreme = doc["ntfyCatOtherExtreme"].as<bool>();
-                    if (doc["ntfyCatThunderstormConsiderable"].is<bool>()) s.ntfyCatThunderstormConsiderable = doc["ntfyCatThunderstormConsiderable"].as<bool>();
-                    if (doc["ntfyCatTornadoUnconfirmed"].is<bool>()) s.ntfyCatTornadoUnconfirmed = doc["ntfyCatTornadoUnconfirmed"].as<bool>();
-                    if (doc["ntfyCatThunderstormDestructive"].is<bool>()) s.ntfyCatThunderstormDestructive = doc["ntfyCatThunderstormDestructive"].as<bool>();
-                    if (doc["ntfyCatTornadoConfirmed"].is<bool>()) s.ntfyCatTornadoConfirmed = doc["ntfyCatTornadoConfirmed"].as<bool>();
-                    if (doc["ntfyCatTornadoEmergency"].is<bool>()) s.ntfyCatTornadoEmergency = doc["ntfyCatTornadoEmergency"].as<bool>();
-                    if (doc["ntfyNotifyErrors"].is<bool>()) s.ntfyNotifyErrors = doc["ntfyNotifyErrors"].as<bool>();
-                    if (doc["ntfyNotifySrcLocal"].is<bool>()) s.ntfyNotifySrcLocal = doc["ntfyNotifySrcLocal"].as<bool>();
-                    if (doc["ntfyNotifySrcWeb"].is<bool>()) s.ntfyNotifySrcWeb = doc["ntfyNotifySrcWeb"].as<bool>();
-                    if (doc["ntfyNotifySrcMesh"].is<bool>()) s.ntfyNotifySrcMesh = doc["ntfyNotifySrcMesh"].as<bool>();
-                    if (doc["ntfyNotifyStop"].is<bool>()) s.ntfyNotifyStop = doc["ntfyNotifyStop"].as<bool>();
-                    if (doc["ntfyNotifySystemEvents"].is<bool>()) s.ntfyNotifySystemEvents = doc["ntfyNotifySystemEvents"].as<bool>();
-                    if (doc["ntfyNotifyStatus"].is<bool>()) s.ntfyNotifyStatus = doc["ntfyNotifyStatus"].as<bool>();
+                    applyPri(doc, "ntfyPriThunderstormBase",        s.ntfyPriThunderstormBase);
+                    applyPri(doc, "ntfyPriOtherExtreme",             s.ntfyPriOtherExtreme);
+                    applyPri(doc, "ntfyPriTornadoWatch",      s.ntfyPriTornadoWatch);
+                    applyPri(doc, "ntfyPriSevereTstormWatch", s.ntfyPriSevereTstormWatch);
+                    applyPri(doc, "ntfyPriThunderstormConsiderable", s.ntfyPriThunderstormConsiderable);
+                    applyPri(doc, "ntfyPriTornadoUnconfirmed",       s.ntfyPriTornadoUnconfirmed);
+                    applyPri(doc, "ntfyPriThunderstormDestructive",  s.ntfyPriThunderstormDestructive);
+                    applyPri(doc, "ntfyPriTornadoConfirmed",         s.ntfyPriTornadoConfirmed);
+                    applyPri(doc, "ntfyPriTornadoEmergency",         s.ntfyPriTornadoEmergency);
+                    applyPri(doc, "ntfyPriFaults",          s.ntfyPriFaults);
+                    applyPri(doc, "ntfyPriActivations",     s.ntfyPriActivations);
+                    applyPri(doc, "ntfyPriStop",            s.ntfyPriStop);
+                    applyPri(doc, "ntfyPriLockedPress",     s.ntfyPriLockedPress);
+                    applyPri(doc, "ntfyPriBoot",             s.ntfyPriBoot);
+                    applyPri(doc, "ntfyPriScheduledStatus", s.ntfyPriScheduledStatus);
 
                     settingsMgr.save();
                     applyTimeConfig();
@@ -1544,20 +1583,21 @@ private:
         doc["ntfyTopic"]      = s.ntfyTopic;
         doc["ntfyHasToken"]   = s.ntfyToken[0] != '\0'; // never the token itself (ground rule 4)
         doc["ntfyVerifyCert"] = s.ntfyVerifyCert;
-        doc["ntfyCatThunderstormBase"]         = s.ntfyCatThunderstormBase;
-        doc["ntfyCatOtherExtreme"]             = s.ntfyCatOtherExtreme;
-        doc["ntfyCatThunderstormConsiderable"] = s.ntfyCatThunderstormConsiderable;
-        doc["ntfyCatTornadoUnconfirmed"]       = s.ntfyCatTornadoUnconfirmed;
-        doc["ntfyCatThunderstormDestructive"]  = s.ntfyCatThunderstormDestructive;
-        doc["ntfyCatTornadoConfirmed"]         = s.ntfyCatTornadoConfirmed;
-        doc["ntfyCatTornadoEmergency"]         = s.ntfyCatTornadoEmergency;
-        doc["ntfyNotifyErrors"]   = s.ntfyNotifyErrors;
-        doc["ntfyNotifySrcLocal"] = s.ntfyNotifySrcLocal;
-        doc["ntfyNotifySrcWeb"]   = s.ntfyNotifySrcWeb;
-        doc["ntfyNotifySrcMesh"]  = s.ntfyNotifySrcMesh;
-        doc["ntfyNotifyStop"]         = s.ntfyNotifyStop;
-        doc["ntfyNotifySystemEvents"] = s.ntfyNotifySystemEvents;
-        doc["ntfyNotifyStatus"]       = s.ntfyNotifyStatus;
+        doc["ntfyPriThunderstormBase"]         = s.ntfyPriThunderstormBase;
+        doc["ntfyPriOtherExtreme"]             = s.ntfyPriOtherExtreme;
+        doc["ntfyPriTornadoWatch"]      = s.ntfyPriTornadoWatch;
+        doc["ntfyPriSevereTstormWatch"] = s.ntfyPriSevereTstormWatch;
+        doc["ntfyPriThunderstormConsiderable"] = s.ntfyPriThunderstormConsiderable;
+        doc["ntfyPriTornadoUnconfirmed"]       = s.ntfyPriTornadoUnconfirmed;
+        doc["ntfyPriThunderstormDestructive"]  = s.ntfyPriThunderstormDestructive;
+        doc["ntfyPriTornadoConfirmed"]         = s.ntfyPriTornadoConfirmed;
+        doc["ntfyPriTornadoEmergency"]         = s.ntfyPriTornadoEmergency;
+        doc["ntfyPriFaults"]          = s.ntfyPriFaults;
+        doc["ntfyPriActivations"]     = s.ntfyPriActivations;
+        doc["ntfyPriStop"]            = s.ntfyPriStop;
+        doc["ntfyPriLockedPress"]     = s.ntfyPriLockedPress;
+        doc["ntfyPriBoot"]            = s.ntfyPriBoot;
+        doc["ntfyPriScheduledStatus"] = s.ntfyPriScheduledStatus;
 
         doc["resetReason"]      = resetReasonName();
         doc["fwVersion"]        = FW_VERSION;

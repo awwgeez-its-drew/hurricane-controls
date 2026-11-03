@@ -28,6 +28,16 @@ enum class AlertCategory : uint8_t {
     THUNDERSTORM_DESTRUCTIVE,
     TORNADO_CONFIRMED,
     TORNADO_EMERGENCY,
+    // Appended, not inserted — these values are persisted (AlertLogEntry's
+    // category byte, alertlog.h) and mirrored to the main board as a raw
+    // number (src/weather_link.h's LinkedAlert::category), so inserting
+    // earlier in this list would silently relabel every already-stored
+    // entry and desync the main board's own hardcoded copy of this
+    // mapping (src/webserver.h's alertCategoryColor()). Display-only —
+    // see classify()/poll() — never map to a siren mode or enter the
+    // trigger queue/AlertLog.
+    TORNADO_WATCH,
+    SEVERE_TSTORM_WATCH,
 };
 
 inline const char* categoryColor(AlertCategory c) {
@@ -39,8 +49,17 @@ inline const char* categoryColor(AlertCategory c) {
     case AlertCategory::THUNDERSTORM_DESTRUCTIVE:
     case AlertCategory::THUNDERSTORM_CONSIDERABLE: return "red";
     case AlertCategory::THUNDERSTORM_BASE:    return "orange";
+    case AlertCategory::TORNADO_WATCH:        return "red";
+    case AlertCategory::SEVERE_TSTORM_WATCH:  return "yellow";
     default:                                  return "";
     }
+}
+
+// Warnings (anything that can actually trigger the siren, plus Other
+// Extreme) rank above Watches in the Current Alerts list — see where
+// this sorts `fresh[]` in poll() and webserver.h's /alerts endpoint.
+inline bool categoryIsWatch(AlertCategory c) {
+    return c == AlertCategory::TORNADO_WATCH || c == AlertCategory::SEVERE_TSTORM_WATCH;
 }
 
 // "TYPE - THREAT LEVEL" string sent to the main board alongside a trigger,
@@ -267,7 +286,7 @@ private:
     static constexpr uint32_t STARTUP_GRACE_MS = 120000;
 
     // ── Non-blocking line reader for main-board replies ─────────────────────
-    char    rxLine_[96];
+    char    rxLine_[220]; // SX STATUS can carry many key=value tokens at once (Status Broadcast)
     uint8_t rxLen_ = 0;
 
     bool     everPolled_       = false;
@@ -457,21 +476,29 @@ private:
         return true;
     }
 
-    static bool categoryNotifyEnabled(AlertCategory c) {
+    // 0 = don't notify for this category, 1-5 = the ntfy priority to use.
+    static int8_t categoryNotifyPriority(AlertCategory c) {
         switch (c) {
-        case AlertCategory::THUNDERSTORM_BASE:         return settingsMgr.s.ntfyCatThunderstormBase;
-        case AlertCategory::OTHER_EXTREME:             return settingsMgr.s.ntfyCatOtherExtreme;
-        case AlertCategory::THUNDERSTORM_CONSIDERABLE: return settingsMgr.s.ntfyCatThunderstormConsiderable;
-        case AlertCategory::TORNADO_UNCONFIRMED:        return settingsMgr.s.ntfyCatTornadoUnconfirmed;
-        case AlertCategory::THUNDERSTORM_DESTRUCTIVE:   return settingsMgr.s.ntfyCatThunderstormDestructive;
-        case AlertCategory::TORNADO_CONFIRMED:           return settingsMgr.s.ntfyCatTornadoConfirmed;
-        case AlertCategory::TORNADO_EMERGENCY:           return settingsMgr.s.ntfyCatTornadoEmergency;
-        default:                                         return false;
+        case AlertCategory::THUNDERSTORM_BASE:         return settingsMgr.s.ntfyPriThunderstormBase;
+        case AlertCategory::OTHER_EXTREME:             return settingsMgr.s.ntfyPriOtherExtreme;
+        case AlertCategory::THUNDERSTORM_CONSIDERABLE: return settingsMgr.s.ntfyPriThunderstormConsiderable;
+        case AlertCategory::TORNADO_UNCONFIRMED:        return settingsMgr.s.ntfyPriTornadoUnconfirmed;
+        case AlertCategory::THUNDERSTORM_DESTRUCTIVE:   return settingsMgr.s.ntfyPriThunderstormDestructive;
+        case AlertCategory::TORNADO_CONFIRMED:           return settingsMgr.s.ntfyPriTornadoConfirmed;
+        case AlertCategory::TORNADO_EMERGENCY:           return settingsMgr.s.ntfyPriTornadoEmergency;
+        case AlertCategory::TORNADO_WATCH:               return settingsMgr.s.ntfyPriTornadoWatch;
+        case AlertCategory::SEVERE_TSTORM_WATCH:         return settingsMgr.s.ntfyPriSevereTstormWatch;
+        default:                                         return 0;
         }
     }
 
     static AlertCategory classify(const char* event, JsonObject params,
                                    const char* severity, const char* urgency, const char* certainty) {
+        // Display-only — never trigger, never enter the trigger queue/
+        // AlertLog (see poll()'s isWatchCategory() branch below). No
+        // damage-threat parsing; a Watch carries neither parameter.
+        if (!strcmp(event, "Tornado Watch"))             return AlertCategory::TORNADO_WATCH;
+        if (!strcmp(event, "Severe Thunderstorm Watch"))  return AlertCategory::SEVERE_TSTORM_WATCH;
         if (!strcmp(event, "Tornado Warning")) {
             const char* detection = params["tornadoDetection"][0] | "";
             const char* damage    = params["tornadoDamageThreat"][0] | "";
@@ -525,9 +552,10 @@ private:
         }
         // Edge-detected, not every poll — the backoff schedule already
         // keeps a sustained outage from being chatty on its own.
-        if (settingsMgr.s.ntfyNotifyErrors) {
-            if (wasOk && !ok) ntfy.notify(4, "NWS poll failing", err, "warning");
-            else if (!wasOk && ok) ntfy.notify(3, "NWS poll recovered", "Back to normal after " + String(failedAttempts) + " failed attempt(s)", "white_check_mark");
+        if (settingsMgr.s.ntfyPriFaults > 0) {
+            int8_t pri = settingsMgr.s.ntfyPriFaults;
+            if (wasOk && !ok) ntfy.notify(pri, "NWS poll failing", err, "warning");
+            else if (!wasOk && ok) ntfy.notify(pri, "NWS poll recovered", "Back to normal after " + String(failedAttempts) + " failed attempt(s)", "white_check_mark");
         }
     }
 
@@ -654,7 +682,20 @@ private:
                               te->lastActedCategory > 0 &&
                               categoryVal > te->lastActedCategory;
             if ((firstTime || escalated) && !te->pending) {
-                if (!strcmp(mode, "OFF")) {
+                if (categoryIsWatch(category)) {
+                    // Display-only (see classify()) — dedup via the same
+                    // TrackedEvent mechanism so a still-active Watch doesn't
+                    // re-notify every poll, but deliberately no AlertLog
+                    // entry: the Recent Alerts list is trigger-queue
+                    // outcomes, and a Watch never attempts one.
+                    te->lastActedCategory = categoryVal;
+                    trackedDirty_ = true;
+                    int8_t pri = categoryNotifyPriority(category);
+                    if (pri > 0) {
+                        ntfy.notify(pri, "Weather alert (watch)",
+                            String(event) + " — awareness only, never triggers the siren", "eye");
+                    }
+                } else if (!strcmp(mode, "OFF")) {
                     // Awareness-only crossing: no siren command, but still a
                     // real disposition (NOTIFY_ONLY) for the log/ntfy (WP3/
                     // WP4) to pick up, and still marks this category acted
@@ -671,11 +712,12 @@ private:
                     strlcpy(le.disposition, "NOTIFY_ONLY", sizeof(le.disposition));
                     le.escalation = escalated;
                     alertLog.record(le);
-                    if (categoryNotifyEnabled(category)) {
+                    int8_t pri = categoryNotifyPriority(category);
+                    if (pri > 0) {
                         // Still a real NWS warning crossing threshold, just
-                        // without an activation — top priority tier same as
-                        // an actual activation (see docs/uart-protocol.md).
-                        ntfy.notify(5, "Weather alert (auto-trigger off)",
+                        // without an activation — same per-category priority
+                        // as an actual activation would use (see docs/uart-protocol.md).
+                        ntfy.notify(pri, "Weather alert (auto-trigger off)",
                             String(event) + " — " + categoryDescriptor(category, event) +
                             " (siren mode OFF, awareness only)", "rotating_light");
                     }
@@ -693,26 +735,37 @@ private:
                 ca.headline = capped(props["headline"].is<const char*>() ? (const char*)props["headline"] : event);
                 ca.areaDesc = capped(props["areaDesc"].is<const char*>() ? (const char*)props["areaDesc"] : "");
                 ca.category = category;
-                ca.triggeredSiren = (te->lastActedCategory > 0);
+                // A Watch's lastActedCategory only ever means "already
+                // notified" (see above) — never a real trigger.
+                ca.triggeredSiren = !categoryIsWatch(category) && (te->lastActedCategory > 0);
                 strlcpy(ca.vtecKey, key, sizeof(ca.vtecKey));
                 ca.expEpoch = parseIso8601(props["expires"] | "");
             }
         }
-        sendAlertsSnapshot(fresh, freshCount);
-        pruneTracked();
-        saveTrackedIfDirty();
-
-        // Sort by severity, highest first (simple insertion sort — at most
-        // MAX_CURRENT=8 entries, no need for anything fancier).
+        // Sort by severity, highest first: warnings (and Other Extreme)
+        // always rank above Watches (display-only, never trigger —
+        // categoryIsWatch()) regardless of their raw category number, then
+        // by category value within each group (simple insertion sort — at
+        // most MAX_CURRENT=8 entries, no need for anything fancier). Sorted
+        // before the main board mirror below, so both boards' Current
+        // Alerts lists come out in the same order.
+        auto warnRank = [](AlertCategory c) { return categoryIsWatch(c) ? 0 : 1; };
         for (uint8_t i = 1; i < freshCount; i++) {
             CurrentAlert key = fresh[i];
             int j = i - 1;
-            while (j >= 0 && (uint8_t)fresh[j].category < (uint8_t)key.category) {
+            while (j >= 0 && (
+                warnRank(fresh[j].category) < warnRank(key.category) ||
+                (warnRank(fresh[j].category) == warnRank(key.category) &&
+                 (uint8_t)fresh[j].category < (uint8_t)key.category))) {
                 fresh[j + 1] = fresh[j];
                 j--;
             }
             fresh[j + 1] = key;
         }
+
+        sendAlertsSnapshot(fresh, freshCount);
+        pruneTracked();
+        saveTrackedIfDirty();
         for (uint8_t i = 0; i < freshCount; i++) currentAlerts_[i] = fresh[i];
         currentAlertCount_ = freshCount;
     }
@@ -869,14 +922,19 @@ private:
         alertLog.record(le);
 
         bool isFailure = !strcmp(disposition, "NO_RESPONSE") || !strncmp(disposition, "GAVE_UP_", 8);
-        if (isFailure && settingsMgr.s.ntfyNotifyErrors) {
+        if (isFailure && settingsMgr.s.ntfyPriFaults > 0) {
+            // Always the max priority whenever Faults is enabled at all —
+            // a non-responding siren is more urgent than an NWS API hiccup
+            // (see settings.h's ntfyPriFaults comment).
             ntfy.notify(5, "Siren did not respond",
                 String(q.event.c_str()) + " — " + q.mode + " command " + disposition +
                 " (" + q.sendCount + " attempt" + (q.sendCount == 1 ? "" : "s") + ")", "rotating_light");
-        } else if ((!strcmp(disposition, "TRIGGERED") || !strcmp(disposition, "RETRIED_TRIGGERED")) &&
-                   categoryNotifyEnabled((AlertCategory)q.category)) {
-            ntfy.notify(5, String(q.mode) + " activated",
-                String(q.event.c_str()) + " — " + q.descriptor, "rotating_light");
+        } else if (!strcmp(disposition, "TRIGGERED") || !strcmp(disposition, "RETRIED_TRIGGERED")) {
+            int8_t pri = categoryNotifyPriority((AlertCategory)q.category);
+            if (pri > 0) {
+                ntfy.notify(pri, String(q.mode) + " activated",
+                    String(q.event.c_str()) + " — " + q.descriptor, "rotating_light");
+            }
         }
 
         for (uint8_t i = 1; i < MAX_QUEUED; i++) queue_[i - 1] = queue_[i];
@@ -976,76 +1034,106 @@ private:
             strlcpy(lastSxEvent_, body, sizeof(lastSxEvent_));
             lastSxEventMs_ = millis();
         }
-        char rest[64];
+        char rest[220];
         strlcpy(rest, body, sizeof(rest));
         char* tok = strtok(rest, " ");
         if (!tok) return;
 
         if (!strcmp(tok, "ACTIVATED")) {
-            // The three non-NWS activation sources each have their own
-            // opt-in toggle (off by default — "someone's using the siren",
-            // not a fault). An NWS-triggered activation is never reported
-            // this way (see sourceWord() in weather_link.h), so there's no
+            // One shared category for all three non-NWS activation sources
+            // — the message itself names the activation point. An
+            // NWS-triggered activation is never reported this way (see
+            // sourceWord() in weather_link.h), so there's no
             // double-notification with finalizeQueueHead()'s own TRIGGERED
             // push below.
             char* modeW = strtok(nullptr, " ");
             char* srcW  = strtok(nullptr, " ");
-            bool wanted = srcW && (
-                (!strcmp(srcW, "LOCAL") && settingsMgr.s.ntfyNotifySrcLocal) ||
-                (!strcmp(srcW, "WEB")   && settingsMgr.s.ntfyNotifySrcWeb) ||
-                (!strcmp(srcW, "MESH")  && settingsMgr.s.ntfyNotifySrcMesh));
-            if (wanted) {
-                ntfy.notify(5, "Siren activated",
+            int8_t pri = settingsMgr.s.ntfyPriActivations;
+            if (pri > 0 && srcW) {
+                ntfy.notify(pri, "Siren activated",
                     String(modeW ? modeW : "?") + " — activated from " + srcW, "rotating_light");
             }
         } else if (!strcmp(tok, "STOPPED")) {
-            if (settingsMgr.s.ntfyNotifyStop) {
+            if (settingsMgr.s.ntfyPriStop > 0) {
                 char* modeW = strtok(nullptr, " ");
-                ntfy.notify(3, "Siren stopped",
+                ntfy.notify(settingsMgr.s.ntfyPriStop, "Siren stopped",
                     String(modeW ? modeW : "?") + " — cycle completed", "white_check_mark");
             }
         } else if (!strcmp(tok, "STOP")) {
-            if (settingsMgr.s.ntfyNotifyStop) {
+            if (settingsMgr.s.ntfyPriStop > 0) {
                 char* srcW = strtok(nullptr, " ");
-                ntfy.notify(3, "Stop command", String("Stop activated from ") + (srcW ? srcW : "?"));
-            }
-        } else if (!strcmp(tok, "LOCKOUT")) {
-            if (settingsMgr.s.ntfyNotifySystemEvents) {
-                char* state = strtok(nullptr, " ");
-                bool on = state && !strcmp(state, "ON");
-                ntfy.notify(3, "Local button lockout", on ? "Lockout enabled" : "Lockout disabled");
+                ntfy.notify(settingsMgr.s.ntfyPriStop, "Stop command", String("Stop activated from ") + (srcW ? srcW : "?"));
             }
         } else if (!strcmp(tok, "LOCKEDPRESS")) {
-            if (settingsMgr.s.ntfyNotifySystemEvents) {
+            if (settingsMgr.s.ntfyPriLockedPress > 0) {
                 char* btn = strtok(nullptr, " ");
-                ntfy.notify(4, "Locked button pressed",
+                ntfy.notify(settingsMgr.s.ntfyPriLockedPress, "Locked button pressed",
                     String(btn ? btn : "?") + " pressed while locked out", "warning");
             }
-        } else if (!strcmp(tok, "WEATHERTRIG")) {
-            if (settingsMgr.s.ntfyNotifySystemEvents) {
-                char* state = strtok(nullptr, " ");
-                bool on = state && !strcmp(state, "ON");
-                ntfy.notify(3, "Weather auto-trigger", on ? "Enabled" : "Disabled");
-            }
         } else if (!strcmp(tok, "STARTUP")) {
-            if (settingsMgr.s.ntfyNotifyStatus) {
-                ntfy.notify(3, "Main board started up", "Hurricane Controls board has booted.");
+            if (settingsMgr.s.ntfyPriBoot > 0) {
+                ntfy.notify(settingsMgr.s.ntfyPriBoot, "Main board started up", "Hurricane Controls board has booted.");
             }
         } else if (!strcmp(tok, "STATUS")) {
-            if (settingsMgr.s.ntfyNotifyStatus) {
-                char* mode      = strtok(nullptr, " ");
-                char* locked    = strtok(nullptr, " ");
-                char* uptimeSec = strtok(nullptr, " ");
-                char* tempF     = strtok(nullptr, " ");
-                uint32_t upSec = uptimeSec ? strtoul(uptimeSec, nullptr, 10) : 0;
-                char upBuf[24];
-                snprintf(upBuf, sizeof(upBuf), "%lud %luh %lum",
-                    (unsigned long)(upSec / 86400), (unsigned long)((upSec % 86400) / 3600),
-                    (unsigned long)((upSec % 3600) / 60));
-                ntfy.notify(3, "Main board status",
-                    String(mode ? mode : "?") + " — local controls " +
-                    ((locked && locked[0] == '1') ? "LOCKED" : "UNLOCKED") +
-                    " — uptime " + upBuf + " — " + (tempF ? tempF : "?") + "F");
+            if (settingsMgr.s.ntfyPriScheduledStatus > 0) {
+                // "KEY=VALUE" tokens, order-independent, any subset — the
+                // main board only sends the ones its Status Broadcast
+                // toggles have enabled (see src/weather_link.h's
+                // sendSxStatus()), so build the message from whichever
+                // keys actually showed up rather than assuming a fixed set.
+                const char* mode = nullptr; const char* lock = nullptr;
+                const char* up = nullptr;   const char* temp = nullptr;
+                const char* wifi = nullptr; const char* time_ = nullptr;
+                const char* lastRun = nullptr; const char* alerts = nullptr;
+                char* kv;
+                while ((kv = strtok(nullptr, " ")) != nullptr) {
+                    char* eq = strchr(kv, '=');
+                    if (!eq) continue;
+                    *eq = '\0';
+                    const char* val = eq + 1;
+                    if      (!strcmp(kv, "MODE"))    mode = val;
+                    else if (!strcmp(kv, "LOCK"))    lock = val;
+                    else if (!strcmp(kv, "UP"))      up = val;
+                    else if (!strcmp(kv, "TEMP"))    temp = val;
+                    else if (!strcmp(kv, "WIFI"))    wifi = val;
+                    else if (!strcmp(kv, "TIME"))    time_ = val;
+                    else if (!strcmp(kv, "LASTRUN")) lastRun = val;
+                    else if (!strcmp(kv, "ALERTS"))  alerts = val;
+                }
+                String parts;
+                auto add = [&](const String& p) {
+                    if (parts.length()) parts += " — ";
+                    parts += p;
+                };
+                if (mode) add(mode);
+                if (lock) add(String("local controls ") + (lock[0] == '1' ? "LOCKED" : "UNLOCKED"));
+                if (up) {
+                    uint32_t upSec = strtoul(up, nullptr, 10);
+                    char upBuf[24];
+                    snprintf(upBuf, sizeof(upBuf), "%lud %luh %lum",
+                        (unsigned long)(upSec / 86400), (unsigned long)((upSec % 86400) / 3600),
+                        (unsigned long)((upSec % 3600) / 60));
+                    add(String("uptime ") + upBuf);
+                }
+                if (temp) add(String(temp) + "F");
+                if (wifi) add(String("wifi ") + (wifi[0] == '1' ? "ok" : "down"));
+                if (time_) {
+                    time_t epoch = (time_t)strtoul(time_, nullptr, 10);
+                    char tbuf[16];
+                    strftime(tbuf, sizeof(tbuf), "%H:%M:%S", localtime(&epoch));
+                    add(String("clock ") + tbuf);
+                }
+                if (lastRun) add(String("last run ") + lastRun);
+                if (alerts) {
+                    // Underscores stand in for spaces on the wire (event
+                    // names like "Tornado Warning" would otherwise break
+                    // the space-tokenized format) — undo it for display.
+                    String a = alerts;
+                    a.replace('_', ' ');
+                    add(String("alerts ") + a);
+                }
+                if (parts.length())
+                    ntfy.notify(settingsMgr.s.ntfyPriScheduledStatus, "Main board status", parts);
             }
         }
     }

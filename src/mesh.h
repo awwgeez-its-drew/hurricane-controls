@@ -1,12 +1,16 @@
 #pragma once
 #include <Arduino.h>
 #include <cctype>
+#include <time.h>
 #include "config.h"
 #include "settings.h"
 #include "statemachine.h"
 #include "buttons.h"
 #include "weather_link.h"
 #include "mesh_health.h"
+#include "wifi_manager.h"
+#include "runlog.h"
+#include "clock.h"
 
 // Bridges a Meshtastic node (wired via UART2, running its Serial Module in
 // Text Message mode) to the state machine, so the siren can be triggered/
@@ -152,16 +156,47 @@ public:
         }
         wasWwError_ = wwError;
 
+        // New Tornado/Severe T-storm Watch in the Weather Watcher's
+        // mirrored alert list (WX ALERTS batch) — a one-time proactive
+        // ping, same spirit as the WW health announcements above, even
+        // though a Watch never triggers the siren (display-only; see
+        // weather-watcher/src/nws_client.h's classify()). category 8/9
+        // are AlertCategory::TORNADO_WATCH/SEVERE_TSTORM_WATCH, duplicated
+        // here as raw numbers since the two firmwares don't share headers
+        // (same convention as src/webserver.h's alertCategoryColor()).
+        // Dedup by VTEC key in a small ring so an ongoing Watch doesn't
+        // re-announce every time this batch refreshes.
+        if (settingsMgr.s.meshNotifyWatches) {
+            for (uint8_t i = 0; i < weatherLink.alertCount(); i++) {
+                const WeatherLink::LinkedAlert& a = weatherLink.alert(i);
+                if (a.category != 8 && a.category != 9) continue;
+                if (!a.vtecKey[0]) continue;
+                bool alreadyAnnounced = false;
+                for (uint8_t k = 0; k < WeatherLink::MAX_LINKED_ALERTS; k++) {
+                    if (!strcmp(announcedWatchKeys_[k], a.vtecKey)) { alreadyAnnounced = true; break; }
+                }
+                if (alreadyAnnounced) continue;
+                strlcpy(announcedWatchKeys_[announcedWatchNext_], a.vtecKey, sizeof(announcedWatchKeys_[0]));
+                announcedWatchNext_ = (announcedWatchNext_ + 1) % WeatherLink::MAX_LINKED_ALERTS;
+                reply(String("\x07") + (a.category == 8 ? "TORNADO WATCH" : "SEVERE THUNDERSTORM WATCH") +
+                      " ISSUED: " + a.event);
+            }
+        }
+
         // Deferred boot announcement — see announceStartup(). Only the
         // STARTUP COMPLETE/STATUS pair waits; every activation/stop/lockout
         // broadcast above still goes out immediately during this window.
+        // STARTUP's own SX push (weatherLink.sendSxStatus() inside
+        // sendStatusEvents()) is independent of this — it fires as soon as
+        // the Weather Watcher hears from this board at all, not gated on
+        // Status Broadcast scheduling.
         if (startupPending_) {
             bool ready = !settingsMgr.s.weatherAutoTriggerEnabled ||   // WW: OFF
                          weatherLink.finalReported() ||                // WW: OK / ERROR
                          now - bootTs_ >= STARTUP_ANNOUNCE_MAX_WAIT_MS; // give up waiting
             if (ready) {
                 startupPending_ = false;
-                lastStatusTs_ = now;
+                markStatusFiredNow_();
                 if (settingsMgr.s.meshNotifyStatus) {
                     reply("STARTUP COMPLETE");
                     reply(buildStatusMessage());
@@ -170,11 +205,33 @@ public:
             return;
         }
 
-        // Periodic status line.
-        if (now - lastStatusTs_ >= STATUS_INTERVAL_MS) {
-            lastStatusTs_ = now;
-            if (settingsMgr.s.meshNotifyStatus)
-                reply(buildStatusMessage());
+        // Status Broadcast: fires at most once per matching minute, at up
+        // to 3 configured daily local times (Settings → Status Broadcast),
+        // replacing the old fixed 12-hour interval. Needs a valid local
+        // clock; does nothing until one is set (same as every other
+        // clock-dependent feature on this board). Drives both channels —
+        // the Meshtastic STATUS line (gated by meshNotifyStatus) and the
+        // SX STATUS push to the Weather Watcher (always sent; the Weather
+        // Watcher's own ntfyPriBoot/ntfyPriScheduledStatus decide whether
+        // it turns into a push on that side) — so they report on the same
+        // schedule even though they're two different wire messages.
+        if (clockValid()) {
+            time_t t = time(nullptr);
+            struct tm lt;
+            localtime_r(&t, &lt);
+            int32_t minuteKey = (int32_t)lt.tm_yday * 1440 + lt.tm_hour * 60 + lt.tm_min;
+            if (minuteKey != lastStatusFiredMinuteKey_) {
+                const Settings& s = settingsMgr.s;
+                bool fire = statusTimeMatches(s.statusTime1, lt.tm_hour, lt.tm_min) ||
+                            statusTimeMatches(s.statusTime2, lt.tm_hour, lt.tm_min) ||
+                            statusTimeMatches(s.statusTime3, lt.tm_hour, lt.tm_min);
+                if (fire) {
+                    lastStatusFiredMinuteKey_ = minuteKey;
+                    if (settingsMgr.s.meshNotifyStatus)
+                        reply(buildStatusMessage());
+                    weatherLink.sendSxStatus();
+                }
+            }
         }
     }
 
@@ -190,10 +247,32 @@ public:
         bootTs_         = millis();
     }
 
+    // Parses "HH:MM" and reports whether it matches the given local hour/
+    // minute; an empty/malformed string (an unused slot) never matches.
+    static bool statusTimeMatches(const char* hhmm, int curH, int curM) {
+        if (!hhmm || !hhmm[0]) return false;
+        int h, m;
+        if (sscanf(hhmm, "%d:%d", &h, &m) != 2) return false;
+        return h == curH && m == curM;
+    }
+
 private:
-    static constexpr uint32_t STATUS_INTERVAL_MS = 12UL * 60 * 60 * 1000;  // 12 hours
     static constexpr uint32_t STARTUP_ANNOUNCE_MAX_WAIT_MS = 120000;       // 2 minutes
     static constexpr uint32_t WW_ERROR_REANNOUNCE_MS = 10UL * 60 * 1000;   // 10 minutes
+
+    // Marks "now" as already handled for the Status Broadcast schedule, so
+    // the STARTUP announcement (which always sends its own STATUS line)
+    // doesn't also immediately re-fire the scheduled one if it happens to
+    // land in the same minute as a configured time. A no-op (leaves the
+    // key at its default) until the clock is valid — scheduling simply
+    // doesn't start until then.
+    void markStatusFiredNow_() {
+        if (!clockValid()) return;
+        time_t t = time(nullptr);
+        struct tm lt;
+        localtime_r(&t, &lt);
+        lastStatusFiredMinuteKey_ = (int32_t)lt.tm_yday * 1440 + lt.tm_hour * 60 + lt.tm_min;
+    }
 
     char     line_[64];
     uint8_t  lineLen_          = 0;
@@ -201,7 +280,7 @@ private:
     RunMode  lastKnownRunMode_ = RunMode::NONE;
     uint32_t lastSeenStopSeq_  = 0;
     bool     wasLocked_        = false;
-    uint32_t lastStatusTs_     = 0;
+    int32_t  lastStatusFiredMinuteKey_ = -1;
     uint32_t lastSeenLockedPressSeq_ = 0;
     bool     wasWeatherEnabled_ = false;
     bool     startupPending_   = false;
@@ -209,6 +288,8 @@ private:
     bool     wasWwLost_        = false;
     bool     wasWwError_       = false;
     uint32_t lastWwErrorTs_    = 0;
+    char     announcedWatchKeys_[WeatherLink::MAX_LINKED_ALERTS][20] = {};
+    uint8_t  announcedWatchNext_ = 0;
 
     void reply(const char* msg) { Serial2.println(msg); meshHealth.lastTxMs = millis(); }
     void reply(const String& msg) { Serial2.println(msg); meshHealth.lastTxMs = millis(); }
@@ -279,10 +360,59 @@ private:
         return (int)(temperatureRead() * 9.0f / 5.0f + 32.0f);
     }
 
+    // "COMPLETED"/"STOPPED"/"FAILSAFE"/"INTERRUPTED" — matches RunEnd's
+    // declaration order in runlog.h.
+    static const char* runEndWord(uint8_t end) {
+        static const char* w[] = {"COMPLETED", "STOPPED", "FAILSAFE", "INTERRUPTED"};
+        return end < 4 ? w[end] : "?";
+    }
+
+    // Status Broadcast (Settings page card): each field below is only
+    // included if its statusInclude* toggle is on, so the message can be
+    // as terse or as detailed as the owner wants — see settings.h. Always
+    // starts with "STATUS:" even if every toggle happens to be off.
     static String buildStatusMessage() {
-        return "STATUS: " + modeOrIdle() + " - LOCAL CONTROL " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
-               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F" +
-               " // WW: " + weatherWatcherWord();
+        const Settings& s = settingsMgr.s;
+        String msg = "STATUS:";
+        bool first = true;
+        auto add = [&](const String& part) {
+            msg += first ? " " : " // ";
+            msg += part;
+            first = false;
+        };
+        if (s.statusIncludeMode)
+            add(modeOrIdle());
+        if (s.statusIncludeLock)
+            add(String("LOCAL CONTROL ") + (buttons.locked ? "LOCKED" : "UNLOCKED"));
+        if (s.statusIncludeUptime)
+            add("UPTIME: " + formatUptime(millis()));
+        if (s.statusIncludeCpuTemp)
+            add("CPU TEMP: " + String(cpuTempF()) + "F");
+        if (s.statusIncludeWwHealth)
+            add(String("WW: ") + weatherWatcherWord());
+        if (s.statusIncludeWifi)
+            add(String("WIFI: ") + (wifiMgr.isConnected() ? "OK" : "DOWN"));
+        if (s.statusIncludeTime && clockValid()) {
+            time_t t = time(nullptr);
+            char buf[12];
+            strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&t));
+            add(String("TIME: ") + buf);
+        }
+        if (s.statusIncludeLastRun) {
+            if (runLog.count() > 0) {
+                const RunEntry& e = runLog.recent(0);
+                add(String("LAST RUN: ") + modeWord((RunMode)e.mode) + " from " +
+                    sourceWord((TriggerSource)e.source) + " (" + runEndWord(e.end) + ")");
+            } else {
+                add("LAST RUN: NONE");
+            }
+        }
+        if (s.statusIncludeAlerts) {
+            uint8_t n = weatherLink.alertCount();
+            if (n == 0) add("ALERTS: NONE");
+            else add("ALERTS: " + String(n) + " (" + weatherLink.alert(0).event + ")");
+        }
+        return msg;
     }
 
     static String buildPingReply() {

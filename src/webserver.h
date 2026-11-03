@@ -190,13 +190,13 @@ main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;
 #warnBanner.show{display:flex}
 .whead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .warnItem{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:10px;background:#2A1218}
-.warnItem.orange{background:#251A12}.warnItem.purple{background:#1E1530}
+.warnItem.orange{background:#251A12}.warnItem.purple{background:#1E1530}.warnItem.yellow{background:#2A2512}
 .warnItem.stale{opacity:.55}
 .wdot{width:12px;height:12px;border-radius:50%;flex-shrink:0;background:#64748B}
-.warnItem.red .wdot{background:#EF4444}.warnItem.orange .wdot{background:#F97316}.warnItem.purple .wdot{background:#A855F7}
+.warnItem.red .wdot{background:#EF4444}.warnItem.orange .wdot{background:#F97316}.warnItem.purple .wdot{background:#A855F7}.warnItem.yellow .wdot{background:#FACC15}
 .wname{flex:1;min-width:180px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600}
 .wtag{font-size:11px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:999px;border:1px solid var(--red);color:#FECACA}
-.warnItem.orange .wtag{border-color:#F97316;color:#FED7AA}.warnItem.purple .wtag{border-color:#A855F7;color:#E9D5FF}
+.warnItem.orange .wtag{border-color:#F97316;color:#FED7AA}.warnItem.purple .wtag{border-color:#A855F7;color:#E9D5FF}.warnItem.yellow .wtag{border-color:#FACC15;color:#FEF08A}
 .wthis{font-size:11px;font-weight:700;letter-spacing:.08em;padding:4px 8px;border-radius:6px;background:#14301F;color:#86EFAC}
 .wage{font-size:12px;color:var(--soft)}
 /* Layout */
@@ -775,6 +775,7 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
   <a href="#network">Wi-Fi &amp; network</a>
   <a href="#security">Security</a>
   <a href="#time">Time</a>
+  <a href="#statusbc">Status Broadcast</a>
   <span class="eyebrow">Integrations</span>
   <a href="#weather">Weather Watcher</a>
   <a href="#mesh">Meshtastic</a>
@@ -849,6 +850,30 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
   <div class="msg" id="tmz"></div>
 </section>
 
+<section class="card" id="statusbc">
+  <div><h2>Status Broadcast</h2><p class="desc">The periodic status line this board sends out, over both Meshtastic and to the Weather Watcher. Up to 3 times a day, and which data points it includes.</p></div>
+  <div class="g3">
+    <div><label for="statusTime1">Time 1</label><input type="time" id="statusTime1"></div>
+    <div><label for="statusTime2">Time 2</label><input type="time" id="statusTime2"></div>
+    <div><label for="statusTime3">Time 3 (optional)</label><input type="time" id="statusTime3"></div>
+  </div>
+  <div>
+    <span class="eyebrow">Include in the status message</span>
+    <div class="trow" style="margin-top:8px"><label for="statusIncludeMode">Mode / idle state</label><input type="checkbox" id="statusIncludeMode"></div>
+    <div class="trow"><label for="statusIncludeLock">Local control lock state</label><input type="checkbox" id="statusIncludeLock"></div>
+    <div class="trow"><label for="statusIncludeUptime">Uptime</label><input type="checkbox" id="statusIncludeUptime"></div>
+    <div class="trow"><label for="statusIncludeCpuTemp">CPU temperature</label><input type="checkbox" id="statusIncludeCpuTemp"></div>
+    <div class="trow"><label for="statusIncludeWwHealth">Weather Watcher health</label><input type="checkbox" id="statusIncludeWwHealth"></div>
+    <div class="trow"><label for="statusIncludeWifi">Wi-Fi status</label><input type="checkbox" id="statusIncludeWifi"></div>
+    <div class="trow"><label for="statusIncludeTime">Current time</label><input type="checkbox" id="statusIncludeTime"></div>
+    <div class="trow"><label for="statusIncludeLastRun">Last activation</label><input type="checkbox" id="statusIncludeLastRun"></div>
+    <div class="trow"><label for="statusIncludeAlerts">Current alerts (from the Weather Watcher)</label><input type="checkbox" id="statusIncludeAlerts"></div>
+  </div>
+  <p class="hint">This card only controls timing and content. Whether it's actually sent over each channel is set where that channel lives: <b>Boot announcement and periodic status</b> on the <a href="#mesh">Meshtastic</a> card below for the mesh line, and <b>Boot announcement</b>/<b>Scheduled status updates</b> under Push notifications on the Weather Watcher's own Settings page for the ntfy push.</p>
+  <div class="actions"><button class="btn save" onclick="saveStatusBroadcast()">Save status broadcast settings</button></div>
+  <div class="msg" id="sbcm"></div>
+</section>
+
 <section class="card" id="weather">
   <div><h2>Weather Watcher</h2><p class="desc">Lets the separately wired Weather Watcher board start the siren when the National Weather Service issues a qualifying warning. It never overrides TEST MODE. See docs/weather-watcher.md.</p></div>
   <div id="wwStatus" class="ws">Checking&hellip;</div>
@@ -877,6 +902,7 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
     <div class="trow"><label for="meshNotifySystemEvents">Lockout or weather trigger toggled, locked button pressed</label><input type="checkbox" id="meshNotifySystemEvents"></div>
     <div class="trow"><label for="meshNotifyWwHealth">Weather Watcher health (lost, recovered, error)</label><input type="checkbox" id="meshNotifyWwHealth"></div>
     <div class="trow"><label for="meshNotifyStatus">Boot announcement and periodic status</label><input type="checkbox" id="meshNotifyStatus"></div>
+    <div class="trow"><label for="meshNotifyWatches">A new Tornado/Severe T-storm Watch appears (display-only, never triggers)</label><input type="checkbox" id="meshNotifyWatches"></div>
     <p class="hint">A direct <code>SIREN PING</code> always gets a reply &mdash; these only control unprompted broadcasts.</p>
   </div>
   <div class="actions"><button class="btn save" onclick="saveMeshWL()">Save mesh settings</button></div>
@@ -984,10 +1010,23 @@ fetch('/settings-data').then(r=>r.json()).then(d=>{
   document.getElementById('meshNotifySystemEvents').checked=d.meshNotifySystemEvents!==false;
   document.getElementById('meshNotifyWwHealth').checked=d.meshNotifyWwHealth!==false;
   document.getElementById('meshNotifyStatus').checked=d.meshNotifyStatus!==false;
+  document.getElementById('meshNotifyWatches').checked=d.meshNotifyWatches!==false;
   document.getElementById('ntpServer').value=d.ntpServer||'pool.ntp.org';
   document.getElementById('ntpUpdateHours').value=d.ntpUpdateHours||12;
   document.getElementById('timeZone').value=d.timeZone||'EASTERN';
   document.getElementById('autoDst').checked=d.autoDst!==false;
+  document.getElementById('statusTime1').value=d.statusTime1||'';
+  document.getElementById('statusTime2').value=d.statusTime2||'';
+  document.getElementById('statusTime3').value=d.statusTime3||'';
+  document.getElementById('statusIncludeMode').checked=d.statusIncludeMode!==false;
+  document.getElementById('statusIncludeLock').checked=d.statusIncludeLock!==false;
+  document.getElementById('statusIncludeUptime').checked=d.statusIncludeUptime!==false;
+  document.getElementById('statusIncludeCpuTemp').checked=d.statusIncludeCpuTemp!==false;
+  document.getElementById('statusIncludeWwHealth').checked=d.statusIncludeWwHealth!==false;
+  document.getElementById('statusIncludeWifi').checked=!!d.statusIncludeWifi;
+  document.getElementById('statusIncludeTime').checked=!!d.statusIncludeTime;
+  document.getElementById('statusIncludeLastRun').checked=!!d.statusIncludeLastRun;
+  document.getElementById('statusIncludeAlerts').checked=!!d.statusIncludeAlerts;
   document.getElementById('wxAutoTrig').checked=!!d.weatherAutoTriggerEnabled;
   const wwEl=document.getElementById('wwStatus');
   if(!d.weatherAutoTriggerEnabled){wwEl.textContent='Disabled';wwEl.className='ws';}
@@ -1116,6 +1155,23 @@ function saveTime(){
   };
   post('/settings-data',b).then(d=>msg('tmz',d.ok?'Saved!':'Error',d.ok));
 }
+function saveStatusBroadcast(){
+  const b={
+    statusTime1: document.getElementById('statusTime1').value,
+    statusTime2: document.getElementById('statusTime2').value,
+    statusTime3: document.getElementById('statusTime3').value,
+    statusIncludeMode: document.getElementById('statusIncludeMode').checked,
+    statusIncludeLock: document.getElementById('statusIncludeLock').checked,
+    statusIncludeUptime: document.getElementById('statusIncludeUptime').checked,
+    statusIncludeCpuTemp: document.getElementById('statusIncludeCpuTemp').checked,
+    statusIncludeWwHealth: document.getElementById('statusIncludeWwHealth').checked,
+    statusIncludeWifi: document.getElementById('statusIncludeWifi').checked,
+    statusIncludeTime: document.getElementById('statusIncludeTime').checked,
+    statusIncludeLastRun: document.getElementById('statusIncludeLastRun').checked,
+    statusIncludeAlerts: document.getElementById('statusIncludeAlerts').checked,
+  };
+  post('/settings-data',b).then(d=>msg('sbcm',d.ok?'Saved!':'Error',d.ok));
+}
 function refreshMeshWLWarn(){
   document.getElementById('meshWLWarn').style.display=
     document.getElementById('meshWhitelistEnabled').checked?'none':'block';
@@ -1131,6 +1187,7 @@ function saveMeshWL(){
     meshNotifySystemEvents: document.getElementById('meshNotifySystemEvents').checked,
     meshNotifyWwHealth: document.getElementById('meshNotifyWwHealth').checked,
     meshNotifyStatus: document.getElementById('meshNotifyStatus').checked,
+    meshNotifyWatches: document.getElementById('meshNotifyWatches').checked,
   }).then(d=>msg('mwlm',d.ok?'Saved!':'Error',d.ok));
 }
 function saveWeatherAutoTrigger(){
@@ -1930,10 +1987,23 @@ private:
                     applyBool(doc, "meshNotifySystemEvents", s.meshNotifySystemEvents);
                     applyBool(doc, "meshNotifyWwHealth", s.meshNotifyWwHealth);
                     applyBool(doc, "meshNotifyStatus", s.meshNotifyStatus);
+                    applyBool(doc, "meshNotifyWatches", s.meshNotifyWatches);
                     applyString(doc, "ntpServer", s.ntpServer, sizeof(s.ntpServer));
                     applyUInt(doc, "ntpUpdateHours", s.ntpUpdateHours, 1, 168);
                     applyString(doc, "timeZone", s.timeZone, sizeof(s.timeZone));
                     applyBool(doc, "autoDst", s.autoDst);
+                    applyTimeOfDay(doc, "statusTime1", s.statusTime1, sizeof(s.statusTime1));
+                    applyTimeOfDay(doc, "statusTime2", s.statusTime2, sizeof(s.statusTime2));
+                    applyTimeOfDay(doc, "statusTime3", s.statusTime3, sizeof(s.statusTime3));
+                    applyBool(doc, "statusIncludeMode",     s.statusIncludeMode);
+                    applyBool(doc, "statusIncludeLock",     s.statusIncludeLock);
+                    applyBool(doc, "statusIncludeUptime",   s.statusIncludeUptime);
+                    applyBool(doc, "statusIncludeCpuTemp",  s.statusIncludeCpuTemp);
+                    applyBool(doc, "statusIncludeWwHealth", s.statusIncludeWwHealth);
+                    applyBool(doc, "statusIncludeWifi",     s.statusIncludeWifi);
+                    applyBool(doc, "statusIncludeTime",     s.statusIncludeTime);
+                    applyBool(doc, "statusIncludeLastRun",  s.statusIncludeLastRun);
+                    applyBool(doc, "statusIncludeAlerts",   s.statusIncludeAlerts);
                     settingsMgr.save();
                     // Takes effect immediately: always re-apply the timezone, and
                     // if the WX link hasn't provided a time, kick the fallback
@@ -2151,6 +2221,21 @@ private:
         if (doc[key].is<bool>()) field = doc[key].as<bool>();
     }
 
+    // A Status Broadcast time slot: "HH:MM" (24h) or empty to clear/unuse
+    // the slot. Anything else is silently rejected (field unchanged) —
+    // mesh.h's statusTimeMatches() would just never match a malformed
+    // string anyway, but there's no reason to store garbage.
+    static void applyTimeOfDay(JsonDocument& doc, const char* key, char* field, size_t fieldSize) {
+        if (!doc[key].is<const char*>()) return;
+        const char* v = doc[key].as<const char*>();
+        if (!v[0]) { field[0] = '\0'; return; }
+        int h, m, n;
+        if (sscanf(v, "%d:%d%n", &h, &m, &n) == 2 && v[n] == '\0' &&
+            h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+            strlcpy(field, v, fieldSize);
+        }
+    }
+
     static const char* tf(bool b) { return b ? "true" : "false"; }
 
     // Seconds since a millis() timestamp, or -1 for "never" (0).
@@ -2218,6 +2303,8 @@ private:
         case 7: case 6: case 2: return "purple"; // TORNADO_EMERGENCY, TORNADO_CONFIRMED, OTHER_EXTREME
         case 4: case 5: case 3: return "red";    // TORNADO_UNCONFIRMED, THUNDERSTORM_DESTRUCTIVE, THUNDERSTORM_CONSIDERABLE
         case 1:                 return "orange"; // THUNDERSTORM_BASE
+        case 8:                 return "red";    // TORNADO_WATCH (display-only, never triggers)
+        case 9:                 return "yellow"; // SEVERE_TSTORM_WATCH (display-only, never triggers)
         default:                return "";
         }
     }
@@ -2309,10 +2396,23 @@ private:
         doc["meshNotifySystemEvents"] = s.meshNotifySystemEvents;
         doc["meshNotifyWwHealth"]     = s.meshNotifyWwHealth;
         doc["meshNotifyStatus"]       = s.meshNotifyStatus;
+        doc["meshNotifyWatches"]      = s.meshNotifyWatches;
         doc["ntpServer"]        = s.ntpServer;
         doc["ntpUpdateHours"]   = s.ntpUpdateHours;
         doc["timeZone"]         = s.timeZone;
         doc["autoDst"]          = s.autoDst;
+        doc["statusTime1"] = s.statusTime1;
+        doc["statusTime2"] = s.statusTime2;
+        doc["statusTime3"] = s.statusTime3;
+        doc["statusIncludeMode"]     = s.statusIncludeMode;
+        doc["statusIncludeLock"]     = s.statusIncludeLock;
+        doc["statusIncludeUptime"]   = s.statusIncludeUptime;
+        doc["statusIncludeCpuTemp"]  = s.statusIncludeCpuTemp;
+        doc["statusIncludeWwHealth"] = s.statusIncludeWwHealth;
+        doc["statusIncludeWifi"]     = s.statusIncludeWifi;
+        doc["statusIncludeTime"]     = s.statusIncludeTime;
+        doc["statusIncludeLastRun"]  = s.statusIncludeLastRun;
+        doc["statusIncludeAlerts"]   = s.statusIncludeAlerts;
         doc["wwEverReported"] = weatherLink.everReported();
         doc["wwOk"]           = weatherLink.reportedOk();
         doc["wwPending"]      = weatherLink.pending();

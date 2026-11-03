@@ -8,6 +8,8 @@
 #include "buttons.h"
 #include "clock.h"
 #include "sync.h"
+#include "wifi_manager.h"
+#include "runlog.h"
 
 // Bridges a second, dedicated ESP32 ("Weather Watcher", see weather-watcher/
 // in this repo) that polls National Weather Service alerts for a specific
@@ -99,6 +101,73 @@ public:
     // see mesh.h's "WXREBOOT" command.
     void requestReboot() { Serial1.println("REBOOT"); }
 
+    // "SX STATUS <KEY>=<VALUE> ..." — one key=value token per enabled
+    // Status Broadcast data point (settings.h's statusInclude*; WW health
+    // isn't included here, the Weather Watcher already knows its own
+    // state). Order-independent key=value tokens (rather than fixed
+    // positions) so the Weather Watcher's parser doesn't care which subset
+    // actually arrives. Sent once right after SX STARTUP (see
+    // sendStatusEvents()), and from then on only when mesh.h's update()
+    // calls this directly on the Status Broadcast schedule — this class no
+    // longer keeps its own independent timer, so both the Meshtastic
+    // STATUS line and this push report on the same schedule.
+    void sendSxStatus() {
+        const Settings& s = settingsMgr.s;
+        Serial1.print("SX STATUS");
+        if (s.statusIncludeMode) {
+            Serial1.print(" MODE=");
+            Serial1.print(sm.isIdle() ? "IDLE" : runModeWord(sm.runMode));
+        }
+        if (s.statusIncludeLock) {
+            Serial1.print(" LOCK=");
+            Serial1.print(buttons.locked ? 1 : 0);
+        }
+        if (s.statusIncludeUptime) {
+            Serial1.print(" UP=");
+            Serial1.print(millis() / 1000);
+        }
+        if (s.statusIncludeCpuTemp) {
+            Serial1.print(" TEMP=");
+            Serial1.print((int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f));
+        }
+        if (s.statusIncludeWifi) {
+            Serial1.print(" WIFI=");
+            Serial1.print(wifiMgr.isConnected() ? 1 : 0);
+        }
+        if (s.statusIncludeTime && clockValid()) {
+            Serial1.print(" TIME=");
+            Serial1.print((uint32_t)time(nullptr));
+        }
+        if (s.statusIncludeLastRun) {
+            Serial1.print(" LASTRUN=");
+            if (runLog.count() > 0) {
+                const RunEntry& e = runLog.recent(0);
+                Serial1.print(runModeWord((RunMode)e.mode));
+                Serial1.print(':');
+                Serial1.print(sourceWord((TriggerSource)e.source));
+                Serial1.print(':');
+                Serial1.print(e.end);
+            } else {
+                Serial1.print("NONE");
+            }
+        }
+        if (s.statusIncludeAlerts) {
+            Serial1.print(" ALERTS=");
+            Serial1.print(alertCount_);
+            if (alertCount_ > 0) {
+                // Spaces would break the space-tokenized wire format (event
+                // names routinely contain them, e.g. "Tornado Warning") —
+                // substitute underscores; the receiving side undoes it.
+                char evBuf[sizeof(alerts_[0].event)];
+                strlcpy(evBuf, alerts_[0].event, sizeof(evBuf));
+                for (char* p = evBuf; *p; p++) if (*p == ' ') *p = '_';
+                Serial1.print(':');
+                Serial1.print(evBuf);
+            }
+        }
+        Serial1.println();
+    }
+
     // One alert from the most recent "WX ALERTS .. WX ALERTS END" batch
     // (protocol v2, docs/uart-protocol.md section 2.1) — feeds the main
     // page's active-warning banner. event is truncated to fit; exp is 0 if
@@ -166,8 +235,6 @@ private:
     uint32_t sxLastSeenLockedPressSeq_ = 0;
     bool     sxWasWeatherEnabled_ = false;
     bool     sxStartupSent_       = false;
-    uint32_t sxLastStatusTs_      = 0;
-    static constexpr uint32_t SX_STATUS_INTERVAL_MS = 12UL * 60 * 60 * 1000; // 12 hours
 
     void sendStatusEvents() {
         if (sm.runMode != RunMode::NONE) sxLastKnownRunMode_ = sm.runMode;
@@ -207,14 +274,14 @@ private:
             Serial1.println(sxWasWeatherEnabled_ ? "SX WEATHERTRIG ON" : "SX WEATHERTRIG OFF");
         }
 
-        uint32_t now = millis();
+        // The recurring push is no longer timed independently here — it
+        // fires on the Status Broadcast schedule instead, driven by
+        // mesh.h's update() calling sendSxStatus() directly (public, below)
+        // alongside its own Meshtastic STATUS line, so both channels report
+        // on the same schedule. Only the one-shot boot push stays here.
         if (!sxStartupSent_) {
             sxStartupSent_ = true;
             Serial1.println("SX STARTUP");
-            sxLastStatusTs_ = now;
-            sendSxStatus();
-        } else if (now - sxLastStatusTs_ >= SX_STATUS_INTERVAL_MS) {
-            sxLastStatusTs_ = now;
             sendSxStatus();
         }
     }
@@ -226,22 +293,6 @@ private:
         case LockedButton::ATTACK: return "ATTACK";
         default:                   return "UNKNOWN";
         }
-    }
-
-    // "SX STATUS <MODE|IDLE> <LOCKED:0|1> <UPTIME_SEC> <TEMP_F>" — sent once
-    // right after SX STARTUP and then every SX_STATUS_INTERVAL_MS, mirroring
-    // mesh.h's own periodic STATUS broadcast. Doesn't include the Weather
-    // Watcher's own health the way mesh's STATUS does (it already knows its
-    // own state) — just this board's.
-    void sendSxStatus() {
-        Serial1.print("SX STATUS ");
-        Serial1.print(sm.isIdle() ? "IDLE" : runModeWord(sm.runMode));
-        Serial1.print(' ');
-        Serial1.print(buttons.locked ? 1 : 0);
-        Serial1.print(' ');
-        Serial1.print(millis() / 1000);
-        Serial1.print(' ');
-        Serial1.println((int)roundf(temperatureRead() * 9.0f / 5.0f + 32.0f));
     }
 
     static const char* runModeWord(RunMode m) {
