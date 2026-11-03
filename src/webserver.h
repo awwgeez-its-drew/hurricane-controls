@@ -326,8 +326,8 @@ main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:20px;display:flex;
 </div></header>
 
 <main>
-<section class="panel" id="warnBanner" aria-label="Active weather warnings">
-  <div class="whead"><span class="eyebrow" style="color:#FCA5A5">Active warnings &middot; from Weather Watcher</span><span class="wage" id="warnAge"></span></div>
+<section class="panel" id="warnBanner" aria-label="Active weather alerts">
+  <div class="whead"><span class="eyebrow" style="color:#FCA5A5">Active alerts &middot; from Weather Watcher</span><span class="wage" id="warnAge"></span></div>
   <div id="warnList" style="display:flex;flex-direction:column;gap:10px"></div>
 </section>
 
