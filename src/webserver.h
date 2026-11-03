@@ -870,6 +870,7 @@ input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px rgba(56,189,248,.35)}
     <div class="trow"><label for="statusIncludeAlerts">Current alerts (from the Weather Watcher)</label><input type="checkbox" id="statusIncludeAlerts"></div>
   </div>
   <p class="hint">This card only controls timing and content. Whether it's actually sent over each channel is set where that channel lives: <b>Boot announcement and periodic status</b> on the <a href="#mesh">Meshtastic</a> card below for the mesh line, and <b>Boot announcement</b>/<b>Scheduled status updates</b> under Push notifications on the Weather Watcher's own Settings page for the ntfy push.</p>
+  <p class="hint">A <code>SIREN PING</code> over Meshtastic replies with these same fields, on demand &mdash; it always answers, regardless of the toggles above or the schedule.</p>
   <div class="actions"><button class="btn save" onclick="saveStatusBroadcast()">Save status broadcast settings</button></div>
   <div class="msg" id="sbcm"></div>
 </section>

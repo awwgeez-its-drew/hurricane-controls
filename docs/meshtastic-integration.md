@@ -191,7 +191,7 @@ factor on top of sender-ID filtering.
 | `SIREN WEATHEROFF [pw]` | Sender whitelisted, password correct (if set) | Disables automatic weather-triggered activation | `WEATHER TRIGGER DISABLED` |
 | `SIREN REBOOT [pw]` | Sender whitelisted, password correct (if set) | Restarts the controller | `OK: rebooting` (sent before reset) |
 | `SIREN WXREBOOT [pw]` | Sender whitelisted, password correct (if set) | Sends a restart request to the Weather Watcher over the dedicated UART link (fire-and-forget — it has no mesh connectivity of its own, so there's no confirmation it actually landed) | `OK: weather watcher reboot requested` |
-| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity/status check | `MODE: <IDLE\|mode> // LOCAL CONTROLS <LOCKED\|UNLOCKED> // UPTIME: ... // CPU TEMP: ... // WW: <OFF\|N/A\|LOST\|STARTING\|OK\|ERROR>` |
+| `SIREN PING` | Sender whitelisted (no password ever required) | Connectivity/status check | `PONG: <the same fields as the Status Broadcast, per its Settings page toggles>` — see "Status Broadcast" below |
 | `SIREN <anything else> [pw]` | Sender whitelisted, password correct (if set) | No effect | `ERR: unknown command` |
 | *(no `SIREN` prefix, sender not whitelisted, or wrong/missing password)* | — | No effect | **no reply at all** |
 
@@ -225,7 +225,46 @@ unit; only *incoming* lines need the `SIREN` prefix to be recognized.
 | Weather Watcher lost/recovered | `\x07WEATHER WATCHER LOST` / `WEATHER WATCHER RECOVERED` | Edge-detected on `weatherLink.lost()` — the dedicated UART link was heard from before and has now gone quiet for 90s+ (`WeatherLink::lost()`), or has started talking again. `LOST` carries the alert-bell prefix; `RECOVERED` does not. |
 | Weather Watcher error (periodic) | `\x07WEATHER WATCHER ERROR: <detail>`, then `WEATHER WATCHER RECOVERED` on clearing | Re-announced every 10 minutes (`MeshBridge::WW_ERROR_REANNOUNCE_MS`) while the Weather Watcher is reachable but has self-reported an `ERROR` (not `LOST` — it's still talking over the link, just unhappy, e.g. WiFi/NWS API trouble); one final `RECOVERED` line when the error clears. |
 | Startup | `STARTUP COMPLETE`, immediately followed by one STATUS line | Once after boot, as soon as the Weather Watcher has reported a real `OK`/`ERROR` from its first NWS poll — or immediately if the weather trigger is off, or after 2 minutes (`MeshBridge::STARTUP_ANNOUNCE_MAX_WAIT_MS`) if the Weather Watcher never reports. Only this pair waits; activation/stop/lockout broadcasts during that window go out immediately. |
-| Periodic status | `STATUS: <IDLE\|MODE> - LOCAL CONTROL <LOCKED\|UNLOCKED> // UPTIME: <Xd Xh Xm> // CPU TEMP: <NN>F // WW: <OFF\|N/A\|LOST\|STARTING\|OK\|ERROR>` | Every 12 hours (`MeshBridge::STATUS_INTERVAL_MS`), and once at startup. `WW` is the Weather Watcher sub-board's last self-reported health over the dedicated UART link (see `docs/weather-watcher.md`) — `OFF` if the weather-trigger toggle is off, `N/A` if it's on but nothing has ever been heard from that board, `LOST` if it was heard from before but has gone quiet for 90s+, `STARTING` if it's alive but hasn't finished its first NWS poll, else its own last `OK`/`ERROR` push. |
+| Status Broadcast | `STATUS: <field> // <field> // ...` — see "Status Broadcast" below for the field list | At up to 3 configurable daily local times (Settings page → Status Broadcast card), replacing the old fixed 12-hour interval, and once at startup. |
+| Watch issued | `\x07TORNADO WATCH ISSUED: <event>` / `\x07SEVERE THUNDERSTORM WATCH ISSUED: <event>` | A new Tornado/Severe Thunderstorm Watch appears in the Weather Watcher's mirrored current-alerts list (`WX ALERTS` batch) — display-only, never a trigger (see `docs/weather-watcher.md`). One-time per VTEC-equivalent key; an ongoing Watch doesn't re-announce. |
+
+#### Status Broadcast
+
+The periodic status line's exact content is configurable from the Main
+page's Settings → **Status Broadcast** card (`src/settings.h`'s
+`statusInclude*` fields), rather than a fixed set of fields:
+
+| Field | Message text | Default |
+|---|---|---|
+| Mode / idle state | `<IDLE\|mode>` | on |
+| Local control lock state | `LOCAL CONTROL <LOCKED\|UNLOCKED>` | on |
+| Uptime | `UPTIME: <Xd Xh Xm>` | on |
+| CPU temperature | `CPU TEMP: <NN>F` | on |
+| Weather Watcher health | `WW: <OFF\|N/A\|LOST\|STARTING\|OK\|ERROR>` | on |
+| Wi-Fi status | `WIFI: <OK\|DOWN>` | off |
+| Current time | `TIME: <HH:MM:SS>` (only if the clock is synced) | off |
+| Last activation | `LAST RUN: <MODE> from <SOURCE> (<COMPLETED\|STOPPED\|FAILSAFE\|INTERRUPTED>)`, or `LAST RUN: NONE` | off |
+| Current alerts | `ALERTS: <n> (<top event>)`, or `ALERTS: NONE` — from the Weather Watcher's mirrored alert list | off |
+
+Included fields are joined with ` // `, in the order above; a field is
+simply omitted (not blanked) when its toggle is off, so the message is
+only ever as long as what's actually enabled. The first 5 default on,
+matching exactly what the old fixed-format message always sent — this
+redesign only makes them optional, it doesn't change a default
+install's content. The up-to-3 daily times replace the old "every 12
+hours" interval; an empty slot is simply unused.
+
+**`SIREN PING`'s reply carries the same fields, on demand.** Its format
+is `PONG: <field> // <field> // ...` — identical content to whatever
+the Status Broadcast card has enabled, just sent immediately on request
+instead of on the schedule. `PING` always answers regardless of the
+Status Broadcast's own settings (schedule, or even the `meshNotifyStatus`
+broadcast toggle below) — only the fields *inside* the reply follow the
+card's toggles.
+
+This same schedule and field set also drives the `SX STATUS` push to
+the Weather Watcher over the dedicated UART link (`src/weather_link.h`) —
+see `docs/weather-watcher.md` and `docs/uart-protocol.md` for that side.
 
 #### Per-event-type broadcast toggles
 
@@ -240,13 +279,17 @@ channels — mesh broadcasts and ntfy pushes — can be tuned separately:
 | Activations & stops | Run mode activated, stop invoked, run cycle completed |
 | Lockout/weather-trigger/locked-button | Lockout changed, locked button pressed, weather trigger toggled |
 | Weather Watcher health | Weather Watcher lost/recovered, Weather Watcher error/recovered |
-| Boot + periodic status | Startup, periodic status |
+| Boot + Status Broadcast | Startup, Status Broadcast |
+| Watch issued | Watch issued |
 
-All four default **on** — every one of these broadcasts has always
-fired unconditionally, so this only lets an owner opt specific ones
-*out*; it never silently changes default behavior. Settings are
-persisted (`Settings::meshNotifyActivation`/`meshNotifySystemEvents`/
-`meshNotifyWwHealth`/`meshNotifyStatus` in `src/settings.h`).
+The first four default **on** — every one of those broadcasts has
+always fired unconditionally, so this only lets an owner opt specific
+ones *out*; it never silently changes default behavior. **Watch
+issued** also defaults on, even though it's a new broadcast type, since
+it's purely informational and never a trigger. Settings are persisted
+(`Settings::meshNotifyActivation`/`meshNotifySystemEvents`/
+`meshNotifyWwHealth`/`meshNotifyStatus`/`meshNotifyWatches` in
+`src/settings.h`).
 
 Implementation notes (`src/mesh.h`, `src/statemachine.h`):
 - **Source attribution** (`LOCAL`/`WEB`/`MESH`) is threaded through a new

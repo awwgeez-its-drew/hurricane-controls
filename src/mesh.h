@@ -367,16 +367,18 @@ private:
         return end < 4 ? w[end] : "?";
     }
 
-    // Status Broadcast (Settings page card): each field below is only
-    // included if its statusInclude* toggle is on, so the message can be
-    // as terse or as detailed as the owner wants — see settings.h. Always
-    // starts with "STATUS:" even if every toggle happens to be off.
-    static String buildStatusMessage() {
+    // The data-point fields shared by the periodic Status Broadcast and the
+    // SIREN PING reply (see buildStatusMessage()/buildPingReply() below) —
+    // each one included only if its statusInclude* toggle is on (Settings
+    // page → Status Broadcast card), so both messages stay in sync with
+    // whatever the owner configured there and never need to be kept in
+    // sync by hand.
+    static String buildStatusFields() {
         const Settings& s = settingsMgr.s;
-        String msg = "STATUS:";
+        String msg;
         bool first = true;
         auto add = [&](const String& part) {
-            msg += first ? " " : " // ";
+            if (!first) msg += " // ";
             msg += part;
             first = false;
         };
@@ -415,10 +417,21 @@ private:
         return msg;
     }
 
+    // Status Broadcast (Settings page card). Always starts with "STATUS:"
+    // even if every toggle happens to be off.
+    static String buildStatusMessage() {
+        String fields = buildStatusFields();
+        return fields.length() ? "STATUS: " + fields : "STATUS:";
+    }
+
+    // SIREN PING's reply — on-demand, not scheduled, but reports the same
+    // fields as the Status Broadcast (see buildStatusFields() above) so the
+    // two never drift out of sync. Always answers regardless of the
+    // Status Broadcast's own toggles/schedule; only its *content* follows
+    // them.
     static String buildPingReply() {
-        return "MODE: " + modeOrIdle() + " // LOCAL CONTROLS " + (buttons.locked ? "LOCKED" : "UNLOCKED") +
-               " // UPTIME: " + formatUptime(millis()) + " // CPU TEMP: " + String(cpuTempF()) + "F" +
-               " // WW: " + weatherWatcherWord();
+        String fields = buildStatusFields();
+        return fields.length() ? "PONG: " + fields : "PONG:";
     }
 
     // Comma-separated, case-insensitive, whitespace-trimmed match against
