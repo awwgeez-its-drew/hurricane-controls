@@ -455,6 +455,17 @@ function drawHealth(h){
     chip('','Free memory '+h.freeHeapKB+' KB')+
     (h.otaActive?chip('warn','Firmware update in progress'):'');
 }
+// A static "until 11pm" (viewer's own local time, from the alert's exp
+// epoch) — no live countdown, unlike the Weather Watcher dashboard's.
+// Drops ":00" on the hour to match how people actually say it.
+function fmtUntil(exp){
+  if(!exp)return'';
+  const d=new Date(exp*1000);
+  let h=d.getHours();const m=d.getMinutes();
+  const ap=h>=12?'pm':'am';
+  h=h%12;if(h===0)h=12;
+  return ' until '+h+(m?':'+String(m).padStart(2,'0'):'')+ap;
+}
 function refreshAlerts(){
   fetch('/alerts').then(r=>r.json()).then(d=>{
     const box=document.getElementById('warnBanner');
@@ -472,8 +483,8 @@ function refreshAlerts(){
       }
       return '<div class="warnItem '+esc(a.color)+(stale?' stale':'')+'">'+
         '<span class="wdot" role="img" aria-label="'+esc(a.color||'')+' alert"></span>'+
-        '<span class="wname">'+esc(a.event)+(a.tag?'<span class="wtag">'+esc(a.tag)+'</span>':'')+'</span>'+
-        act+'<span class="wage">'+(stale?'stale':'active')+'</span></div>';
+        '<span class="wname">'+esc(a.event)+fmtUntil(a.exp)+(a.tag?'<span class="wtag">'+esc(a.tag)+'</span>':'')+'</span>'+
+        act+'<span class="wage">'+(stale?'stale':'')+'</span></div>';
     }).join('');
     box.classList.add('show');
   }).catch(()=>{});

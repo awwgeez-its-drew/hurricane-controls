@@ -200,6 +200,7 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:flex;flex-wrap:wrap;gap
 .alert-title{flex:1;min-width:160px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .alert-title b{font-size:18px}
 .alert-dmg{font-size:11px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.75)}
+.alert-rem{font-size:13px;font-weight:600;opacity:.85}
 .alert-tag{font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.35);white-space:nowrap}
 .alert-sub{font-size:14px;line-height:1.5;opacity:.92}
 .alert-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -314,6 +315,7 @@ function renderCurrentAlerts(list){
   el.innerHTML=list.map((a,i)=>
     '<div class="alert-item alert-'+esc(a.color)+'">'+
       '<div class="alert-head"><span class="alert-title"><b>'+esc(a.event)+'</b>'+
+        '<span class="alert-rem" id="arem'+i+'" data-exp="'+(a.exp||0)+'">'+fmtRemaining(a.exp)+'</span>'+
         (a.tag?'<span class="alert-dmg">'+esc(a.tag)+'</span>':'')+'</span>'+
         (a.triggered?'<span class="alert-tag">SIREN ACTIVATED'+(a.mode?' &mdash; '+esc(a.mode):'')+'</span>':'')+'</div>'+
       '<div class="alert-sub">'+esc(a.headline)+'</div>'+
@@ -325,6 +327,24 @@ function renderCurrentAlerts(list){
     '</div>'
   ).join('');
 }
+
+// The countdown ("5h 13min remaining") ticks every second from the
+// client's own clock, independent of renderCurrentAlerts()'s signature-
+// gated rebuild (which skips most ticks to avoid collapsing an expanded
+// polygon map) — so it stays live even on a tick that doesn't rebuild.
+function fmtRemaining(exp){
+  if(!exp)return'';
+  const rem=exp-Math.floor(Date.now()/1000);
+  if(rem<=0)return'(expiring)';
+  const h=Math.floor(rem/3600),m=Math.floor((rem%3600)/60);
+  return h>0?'('+h+'h '+m+'min remaining)':'('+m+'min remaining)';
+}
+function tickCountdowns(){
+  document.querySelectorAll('.alert-rem').forEach(el=>{
+    el.textContent=fmtRemaining(parseInt(el.dataset.exp,10)||0);
+  });
+}
+setInterval(tickCountdowns,1000);
 
 // WP8: a polygon mini-map for one alert, fetched client-side straight from
 // its own api.weather.gov feature URL (Accept: application/geo+json) —
@@ -1734,6 +1754,7 @@ private:
             o["event"]     = a.event;
             o["headline"]  = a.headline;
             o["areaDesc"]  = a.areaDesc;
+            o["exp"]       = a.expEpoch; // 0 = unknown/unparseable; client hides the countdown
             o["color"]     = categoryColor(a.category);
             o["tag"]       = categoryTag(a.category);
             o["triggered"] = a.triggeredSiren;
