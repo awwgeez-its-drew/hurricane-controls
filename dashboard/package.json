@@ -45,8 +45,11 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "HurricaneDashboard-Setup-${version}.${ext}"
     },
-    "artifactName": "HurricaneDashboard-${version}-${target}.${ext}"
+    "portable": {
+      "artifactName": "HurricaneDashboard-Portable-${version}.${ext}"
+    }
   }
 }
