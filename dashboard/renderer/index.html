@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hurricane Controls Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 6v10l7 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="16" r="2.4" fill="currentColor"/></svg>
+      <div><b>Hurricane</b><span>Controls dashboard</span></div>
+    </div>
+    <nav id="nav" aria-label="Sections">
+      <button data-page="overview" class="on">Overview</button>
+      <button data-page="siren">Siren Controller <i class="dot" id="navDotSiren"></i></button>
+      <button data-page="ww">Weather Watcher <i class="dot" id="navDotWw"></i></button>
+      <button data-page="system">Connections &amp; System</button>
+    </nav>
+    <div class="side-foot">
+      <p>A software STOP is a convenience, not a safety device. Keep your independent hardware E-stop within reach.</p>
+      <span id="appVer"></span>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="top">
+      <div id="topAlerts" class="top-alerts" hidden></div>
+      <div class="top-right">
+        <span id="topSiren" class="chip"></span>
+        <span id="topWw" class="chip"></span>
+        <button class="hold stop-global" id="gStop" data-hold="400" title="Hold to STOP the siren">
+          <i class="hfill"></i><span>HOLD TO STOP</span>
+        </button>
+      </div>
+    </header>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="pages"></div>
+  </main>
+</div>
+<div id="modal" hidden></div>
+<script src="util.js"></script>
+<script src="forms.js"></script>
+<script src="schemas.js"></script>
+<script src="pages.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

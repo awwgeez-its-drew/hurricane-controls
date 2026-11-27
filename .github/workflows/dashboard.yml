@@ -1,0 +1,60 @@
+name: Dashboard
+
+# Tests the desktop dashboard (dashboard/) against the mock boards on Linux,
+# then builds the Windows installer + portable .exe on a Windows runner and
+# uploads them as a workflow artifact. Pushing a tag like dashboard-v1.0.0 also
+# attaches them to a GitHub release.
+on:
+  push:
+    branches: [main]
+    tags: ["dashboard-v*"]
+    paths: ["dashboard/**", ".github/workflows/dashboard.yml"]
+  pull_request:
+    paths: ["dashboard/**", ".github/workflows/dashboard.yml"]
+
+defaults:
+  run:
+    working-directory: dashboard
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - name: Client protocol tests (mock boards)
+        run: npm test
+      - name: System libraries Electron needs on a headless runner
+        run: sudo npx --yes playwright@1.49.0 install-deps chromium
+      - name: UI test (real Electron app + mock boards)
+        run: xvfb-run -a node test/ui-smoke.js
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HurricaneDashboard-windows
+          path: |
+            dashboard/dist/*.exe
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/dashboard-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dashboard/dist/*.exe
