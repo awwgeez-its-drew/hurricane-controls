@@ -221,6 +221,8 @@ function createWW({ port = 0, password = 'Weather123!', lockMs } = {}) {
     currentAlerts: [
       { id: 'a1', event: 'Tornado Warning', headline: 'Tornado Warning issued', areaDesc: 'Cleveland, OK', exp: Math.floor(Date.now() / 1000) + 1800,
         color: 'red', tag: 'CONFIRMED', triggered: true, mode: 'ATTACK' },
+      { id: 'a2', event: 'Severe Thunderstorm Watch', headline: 'Watch issued', areaDesc: 'Cleveland, OK; Oklahoma, OK', exp: Math.floor(Date.now() / 1000) + 7200,
+        color: 'yellow', tag: '', triggered: false },
     ],
     recent: [{ event: 'Tornado Warning', mode: 'ATTACK', disposition: 'TRIGGERED', vtecKey: 'K1', time: '2026-01-01 12:00:00' }],
     linkTests: 0, ntfyTests: 0, restarted: 0, calls: [],

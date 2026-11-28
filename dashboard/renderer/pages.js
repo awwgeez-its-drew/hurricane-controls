@@ -61,6 +61,7 @@ function sirenHero() {
   const flags = el('div', { class: 'row' });
   return {
     node: el('div', { class: 'stack' }, hero, rrow, flags),
+    parts: { hero, relays: rrow, flags },
     render(s) {
       const d = sirenOnline(s) ? s.data.status : null;
       if (!d) {
@@ -92,13 +93,13 @@ function sirenHero() {
 }
 
 // Start/stop controls. `full` adds Manual, Growl and the panel-lock toggle.
-function sirenModes({ full }) {
+function sirenModes({ full, big }) {
   const mk = (cls, label, hint) => el('button', { class: 'hold ' + cls, type: 'button' }, el('i', { class: 'hfill' }), el('span', { text: label }), el('small', { text: hint }));
-  const bWail = mk('wail', 'WAIL', 'hold 1 s'), bAttack = mk('attack', 'ATTACK', 'hold 1 s'), bFast = mk('fastwail', 'FAST WAIL', 'hold 1 s');
-  const bStop = mk('stop', 'STOP', 'hold 0.4 s');
+  const bWail = mk('wail', 'WAIL', 'hold 1 s to start'), bAttack = mk('attack', 'ATTACK', 'hold 1 s to start'), bFast = mk('fastwail', 'FAST WAIL', 'hold 1 s to start');
+  const bStop = mk('stop', 'STOP', 'hold 0.4 s to stop');
   armHold(bWail, 1000, () => doStart('wail')); armHold(bAttack, 1000, () => doStart('attack')); armHold(bFast, 1000, () => doStart('fastwail'));
   armHold(bStop, 400, doStop);
-  const grid = el('div', { class: 'modes' }, bWail, bAttack, bFast);
+  const grid = el('div', { class: 'modes' + (big ? ' big' : '') }, bWail, bAttack, bFast);
   const bMan = mk('manual', 'MANUAL', 'press and hold to sound');
   const bGrowl = mk('growl', 'GROWL TEST', 'hold 1 s');
   const bLock = el('button', { class: 'btn', type: 'button', text: 'Lock panel buttons' });
@@ -152,7 +153,8 @@ function wwSummary({ full }) {
         chipEl(d.stale ? 'warn' : 'ok', d.stale ? 'Alert data stale' : 'Alert data fresh'),
         chipEl('', 'Last poll ' + d.lastPoll));
       const list = d.currentAlerts || [];
-      alerts.replaceChildren(...(list.length ? list.map((a) => alertBlock(a)) : [el('p', { class: 'empty', text: 'No active warnings for this location.' })]));
+      if (full) alerts.replaceChildren(...(list.length ? list.map((a) => alertBlock(a)) : [el('p', { class: 'empty', text: 'No active warnings or watches for this location.' })]));
+      else alerts.replaceChildren(el('p', { class: 'empty', text: list.length ? list.length + ' active - see the banner above.' : 'No active warnings or watches.' }));
       if (full) {
         const rows = [['API status', d.apiDetail], ['Siren link', d.linkDetail], ['Wi-Fi', d.wifiDetail], ['Last message from siren', d.lastSxEvent ? d.lastSxEvent + (d.lastSxEventAgeSec >= 0 ? ' (' + fmtAgo(d.lastSxEventAgeSec) + ')' : '') : 'none yet'],
           ['Clock', d.currentTime], ['Uptime', fmtUptime(d.uptime)], ['CPU temperature', d.tempF + '°F'], ['Firmware', d.fwVersion]];
@@ -167,9 +169,48 @@ function wwSummary({ full }) {
   };
 }
 
+// ── Warnings & watches banner ───────────────────────────────────────────────
+const SEV_RANK = { purple: 4, red: 3, orange: 2, yellow: 1, '': 0 };
+const topSeverity = (list) => list.reduce((m, a) => (SEV_RANK[a.color || ''] > SEV_RANK[m] ? (a.color || '') : m), '');
+function warnBanner() {
+  const node = el('section', { class: 'warnbanner none', role: 'region', 'aria-label': 'Active warnings and watches', 'aria-live': 'polite' });
+  return {
+    node,
+    render(w) {
+      const d = w && w.data && w.data.status;
+      node.removeAttribute('data-sev');
+      if (!d || w.conn !== 'online') {
+        node.className = 'warnbanner unknown';
+        node.replaceChildren(el('div', { class: 'wb-head', text: 'Weather Watcher ' + (w ? (CONN_TEXT[w.conn] || 'offline') : 'not connected') + ' - alert status unknown. Do not assume there are no warnings.' }));
+        return;
+      }
+      const list = (d.currentAlerts || []).slice().sort((a, b) => SEV_RANK[b.color || ''] - SEV_RANK[a.color || '']);
+      if (!list.length) {
+        node.className = 'warnbanner none';
+        node.replaceChildren(el('div', { class: 'wb-head', text: 'No active warnings or watches for your location' + (d.stale ? ' (alert data is stale)' : '') }));
+        return;
+      }
+      const warnings = list.filter((a) => !/watch/i.test(a.event || '')).length;
+      const watches = list.length - warnings;
+      node.className = 'warnbanner';
+      node.dataset.sev = topSeverity(list);
+      node.replaceChildren(
+        el('div', { class: 'wb-head' }, 'Active ' + [warnings && warnings + (warnings === 1 ? ' warning' : ' warnings'), watches && watches + (watches === 1 ? ' watch' : ' watches')].filter(Boolean).join(' and '),
+          d.stale ? el('span', { text: '· data stale' }) : null),
+        el('div', { class: 'wb-body' }, list.map((a) => el('div', { class: 'wrow ' + (a.color || '') },
+          el('span', { class: 'kind', text: /watch/i.test(a.event || '') ? 'WATCH' : 'WARNING' }),
+          el('span', { class: 'ev', text: a.event || 'Alert' }),
+          a.tag ? el('span', { class: 'tag', text: a.tag }) : null,
+          a.exp ? el('span', { class: 'until', text: fmtUntil(a.exp) }) : null,
+          a.triggered ? el('span', { class: 'act', text: 'SIREN ACTIVATED' + (a.mode ? ' - ' + a.mode : '') }) : null,
+          a.areaDesc ? el('span', { class: 'area', text: a.areaDesc }) : null))));
+    },
+  };
+}
+
 // ── Overview ────────────────────────────────────────────────────────────────
 function pageOverview(go) {
-  const hero = sirenHero(), modes = sirenModes({ full: false }), ww = wwSummary({ full: false });
+  const hero = sirenHero(), modes = sirenModes({ full: false, big: true }), ww = wwSummary({ full: false }), wb = warnBanner();
   const welcome = el('div', { class: 'banner warn', hidden: true },
     el('b', { text: 'Welcome. ' }), 'Enter each board\'s address and password to get started. ',
     el('button', { class: 'btn small', text: 'Open Connections', onclick: () => go('system') }));
@@ -177,8 +218,9 @@ function pageOverview(go) {
   const wwIssue = el('div', { class: 'banner bad', hidden: true });
   const node = el('div', { class: 'page' },
     welcome,
-    el('div', { class: 'grid g2' },
-      el('section', { class: 'card stack' }, el('header', null, el('h2', { text: 'Siren Controller' }), el('button', { class: 'btn small', text: 'Open full controls', onclick: () => go('siren') })), sirenIssue, hero.node, modes.node),
+    wb.node,
+    el('div', { class: 'grid ov-grid' },
+      el('section', { class: 'card stack' }, el('header', null, el('h2', { text: 'Siren Controller' }), el('button', { class: 'btn small', text: 'Open full controls', onclick: () => go('siren') })), sirenIssue, hero.parts.hero, modes.node, hero.parts.relays, hero.parts.flags),
       el('section', { class: 'card stack' }, el('header', null, el('h2', { text: 'Weather Watcher' }), el('button', { class: 'btn small', text: 'Open details', onclick: () => go('ww') })), wwIssue, ww.node)));
   const issue = (box, name, s) => {
     const bad = s && ['offline', 'auth-error', 'locked'].includes(s.conn);
@@ -193,7 +235,7 @@ function pageOverview(go) {
     render(st) {
       welcome.hidden = !!(st.siren && st.siren.host) || !!(st.ww && st.ww.host);
       issue(sirenIssue, 'Siren Controller', st.siren); issue(wwIssue, 'Weather Watcher', st.ww);
-      hero.render(st.siren); modes.render(st.siren); ww.render(st.ww);
+      hero.render(st.siren); modes.render(st.siren); ww.render(st.ww); wb.render(st.ww);
     },
   };
 }

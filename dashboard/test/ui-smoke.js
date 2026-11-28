@@ -52,8 +52,31 @@ const shotDir = process.env.SHOTS || '';
   });
   await t('overview shows idle siren + active tornado warning', async () => {
     await page.waitForSelector('.hero .mode:has-text("Idle")');
-    assert.ok(await page.locator('#topAlerts .alert:has-text("Tornado Warning")').count());
     await shot('overview');
+  });
+  await t('overview banner: color-coded, warnings ranked above watches, sits above the cards', async () => {
+    const b = page.locator('.page.on .warnbanner');
+    assert.strictEqual(await b.getAttribute('data-sev'), 'red');
+    assert.match(await b.locator('.wb-head').innerText(), /1 warning and 1 watch/i);
+    const rows = b.locator('.wrow');
+    assert.strictEqual(await rows.count(), 2);
+    assert.ok((await rows.nth(0).getAttribute('class')).includes('red'));
+    assert.ok((await rows.nth(1).getAttribute('class')).includes('yellow'));
+    assert.match(await rows.nth(1).innerText(), /WATCH/);
+    const bb = await b.boundingBox(), card = await page.locator('.page.on .card').first().boundingBox(), top = await page.locator('#top').boundingBox();
+    assert.ok(bb.y >= top.y + top.height - 1 && bb.y + bb.height <= card.y, 'banner is between the top bar and the cards');
+    assert.strictEqual(await page.locator('#topAlerts .alertchip').count(), 0, 'no chip on overview');
+  });
+  await t('control buttons are large and solid (fully opaque)', async () => {
+    const m = await page.evaluate(() => {
+      const b = document.querySelector('.page.on .modes.big .hold.wail'); const c = getComputedStyle(b);
+      return { h: b.getBoundingClientRect().height, op: c.opacity, bg: c.backgroundColor };
+    });
+    assert.ok(m.h >= 120, 'height ' + m.h);
+    const clipped = await page.evaluate(() => [...document.querySelectorAll('.page.on .modes.big .hold span')].filter((x) => x.scrollWidth > x.parentElement.clientWidth).map((x) => x.textContent));
+    assert.deepStrictEqual(clipped, [], 'label text clipped: ' + clipped);
+    assert.strictEqual(m.op, '1');
+    assert.ok(!/rgba\(.*,\s*0?\.\d+\)/.test(m.bg), 'bg ' + m.bg);
   });
 
   await t('a short press does NOT start the siren (hold-to-confirm)', async () => {
@@ -78,6 +101,7 @@ const shotDir = process.env.SHOTS || '';
 
   await t('Siren page: MANUAL sounds only while held, keep-alives flow, release stops', async () => {
     await page.click('#nav button[data-page=siren]');
+    assert.match(await page.locator('#topAlerts .alertchip').innerText(), /2 active alerts/);
     const b = page.locator('.page.on .hold.manual');
     const bb = await b.boundingBox();
     await page.mouse.move(bb.x + 20, bb.y + 20); await page.mouse.down();

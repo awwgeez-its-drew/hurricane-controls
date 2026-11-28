@@ -11,6 +11,7 @@
     $$('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.page === name));
     for (const [k, p] of Object.entries(pages)) p.node.classList.toggle('on', k === name);
     if (pages[name].onShow) pages[name].onShow();
+    renderTop();
     pages[name].render(state);
   }
 
@@ -32,10 +33,12 @@
     $('#navDotWw').className = 'dot ' + connDot(w);
     const d = sirenOnline(s) ? s.data.status : null;
     $('#gStop').disabled = !d || (d.mode === 'idle' && !d.testMode);
-    const alerts = (w && w.data && w.data.status && w.data.status.currentAlerts) || [];
+    // Alerts live in the Overview banner; on other pages show a compact, clickable count.
+    const alerts = (w && w.conn === 'online' && w.data && w.data.status && w.data.status.currentAlerts) || [];
     const box = $('#topAlerts');
-    box.hidden = !alerts.length;
-    box.replaceChildren(...alerts.map((a) => alertBlock(a, { showSub: false })));
+    if (!alerts.length || current === 'overview') { box.replaceChildren(); return; }
+    const sev = topSeverity(alerts);
+    box.replaceChildren(el('button', { class: 'chip alertchip ' + sev, title: 'Open the Overview', onclick: () => go('overview'), text: '\u26A0 ' + alerts.length + ' active alert' + (alerts.length === 1 ? '' : 's') + ' - ' + alerts.map((a) => a.event).join(', ') }));
   }
 
   function render() {

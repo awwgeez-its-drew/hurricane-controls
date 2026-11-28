@@ -198,6 +198,7 @@ function createWindow() {
     width: 1360, height: 860, minWidth: 1040, minHeight: 640,
     backgroundColor: '#0e1116',
     title: 'Hurricane Controls Dashboard',
+    icon: path.join(__dirname, 'renderer', 'siren.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
