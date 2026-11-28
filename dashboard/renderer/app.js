@@ -27,6 +27,15 @@
 
   function renderTop() {
     const s = state.siren, w = state.ww;
+    if (state.auth) Object.assign(AUTH, state.auth);
+    const chip = $('#authChip');
+    chip.hidden = !AUTH.required;
+    if (AUTH.required) {
+      const left = Math.max(0, Math.ceil((AUTH.until - Date.now()) / 1000));
+      chip.className = 'chip authchip ' + (left ? 'unlocked' : 'locked');
+      chip.textContent = left ? '\uD83D\uDD13 Unlocked ' + fmtClock(left) + ' - click to lock' : '\uD83D\uDD12 Locked - click to unlock';
+      chip.title = left ? 'Lock the controls now' : 'Sign in with Windows to start the siren or change settings (STOP is always available)';
+    }
     $('#topSiren').replaceChildren(el('i', { class: 'dot ' + connDot(s) }), 'Siren: ' + (s ? CONN_TEXT[s.conn] : '…'));
     $('#topWw').replaceChildren(el('i', { class: 'dot ' + connDot(w) }), 'Weather Watcher: ' + (w ? CONN_TEXT[w.conn] : '…'));
     $('#navDotSiren').className = 'dot ' + connDot(s);
@@ -46,6 +55,8 @@
     pages[current].render(state);
   }
 
+  $('#authChip').addEventListener('click', () => { if (authLocked()) unlockInteractive(); else hc.lock(); });
+  setInterval(renderTop, 1000);   // countdown + re-lock display
   hc.onState((st) => { state = st; render(); });
   state = await hc.state();
   const cfg = await hc.cfgGet();

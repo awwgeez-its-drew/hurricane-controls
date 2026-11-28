@@ -197,3 +197,15 @@ progress{width:100%;height:10px}
 .alertchip{cursor:pointer;font-weight:700}
 .alertchip.purple{border-color:var(--purple);color:#e9d5ff;background:#2a1745}.alertchip.red{border-color:var(--red);color:#fecaca;background:#3d1414}
 .alertchip.orange{border-color:var(--orange);color:#fed7aa;background:#43250b}.alertchip.yellow{border-color:var(--yellow);color:#fef08a;background:#3b3108}
+
+.authchip{cursor:pointer;font-weight:700}
+.authchip.locked{border-color:#7a5a12;background:#2a2110;color:#f2d28a}
+.authchip.unlocked{border-color:#254d31;background:#10261a;color:#9be3b0}
+/* top bar: right cluster never wraps or shrinks; the alert chip truncates instead */
+.top-right{flex:none;flex-wrap:nowrap}
+.top-alerts{flex:1 1 0;min-width:0}
+.alertchip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.stop-global{white-space:nowrap;flex:none}
+.stop-global span{white-space:nowrap}
+.chip{flex:none}
+.alertchip.chip{flex:0 1 auto;min-width:0}

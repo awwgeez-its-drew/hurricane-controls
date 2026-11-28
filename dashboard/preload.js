@@ -18,5 +18,8 @@ contextBridge.exposeInMainWorld('hc', {
   reconnect: (id) => ipcRenderer.invoke('board:reconnect', id),
   csv: (id) => ipcRenderer.invoke('board:csv', id),
   ota: (id) => ipcRenderer.invoke('board:ota', id),
+  unlock: () => ipcRenderer.invoke('auth:unlock'),
+  lock: () => ipcRenderer.invoke('auth:lock'),
+  setAuthRequired: (on) => ipcRenderer.invoke('auth:setRequired', on),
   info: () => ipcRenderer.invoke('app:info'),
 });

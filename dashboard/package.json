@@ -9,7 +9,7 @@
     "start": "electron .",
     "mock": "node test/mock-boards.js",
     "test": "node test/run.js",
-    "test:ui": "xvfb-run -a node test/ui-smoke.js",
+    "test:ui": "xvfb-run -a node test/ui-smoke.js && xvfb-run -a node test/ui-auth.js",
     "dist": "electron-builder --win --x64"
   },
   "dependencies": {

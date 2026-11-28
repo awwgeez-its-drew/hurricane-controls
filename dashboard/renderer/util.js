@@ -173,3 +173,12 @@ function claxon() {
 function strongPw(pw) {
   return pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
 }
+
+// ── Windows sign-in state (pushed from the main process, which enforces it) ──
+const AUTH = { required: false, until: 0, available: false, enabled: true };
+const authLocked = () => AUTH.required && Date.now() >= AUTH.until;
+async function unlockInteractive() {
+  const r = await hc.unlock();
+  toast(r.ok ? 'Unlocked for 5 minutes' : r.error, r.ok ? 'ok' : 'er');
+  return !!r.ok;
+}

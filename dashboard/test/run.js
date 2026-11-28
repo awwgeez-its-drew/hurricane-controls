@@ -163,6 +163,71 @@ async function t(name, fn) {
     assert.strictEqual(normalizeHost('10.0.0.2:8080'), '10.0.0.2:8080');
   });
 
+  console.log('Windows sign-in gate');
+  const { AuthGate, protectedReason, UNLOCK_MS } = require('../lib/auth-gate');
+  const winauth = require('../lib/winauth');
+  await t('protects starting/config, never STOP or keep-alives or reads', async () => {
+    const P = (id, m, p, b) => protectedReason(id, m, p, b);
+    for (const mode of ['wail', 'attack', 'fastwail', 'manual', 'growl', 'btn-lock']) assert.ok(P('siren', 'POST', '/cmd', { mode }), mode);
+    assert.ok(P('siren', 'POST', '/cmd', { mode: 'test-lock', on: true }));
+    assert.ok(P('siren', 'POST', '/cmd', { mode: 'test', component: 'blower', on: true }));
+    for (const path of ['/settings-data', '/password', '/ap-password', '/wifi-data', '/ntfy-token', '/restart']) {
+      assert.ok(P('siren', 'POST', path, {}), path); assert.ok(P('ww', 'POST', path, {}), 'ww ' + path);
+    }
+    // must stay unlocked: a prompt can never delay stopping the siren
+    assert.strictEqual(P('siren', 'POST', '/cmd', { mode: 'stop' }), null);
+    assert.strictEqual(P('siren', 'POST', '/cmd', { mode: 'manual-ka' }), null);
+    assert.strictEqual(P('siren', 'POST', '/cmd', { mode: 'test-ka', component: 'blower' }), null);
+    assert.strictEqual(P('siren', 'POST', '/cmd', { mode: 'test', component: 'blower', on: false }), null);
+    assert.strictEqual(P('siren', 'POST', '/cmd', { mode: 'test-lock', on: false }), null);
+    for (const path of ['/status', '/settings-data', '/log', '/alerts', '/wifi-data']) assert.strictEqual(P('siren', 'GET', path), null, path);
+    assert.strictEqual(P('ww', 'POST', '/test-link'), null);
+    assert.strictEqual(P('ww', 'POST', '/ntfy-test'), null);
+    // look-alike / odd bodies are not waved through as "stop"
+    assert.ok(P('siren', 'POST', '/cmd', { mode: 'wail', extra: 'stop' }));
+    assert.strictEqual(P('siren', 'POST', '/cmd', null), null);
+  });
+  await t('one sign-in unlocks for 5 minutes, then re-locks', async () => {
+    let now = 1000, prompts = 0;
+    const g = new AuthGate({ required: () => true, now: () => now, verify: async () => { prompts++; return { ok: true }; } });
+    assert.strictEqual(g.unlocked, false);
+    assert.deepStrictEqual(await g.ensure('x'), { ok: true });
+    now += UNLOCK_MS - 1; assert.deepStrictEqual(await g.ensure('x'), { ok: true }); assert.strictEqual(prompts, 1);
+    now += 2; assert.strictEqual(g.unlocked, false);
+    await g.ensure('x'); assert.strictEqual(prompts, 2);
+    g.lock(); assert.strictEqual(g.unlocked, false);
+  });
+  await t('simultaneous protected requests share a single prompt', async () => {
+    let prompts = 0;
+    const g = new AuthGate({ required: () => true, verify: async () => { prompts++; await sleep(60); return { ok: true }; } });
+    const rs = await Promise.all([g.ensure('a'), g.ensure('b'), g.ensure('c')]);
+    assert.ok(rs.every((r) => r.ok)); assert.strictEqual(prompts, 1);
+  });
+  await t('cancel / deny / a throwing prompt all fail CLOSED and do not unlock', async () => {
+    for (const v of [async () => ({ ok: false, reason: 'cancelled' }), async () => ({ ok: false }), async () => { throw new Error('boom'); }, async () => undefined]) {
+      const g = new AuthGate({ required: () => true, verify: v });
+      const r = await g.ensure('x'); assert.strictEqual(r.ok, false); assert.ok(r.message); assert.strictEqual(g.unlocked, false);
+    }
+  });
+  await t('not required => never prompts', async () => {
+    const g = new AuthGate({ required: () => false, verify: async () => { throw new Error('should not be called'); } });
+    assert.deepStrictEqual(await g.ensure('x'), { ok: true });
+  });
+  await t('PowerShell helper: strings are quoted (no injection) and results map correctly', async () => {
+    const sc = winauth.buildScript(4242, "Cap'tion", "evil'; Remove-Item C:\\x #");
+    assert.ok(sc.includes("'Cap''tion'") && sc.includes("'evil''; Remove-Item C:\\x #'"));
+    assert.ok(sc.includes('[long]4242'));
+    assert.ok(/\r\n'@\r\n/.test(sc), 'here-string terminator on its own line');
+    assert.strictEqual(winauth.buildScript('1; calc', 'a', 'b').includes('calc'), false, 'hwnd is numeric-only');
+    assert.deepStrictEqual(winauth.interpret('OK\r\n'), { ok: true });
+    assert.strictEqual(winauth.interpret('CANCEL').reason, 'cancelled');
+    assert.strictEqual(winauth.interpret('FAIL').reason, 'denied');
+    assert.strictEqual(winauth.interpret('UNSUPPORTED').reason, 'unsupported');
+    assert.strictEqual(winauth.interpret('ERR:Add-Type blocked').reason, 'unavailable');
+    assert.strictEqual(winauth.interpret('').ok, false);
+    assert.strictEqual((await winauth.verify({ hwnd: 0, caption: 'c', message: 'm' })).reason, process.platform === 'win32' ? (await winauth.verify({ hwnd: 0, caption: 'c', message: 'm', timeoutMs: 1 })).reason : 'unavailable');
+  });
+
   siren.close(); ww.close();
   console.log(`\n${pass} passed${process.exitCode ? ', SOME FAILED' : ''}`);
   setTimeout(() => process.exit(process.exitCode || 0), 100);

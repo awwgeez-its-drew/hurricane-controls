@@ -106,7 +106,8 @@ function sirenModes({ full, big }) {
   if (full) {
     armHold(bGrowl, 1000, () => doStart('growl'));
     armMomentary(bMan, {
-      down: async () => { claxon(); return sirenCmd({ mode: 'manual' }); },
+      // If locked, sign in FIRST (a prompt mid-hold would steal focus and release the button).
+      down: async () => { if (authLocked()) { await unlockInteractive(); return false; } claxon(); return sirenCmd({ mode: 'manual' }); },
       ka: () => sirenCmd({ mode: 'manual-ka' }, { skipIfBusy: true }),
       up: () => sirenCmd({ mode: 'stop' }, { priority: true }),
     });
@@ -251,7 +252,7 @@ function pageSiren() {
   const comps = ['chopper', 'blower', 'rotator'].map((c) => {
     const b = el('button', { class: 'hold comp', type: 'button' }, el('span', { text: c.toUpperCase() }), el('small', { text: 'press and hold' }));
     armMomentary(b, {
-      down: () => sirenCmd({ mode: 'test', component: c, on: true }),
+      down: async () => { if (authLocked()) { await unlockInteractive(); return false; } return sirenCmd({ mode: 'test', component: c, on: true }); },
       ka: () => sirenCmd({ mode: 'test-ka', component: c }, { skipIfBusy: true }),
       up: () => sirenCmd({ mode: 'test', component: c, on: false }, { priority: true }),
     });
@@ -404,7 +405,8 @@ function pageSystem() {
       out.className = 'msg ' + (r.ok ? 'ok' : 'er'); out.textContent = r.message;
     } });
     const save = el('button', { class: 'btn primary', text: 'Save & connect', onclick: async () => {
-      await hc.cfgSave({ id, host: host.value, password: pw.value });
+      const r = await hc.cfgSave({ id, host: host.value, password: pw.value });
+      if (!r.ok) { out.className = 'msg er'; out.textContent = r.error; return; }
       pw.value = ''; pw.placeholder = '(saved - leave blank to keep)';
       out.className = 'msg ok'; out.textContent = 'Saved. Connecting…';
     } });
@@ -491,9 +493,23 @@ function pageSystem() {
   const lastState = { siren: null, ww: null };
   const lastOnline = (id) => lastState[id] && lastState[id].conn === 'online';
   const encNote = el('p', { class: 'hint' });
+  const reqBox = el('input', { type: 'checkbox', id: 'reqAuth' });
+  const secMsg = el('p', { class: 'hint' });
+  const lockBtn = el('button', { class: 'btn', text: 'Sign in / lock now' });
+  reqBox.addEventListener('change', async () => {
+    const want = reqBox.checked;
+    const r = await hc.setAuthRequired(want);
+    if (!r.ok) { reqBox.checked = !want; toast(r.error, 'er'); } else toast(want ? 'Windows sign-in is now required' : 'Windows sign-in turned off', 'ok');
+  });
+  lockBtn.addEventListener('click', () => { if (authLocked()) unlockInteractive(); else hc.lock(); });
+  const secCard = el('section', { class: 'card stack' }, el('header', null, el('h2', { text: 'Security' })),
+    el('div', { class: 'field check' }, reqBox, el('div', null, el('label', { for: 'reqAuth', text: 'Require Windows sign-in to start the siren or change settings' }),
+      el('div', { class: 'sub', text: 'One sign-in unlocks the controls for 5 minutes. STOP and viewing status never need it.' }))),
+    el('p', { class: 'hint', text: 'Requires sign-in: starting any run mode, TEST MODE, panel lock, settings, passwords, Wi-Fi, firmware, restart, and editing the saved connections above.' }),
+    el('div', { class: 'row' }, lockBtn), secMsg);
   const node = el('div', { class: 'page' }, el('div', { class: 'grid g2' },
     mkCard('siren', 'Siren Controller', 'default Siren123! - change it'),
-    mkCard('ww', 'Weather Watcher', 'default Weather123! - change it')), encNote);
+    mkCard('ww', 'Weather Watcher', 'default Weather123! - change it')), secCard, encNote);
   hc.onOta(({ id, sent, total }) => { const c = cards[id]; if (c) { c.otaBar.hidden = false; c.otaBar.value = Math.round(sent * 100 / total); } });
   let loaded = false;
   async function loadCfg() {
@@ -509,6 +525,11 @@ function pageSystem() {
   return {
     node,
     render(st) {
+      if (st.auth) {
+        reqBox.checked = st.auth.enabled; reqBox.disabled = !st.auth.available;
+        secMsg.textContent = st.auth.available ? (st.auth.required ? (authLocked() ? 'Currently locked.' : 'Currently unlocked.') : 'Protection is off.') : 'Windows sign-in is only available on Windows - protection is inactive here.';
+        lockBtn.disabled = !st.auth.required;
+      }
       for (const id of ['siren', 'ww']) {
         const s = st[id], was = lastState[id] && lastState[id].conn;
         lastState[id] = s;
