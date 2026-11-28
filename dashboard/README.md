@@ -75,17 +75,19 @@ refused: it fails closed. Turn the protection off under **Connections & System >
 
 Limits, honestly:
 
-* **Password only.** The check verifies your Windows *password*. If you normally sign in
-  with a PIN, fingerprint or face, choose **Sign-in options > Password** in the dialog.
-  A PIN can't be verified by this method and is reported as such. (Windows Hello support
-  could be added later.)
+* **Sign-in method.** By default the app uses **Windows Hello** (your PIN, fingerprint or
+  face) when it is set up on the PC, and the **password** dialog otherwise. Cancelling or
+  failing the Hello prompt is final; it does not fall through to the password box. Choose
+  "Windows password only" under Security to skip Hello. If a PIN dialog misbehaves, set
+  `"security": {"method": "password"}` in the app's `config.json` (in a folder named after the app under `%APPDATA%`).
 * **It is a guard against casual use, not a vault.** Anyone already signed in as you,
   with file access, could edit the app's config. It does not protect the boards
   themselves, which still have their own web passwords.
 * **Windows only, and not yet run on real Windows.** The dialog code
   (`lib/winauth.js`) uses built-in PowerShell + Windows APIs, and CI on Linux cannot
-  exercise it; the gating logic around it is tested. Bench check on your PC: start a mode
-  (expect the dialog, wrong password refused, right password allowed), confirm STOP works
+  exercise it; the gating and the Hello/password fallback rules around it are tested. Bench
+  check on your PC: start a mode (expect the Hello or password dialog, a wrong PIN/password
+  refused, a right one allowed), confirm STOP works
   while locked, and confirm cancelling leaves the siren untouched. On a locked-down PC
   (AppLocker / constrained PowerShell) the prompt reports "unavailable" and protected
   actions stay refused.

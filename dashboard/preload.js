@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('hc', {
   ota: (id) => ipcRenderer.invoke('board:ota', id),
   unlock: () => ipcRenderer.invoke('auth:unlock'),
   lock: () => ipcRenderer.invoke('auth:lock'),
+  setAuthMethod: (m) => ipcRenderer.invoke('auth:setMethod', m),
   setAuthRequired: (on) => ipcRenderer.invoke('auth:setRequired', on),
   info: () => ipcRenderer.invoke('app:info'),
 });

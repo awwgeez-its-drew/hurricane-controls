@@ -496,6 +496,8 @@ function pageSystem() {
   const reqBox = el('input', { type: 'checkbox', id: 'reqAuth' });
   const secMsg = el('p', { class: 'hint' });
   const lockBtn = el('button', { class: 'btn', text: 'Sign in / lock now' });
+  const methodSel = el('select', { id: 'authMethod' }, el('option', { value: 'auto', text: 'Windows Hello / PIN if set up, otherwise password (recommended)' }), el('option', { value: 'password', text: 'Windows password only' }));
+  methodSel.addEventListener('change', () => hc.setAuthMethod(methodSel.value));
   reqBox.addEventListener('change', async () => {
     const want = reqBox.checked;
     const r = await hc.setAuthRequired(want);
@@ -505,6 +507,7 @@ function pageSystem() {
   const secCard = el('section', { class: 'card stack' }, el('header', null, el('h2', { text: 'Security' })),
     el('div', { class: 'field check' }, reqBox, el('div', null, el('label', { for: 'reqAuth', text: 'Require Windows sign-in to start the siren or change settings' }),
       el('div', { class: 'sub', text: 'One sign-in unlocks the controls for 5 minutes. STOP and viewing status never need it.' }))),
+    el('div', { class: 'field', style: 'max-width:520px' }, el('label', { for: 'authMethod', text: 'Sign-in method' }), methodSel),
     el('p', { class: 'hint', text: 'Requires sign-in: starting any run mode, TEST MODE, panel lock, settings, passwords, Wi-Fi, firmware, restart, and editing the saved connections above.' }),
     el('div', { class: 'row' }, lockBtn), secMsg);
   const node = el('div', { class: 'page' }, el('div', { class: 'grid g2' },
@@ -529,6 +532,8 @@ function pageSystem() {
         reqBox.checked = st.auth.enabled; reqBox.disabled = !st.auth.available;
         secMsg.textContent = st.auth.available ? (st.auth.required ? (authLocked() ? 'Currently locked.' : 'Currently unlocked.') : 'Protection is off.') : 'Windows sign-in is only available on Windows - protection is inactive here.';
         lockBtn.disabled = !st.auth.required;
+        if (document.activeElement !== methodSel) methodSel.value = st.auth.method || 'auto';
+        methodSel.disabled = !st.auth.available;
       }
       for (const id of ['siren', 'ww']) {
         const s = st[id], was = lastState[id] && lastState[id].conn;

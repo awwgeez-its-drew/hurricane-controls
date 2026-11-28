@@ -13,7 +13,7 @@ const BOARDS = {
   ww: { kind: 'ww', label: 'Weather Watcher' },
 };
 let cfgPath;
-let cfg = { siren: { host: '', password: '' }, ww: { host: '', password: '' }, security: { requireAuth: true } };
+let cfg = { siren: { host: '', password: '' }, ww: { host: '', password: '' }, security: { requireAuth: true, method: 'auto' } };
 
 function encode(pw) {
   if (!pw) return '';
@@ -35,12 +35,13 @@ function loadCfg() {
       if (raw[id]) cfg[id] = { host: normalizeHost(raw[id].host), password: decode(raw[id].password) };
     }
     if (raw.security && typeof raw.security.requireAuth === 'boolean') cfg.security.requireAuth = raw.security.requireAuth;
+    if (raw.security && raw.security.method === 'password') cfg.security.method = 'password';
   } catch (_) { /* first run */ }
 }
 function saveCfg() {
   const out = {};
   for (const id of Object.keys(BOARDS)) out[id] = { host: cfg[id].host, password: encode(cfg[id].password) };
-  out.security = { requireAuth: cfg.security.requireAuth };
+  out.security = { requireAuth: cfg.security.requireAuth, method: cfg.security.method };
   fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
   fs.writeFileSync(cfgPath, JSON.stringify(out, null, 2));
 }
@@ -64,7 +65,7 @@ const gate = new AuthGate({
       return m === 'allow' ? { ok: true } : { ok: false, reason: 'cancelled', message: 'Windows sign-in was cancelled - nothing was sent' };
     }
     const hwnd = win && !win.isDestroyed() ? Number(win.getNativeWindowHandle().readBigUInt64LE(0)) : 0;
-    return winauth.verify({ hwnd, caption: 'Hurricane Controls Dashboard', message: 'Sign in with your Windows account to ' + reason + '.' });
+    return winauth.verify({ hwnd, method: cfg.security.method, caption: 'Hurricane Controls Dashboard', message: 'Sign in with your Windows account to ' + reason + '.' });
   },
 });
 gate.onChange = () => schedulePush();
@@ -74,7 +75,7 @@ const denied = (r) => ({ status: 0, error: r.message, code: 'AUTH_DENIED' });
 function snapshotAll() {
   const out = {};
   for (const id of Object.keys(clients)) out[id] = clients[id].snapshot();
-  out.auth = { ...gate.snapshot(), available: authAvailable(), enabled: cfg.security.requireAuth };
+  out.auth = { ...gate.snapshot(), available: authAvailable(), enabled: cfg.security.requireAuth, method: cfg.security.method };
   return out;
 }
 function schedulePush() {
@@ -230,6 +231,9 @@ function ipc() {
 
   ipcMain.handle('auth:unlock', async () => { const g = await gate.ensure('unlock the dashboard controls'); return g.ok ? { ok: true } : { ok: false, error: g.message }; });
   ipcMain.handle('auth:lock', () => { gate.lock(); return true; });
+  // Only changes HOW you prove it's you (both are Windows credentials), so it is not gated:
+  // gating it would strand someone whose Hello prompt misbehaves.
+  ipcMain.handle('auth:setMethod', (_e, m) => { cfg.security.method = m === 'password' ? 'password' : 'auto'; saveCfg(); schedulePush(); return { ok: true }; });
   ipcMain.handle('auth:setRequired', async (_e, on) => {
     // Turning protection OFF is itself protected; turning it on is not.
     if (!on && gate.isRequired()) { const g = await gate.ensure('turn off Windows sign-in protection'); if (!g.ok) return { ok: false, error: g.message }; }

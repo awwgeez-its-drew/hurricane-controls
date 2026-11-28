@@ -228,6 +228,26 @@ async function t(name, fn) {
     assert.strictEqual((await winauth.verify({ hwnd: 0, caption: 'c', message: 'm' })).reason, process.platform === 'win32' ? (await winauth.verify({ hwnd: 0, caption: 'c', message: 'm', timeoutMs: 1 })).reason : 'unavailable');
   });
 
+  await t('Windows Hello flow: used first, final on cancel/fail, falls back to password only when unusable', async () => {
+    const mk = (helloOut, pwOut) => { const calls = []; return { calls, run: async (script) => { const hello = script.includes('UserConsentVerifier'); calls.push(hello ? 'hello' : 'password'); const v = hello ? helloOut : pwOut; if (v instanceof Error) throw v; return v; } }; };
+    const base = { hwnd: 1, caption: 'c', message: 'm' };
+    let m = mk('HELLO:Verified\r\n', 'OK');
+    assert.deepStrictEqual(await winauth.verify(base, m.run), { ok: true }); assert.deepStrictEqual(m.calls, ['hello']);
+    m = mk('HELLO:Canceled', 'OK');
+    let r = await winauth.verify(base, m.run); assert.strictEqual(r.ok, false); assert.strictEqual(r.reason, 'cancelled'); assert.deepStrictEqual(m.calls, ['hello'], 'cancel must NOT fall through to the password box');
+    m = mk('HELLO:RetriesExhausted', 'OK');
+    r = await winauth.verify(base, m.run); assert.strictEqual(r.ok, false); assert.deepStrictEqual(m.calls, ['hello']);
+    for (const out of ['HELLO:NA:NotConfiguredForUser', 'HELLO:NA:DeviceNotPresent', 'HELLO:NotConfiguredForUser', 'HELLO:ERR:projection failed', '', new Error('spawn failed')]) {
+      m = mk(out, 'OK'); r = await winauth.verify(base, m.run);
+      assert.deepStrictEqual(r, { ok: true }, 'fallback for ' + out); assert.deepStrictEqual(m.calls, ['hello', 'password']);
+    }
+    m = mk('HELLO:Verified', 'OK'); r = await winauth.verify({ ...base, method: 'password' }, m.run);
+    assert.deepStrictEqual(m.calls, ['password'], 'password-only never opens Hello');
+    m = mk('HELLO:NA:x', 'CANCEL'); r = await winauth.verify(base, m.run); assert.strictEqual(r.reason, 'cancelled');
+    m = mk('HELLO:NA:x', new Error('blocked')); r = await winauth.verify(base, m.run); assert.strictEqual(r.ok, false); assert.strictEqual(r.reason, 'unavailable');
+    const hs = winauth.buildHelloScript("it's \"quoted\" $x"); assert.ok(hs.includes("'it''s \"quoted\" $x'"));
+  });
+
   siren.close(); ww.close();
   console.log(`\n${pass} passed${process.exitCode ? ', SOME FAILED' : ''}`);
   setTimeout(() => process.exit(process.exitCode || 0), 100);

@@ -7,10 +7,13 @@
 // NOT exercised in this repo's Linux CI - the dialog needs a real Windows
 // desktop. See dashboard/README.md ("Windows sign-in") for the bench check.
 //
-// Known limit: the check validates a *password*. If your account signs in with
-// a PIN / fingerprint / face, the dialog's default tile is that method and
-// Windows hands back a buffer that cannot be password-verified; we report that
-// and ask you to pick "Sign-in options -> Password" in the same dialog.
+// Two methods, tried in this order (method "auto", the default):
+//   1. Windows Hello (UserConsentVerifier): the Windows Security dialog that takes
+//      your PIN, fingerprint or face. Used when Hello is set up on this PC.
+//   2. Password (CredUIPromptForWindowsCredentials + LogonUser): used when Hello is
+//      unavailable or errors. A PIN cannot be verified by this path.
+// method "password" skips Hello. A cancelled or failed Hello prompt is final: it
+// never silently falls through to the weaker-to-type password box.
 
 const { spawn } = require('child_process');
 const path = require('path');
@@ -90,6 +93,53 @@ function buildScript(hwnd, caption, message) {
   ].join('\r\n');
 }
 
+const HELLO_PS = String.raw`
+$ErrorActionPreference = 'Stop'
+try {
+  Add-Type -AssemblyName System.Runtime.WindowsRuntime
+  $null = [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType = WindowsRuntime]
+  $null = [Windows.Security.Credentials.UI.UserConsentVerifierAvailability, Windows.Security.Credentials.UI, ContentType = WindowsRuntime]
+  $null = [Windows.Security.Credentials.UI.UserConsentVerificationResult, Windows.Security.Credentials.UI, ContentType = WindowsRuntime]
+  $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation` + "`" + String.raw`1' })[0]
+  function Await($op, $type) { $t = $asTask.MakeGenericMethod($type).Invoke($null, @($op)); $t.Wait(-1) | Out-Null; $t.Result }
+  $avail = Await ([Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()) ([Windows.Security.Credentials.UI.UserConsentVerifierAvailability])
+  if ("$avail" -ne 'Available') { [Console]::Out.WriteLine('HELLO:NA:' + $avail); exit 0 }
+  $res = Await ([Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync(MESSAGE)) ([Windows.Security.Credentials.UI.UserConsentVerificationResult])
+  [Console]::Out.WriteLine('HELLO:' + $res)
+} catch { [Console]::Out.WriteLine('HELLO:ERR:' + $_.Exception.Message) }
+`;
+
+function buildHelloScript(message) { return HELLO_PS.replace('MESSAGE', psq(message)).replace(/\n/g, '\r\n'); }
+
+function interpretHello(out) {
+  const line = String(out || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).pop() || '';
+  const m = /^HELLO:(.*)$/.exec(line);
+  const v = m ? m[1] : '';
+  if (v === 'Verified') return { ok: true, method: 'hello' };
+  if (v === 'Canceled') return { ok: false, final: true, reason: 'cancelled', message: 'Windows sign-in was cancelled - nothing was sent' };
+  if (v === 'RetriesExhausted') return { ok: false, final: true, reason: 'denied', message: 'Too many failed attempts - nothing was sent' };
+  if (v === 'DeviceBusy') return { ok: false, final: true, reason: 'unavailable', message: 'Windows Hello is busy - try again in a moment' };
+  // NA:<why>, ERR:<why>, DeviceNotPresent, NotConfiguredForUser, DisabledByPolicy, or no output at all:
+  // Hello can't be used here - fall back to the password dialog.
+  return { ok: false, final: false, reason: 'no-hello', message: v || 'no response' };
+}
+
+function runPowerShell(script, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const enc = Buffer.from(script, 'utf16le').toString('base64');
+    let out = '', done = false, child;
+    const finish = (fn, v) => { if (!done) { done = true; clearTimeout(timer); fn(v); } };
+    try { child = spawn(ps, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    catch (e) { return reject(e); }
+    const timer = setTimeout(() => { try { child.kill(); } catch (_) { /* ignore */ } finish(reject, new Error('timed out')); }, timeoutMs || 180000);
+    child.stdout.on('data', (d) => { out += d; });
+    child.on('error', (e) => finish(reject, e));
+    child.on('close', () => finish(resolve, out));
+  });
+}
+
 function interpret(out) {
   const line = String(out || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).pop() || '';
   if (line === 'OK') return { ok: true };
@@ -102,24 +152,21 @@ function interpret(out) {
 }
 
 /**
- * @param {{hwnd:number, caption:string, message:string, timeoutMs?:number}} o
+ * @param {{hwnd:number, caption:string, message:string, method?:'auto'|'password', timeoutMs?:number}} o
+ * @param {(script:string, timeoutMs?:number)=>Promise<string>} [run] injectable for tests
  */
-function verify(o) {
-  return new Promise((resolve) => {
-    if (process.platform !== 'win32') return resolve({ ok: false, reason: 'unavailable', message: 'Windows sign-in is only available on Windows' });
-    const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    const enc = Buffer.from(buildScript(o.hwnd, o.caption, o.message), 'utf16le').toString('base64');
-    let out = '', done = false;
-    const finish = (r) => { if (!done) { done = true; clearTimeout(timer); resolve(r); } };
-    let child;
-    try {
-      child = spawn(ps, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', enc], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    } catch (e) { return resolve({ ok: false, reason: 'unavailable', message: 'Windows sign-in is unavailable: ' + e.message }); }
-    const timer = setTimeout(() => { try { child.kill(); } catch (_) { /* ignore */ } finish({ ok: false, reason: 'unavailable', message: 'Windows sign-in timed out' }); }, o.timeoutMs || 180000);
-    child.stdout.on('data', (d) => { out += d; });
-    child.on('error', (e) => finish({ ok: false, reason: 'unavailable', message: 'Windows sign-in is unavailable: ' + e.message }));
-    child.on('close', () => finish(interpret(out)));
-  });
+async function verify(o, run) {
+  if (!run && process.platform !== 'win32') return { ok: false, reason: 'unavailable', message: 'Windows sign-in is only available on Windows' };
+  const exec = run || runPowerShell;
+  const fail = (e) => ({ ok: false, reason: 'unavailable', message: 'Windows sign-in is unavailable: ' + e.message });
+  if ((o.method || 'auto') !== 'password') {
+    let h;
+    try { h = interpretHello(await exec(buildHelloScript(o.message), o.timeoutMs)); } catch (e) { h = { ok: false, final: false, reason: 'no-hello', message: e.message }; }
+    if (h.ok) return { ok: true };
+    if (h.final) return h;
+    // else: Hello not usable on this PC -> password dialog below
+  }
+  try { return interpret(await exec(buildScript(o.hwnd, o.caption, o.message), o.timeoutMs)); } catch (e) { return fail(e); }
 }
 
-module.exports = { verify, buildScript, interpret, psq };
+module.exports = { verify, buildScript, buildHelloScript, interpret, interpretHello, psq };
