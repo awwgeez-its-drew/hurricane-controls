@@ -52,6 +52,12 @@ This project is licensed under the MIT License (see [LICENSE](LICENSE)),
 which includes a standard "AS IS, WITHOUT WARRANTY OF ANY KIND" disclaimer.
 Nothing in this README limits or modifies that license.
 
+## Desktop dashboard (Windows)
+
+[`dashboard/`](dashboard/README.md) is a Windows app that controls the siren
+controller **and** the Weather Watcher from one window: live status, run modes,
+component test, logs, every setting, OTA updates. No firmware changes needed.
+
 ## Hardware requirements
 
 - ESP32 dev board

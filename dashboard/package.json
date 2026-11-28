@@ -1,0 +1,55 @@
+{
+  "name": "hurricane-dashboard",
+  "version": "1.0.0",
+  "description": "Desktop dashboard for the Hurricane Controls siren board and Weather Watcher board",
+  "main": "main.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "mock": "node test/mock-boards.js",
+    "test": "node test/run.js",
+    "test:ui": "xvfb-run -a node test/ui-smoke.js && xvfb-run -a node test/ui-auth.js",
+    "dist": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "playwright": "^1.49.0"
+  },
+  "author": "Hurricane Controls",
+  "build": {
+    "appId": "com.hurricanecontrols.dashboard",
+    "productName": "Hurricane Controls Dashboard",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**",
+      "renderer/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "HurricaneDashboard-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "HurricaneDashboard-Portable-${version}.${ext}"
+    }
+  }
+}
